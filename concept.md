@@ -67,7 +67,7 @@ with no memory of earlier ones; this file and the git history are all it has.
 |---|---|
 | **Status** | Phases 0–1 merged into `main`. Phase 2 (drive & fight) built on branch `phase-2-drive-fight`, waiting for the user to try it before merging. |
 | **Current phase** | 2 — done, awaiting user check |
-| **Next step** | User confirms the frame-rate fix on their machine (F2 ×2, F3, F1); then merge `phase-2-drive-fight` → `main`. Then Phase 3, which now starts with firing arcs + turret/icon graphics (§2.10, §6). Open: build that first as its own step, or inside Phase 3 (§12). |
+| **Next step** | User confirms the frame-rate fix on their machine (F2 ×2, F3, F1); then merge `phase-2-drive-fight` → `main`. Then Phase 3, which now starts with firing arcs + turret/icon graphics (§2.10, §6). Decided: arcs + graphics are built first as step **3a** on `phase-3a-arcs-graphics` and handed over on their own, then the rest of Phase 3 (3b). |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
 | **Live version** | none (local only); app version 0.2.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
@@ -636,7 +636,7 @@ Each phase ends with something the user can try, and a short check by them.
 | **0. Setup** | Vite + TS + Phaser scaffold, ESLint/Prettier, Vitest with one passing test, `.gitignore`, `CLAUDE.md`, version label on screen, `README` with start commands. Push to the private repo. | `npm run dev` opens a dark screen with the version label; `npm test` passes. |
 | **1. Grid sandbox** | `sim/grid.ts` + `connectivity.ts` with tests (placement, bounds, rotation, connectivity, bridge detection, split groups). Build screen as a standalone scene: offer 3 random pieces from a test pool, drag/rotate/move/scrap, red invalid feedback, confirm rule, bridge toggle. Grid expansion via debug key. | The user can build cities by hand and the rules feel right in the build screen. |
 | **2. Drive & fight** | City driving with size penalty, camera. Swarmers + Runners, spawner with wave table, spatial hash, pools. Core pistol, Gatling, Cannon with auto-targeting. Tile HP, destruction, offline tiles. XP gems, levels, offers (with Repair Core and reroll), build pause wired in. HUD, lose screen, debug tools. | A complete but simple run loop: drive, level, place, lose tiles, die. 60 fps at 600 enemies. |
-| **3. Layout depth — DECISION MILESTONE** | Firing arcs for Gatling/Cannon (§2.10) with turret barrels, arc wedges in the build screen and procedural icons for all tiles (replacing letters); build screen tiles drawn as textures too. Remaining tiles (Plating, Mortar, Saw, Generator, Shield, Repair, Magnet, Engine). Adjacency buffs, weapon chains, filled-row bonuses with visuals. Duplicate upgrades with L3/L5 perks. Timed grid expansion. Brutes, Spitters, Sappers, Bombers, full 12-minute wave table, boss placeholder (big Brute) and win screen. One tuning pass with the user. | **The user plays several full runs and decides whether the grid puzzle is fun enough to continue**, or what to change first. |
+| **3. Layout depth — DECISION MILESTONE** | **3a (handed over on its own first):** firing arcs for Gatling/Cannon (§2.10) with turret barrels, arc wedges in the build screen and procedural icons for all tiles (replacing letters); build screen tiles drawn as textures too. **3b:** remaining tiles (Plating, Mortar, Saw, Generator, Shield, Repair, Magnet, Engine). Adjacency buffs, weapon chains, filled-row bonuses with visuals. Duplicate upgrades with L3/L5 perks. Timed grid expansion. Brutes, Spitters, Sappers, Bombers, full 12-minute wave table, boss placeholder (big Brute) and win screen. One tuning pass with the user. | **The user plays several full runs and decides whether the grid puzzle is fun enough to continue**, or what to change first. |
 | **4. Boss & balance** | Colossus with 3 phases, enrage. Balance pass using debug tools and, optionally, a headless sim to compare builds. More piece shapes. | A run has a satisfying climax; no single obviously dominant build. |
 | **5. Look & juice** | Final geometric style per §6: icons, colours, effects, screen shake, damage cracks, chain/row visuals, title screen. | The game looks finished in screenshots and stays readable at 600 enemies. |
 | **6. Audio, menus, polish** | SFX set, mute, pause menu, summary screen with layout snapshot, settings. | Feature-complete prototype. |
@@ -656,9 +656,6 @@ decision milestone, change the design before building more content.
   public for GitHub Pages.
 - Piece mirroring allowed or not.
 - Meta-progression after the decision milestone (unlocks, permanent stats).
-- Scheduling of firing arcs + icons: a separate first step of Phase 3 that
-  the user tries on its own (Claude's recommendation), or built together with
-  the rest of Phase 3.
 - All story and UI text in §5 is draft.
 - Phase 1 build-screen calls made without asking (confirm or change):
   one offer must be taken per pause (no "skip"); scrapping a fresh offer
@@ -749,13 +746,14 @@ Format:
   letters; firing arcs as an experiment. Brainstorm results (§2.10): facing
   set by rotating the piece (A); Cannon 90° and Gatling 180° arcs, Core 360°
   (B); arc weapons get more range (A); turning barrels + arc wedges in the
-  build screen only (A).
+  build screen only (A); arcs + graphics built first as step 3a and tried
+  on their own before the rest of Phase 3 (A).
 - Tried and failed: caching label styles alone barely changed the headless
   measurement (15.4 → 14.7 ms, Canvas renderer); the tile Graphics were the
   main cost.
 - State: typecheck, lint, 55/55 tests, build pass. Pushed. Not merged.
-- Next: user confirms the fps fix; merge Phase 2; answer the scheduling
-  question in §12; then Phase 3.
+- Next: user confirms the fps fix; merge Phase 2; then Phase 3a (arcs +
+  graphics) on `phase-3a-arcs-graphics`.
 - Watch out: headless Firefox WebGL is software-rendered; compare scripts'
   per-frame time (rAF wrapper) between builds rather than reading FPS.
 
