@@ -9,10 +9,12 @@ import {
   pickOffer,
   pickUpAt,
   previewAt,
+  reroll,
   rotate,
   scrapAt,
   scrapHeld,
   startBuild,
+  takeRepair,
 } from '../src/sim/build';
 import { createCity, tileAt } from '../src/sim/grid';
 
@@ -130,5 +132,37 @@ describe('build session', () => {
     cancelHeld(s);
     expect(expand(s)).toBe(true);
     expect(s.city.gridSize).toBe(8);
+  });
+});
+
+describe('build session: run options', () => {
+  it('Repair Core counts as taking the offer', () => {
+    const s = session();
+    expect(takeRepair(s)).toBe(true);
+    expect(s.repairChosen).toBe(true);
+    expect(pickOffer(s, 0)).toBe(false);
+    expect(confirmStatus(s)).toEqual({ ok: true });
+  });
+
+  it('rerolls only before an offer is taken or held', () => {
+    const s = session();
+    expect(reroll(s, [MONO])).toBe(true);
+    expect(s.offers).toEqual([MONO]);
+    pickOffer(s, 0);
+    expect(reroll(s, [DOMINO])).toBe(false);
+    dropAt(s, 3, 2);
+    expect(reroll(s, [DOMINO])).toBe(false);
+  });
+
+  it('counts scrapped placed pieces but not scrapped fresh offers', () => {
+    const s = session();
+    pickOffer(s, 0);
+    dropAt(s, 3, 2);
+    scrapAt(s, 3, 2);
+    expect(s.scrapped).toBe(1);
+    const t = startBuild(createCity(6), [MONO]);
+    pickOffer(t, 0);
+    scrapHeld(t);
+    expect(t.scrapped).toBe(0);
   });
 });

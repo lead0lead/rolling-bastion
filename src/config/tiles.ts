@@ -14,6 +14,20 @@ export type TileType =
 
 export type TileFamily = 'core' | 'structure' | 'weapon' | 'support';
 
+export interface WeaponDef {
+  damage: number;
+  /** Shots per second. */
+  fireRate: number;
+  /** Targeting range from the tile centre (px). */
+  range: number;
+  projectileSpeed: number;
+  projectileRadius: number;
+  /** Random aim spread, ± degrees. */
+  spreadDeg: number;
+  /** Knockback impulse on hit (px/s). */
+  knockback: number;
+}
+
 export interface TileDef {
   name: string;
   family: TileFamily;
@@ -24,6 +38,7 @@ export interface TileDef {
   label: string;
   /** One-line function description shown in tooltips. */
   description: string;
+  weapon?: WeaponDef;
 }
 
 export const TILES: Record<TileType, TileDef> = {
@@ -34,6 +49,15 @@ export const TILES: Record<TileType, TileDef> = {
     color: 0xf4f6fb,
     label: '◆',
     description: 'Pistol: 8 dmg, 2 shots/s, range 200. Lose it and the run ends.',
+    weapon: {
+      damage: 8,
+      fireRate: 2,
+      range: 200,
+      projectileSpeed: 520,
+      projectileRadius: 3,
+      spreadDeg: 0,
+      knockback: 0,
+    },
   },
   hull: {
     name: 'Hull',
@@ -58,6 +82,15 @@ export const TILES: Record<TileType, TileDef> = {
     color: 0xf2b134,
     label: 'G',
     description: '4 dmg, 8 shots/s, range 220.',
+    weapon: {
+      damage: 4,
+      fireRate: 8,
+      range: 220,
+      projectileSpeed: 620,
+      projectileRadius: 2.5,
+      spreadDeg: 4,
+      knockback: 0,
+    },
   },
   cannon: {
     name: 'Cannon',
@@ -66,6 +99,15 @@ export const TILES: Record<TileType, TileDef> = {
     color: 0xf08a24,
     label: 'C',
     description: '30 dmg, 0.8 shots/s, range 300, knockback.',
+    weapon: {
+      damage: 30,
+      fireRate: 0.8,
+      range: 300,
+      projectileSpeed: 460,
+      projectileRadius: 5,
+      spreadDeg: 0,
+      knockback: 220,
+    },
   },
   mortar: {
     name: 'Mortar',

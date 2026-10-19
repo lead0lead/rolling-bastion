@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench": "vitest run -c vitest.bench.config.ts --silent=false",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

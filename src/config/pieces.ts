@@ -65,3 +65,19 @@ export const SANDBOX_POOL: PieceDef[] = [
   piece('t-mortar', ['rmr', '.h.'], L),
   piece('l3-engine', ['n.', 'hu'], L),
 ];
+
+/** Phase 2 pool (concept.md §4.2): Gatling and Cannon pieces plus pure Hull. */
+export const PHASE2_POOL: PieceDef[] = [
+  piece('domino-gatling', ['gh'], L),
+  piece('l3-gatling', ['g.', 'hg'], L),
+  piece('i4-gatling', ['hggh'], L),
+  piece('t-gatling', ['ggg', '.h.'], L),
+  piece('domino-cannon', ['ch'], L),
+  piece('l3-cannon', ['c.', 'hh'], L),
+  piece('t-cannon', ['hch', '.h.'], L),
+  piece('s-cannon', ['.ch', 'hc.'], L),
+  piece('mono-hull', ['h'], L, 0.5),
+  piece('domino-hull', ['hh'], L, 0.5),
+  piece('i3-hull', ['hhh'], L, 0.5),
+  piece('o-hull', ['hh', 'hh'], L, 0.4),
+];

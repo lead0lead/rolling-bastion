@@ -25,8 +25,12 @@ export type HeldOrigin = { kind: 'offer'; index: number } | { kind: 'grid'; tile
 export interface BuildSession {
   city: CityState;
   offers: PieceDef[];
-  /** True once one offer has been placed (or scrapped); the others are gone. */
+  /** True once one offer has been placed (or scrapped), or Repair Core chosen; the others are gone. */
   offerTaken: boolean;
+  /** Repair Core was chosen instead of a piece. */
+  repairChosen: boolean;
+  /** Placed pieces scrapped during this pause (each refunds XP in a run). */
+  scrapped: number;
   held: HeldGroup | null;
   heldOrigin: HeldOrigin | null;
 }
@@ -42,7 +46,15 @@ export interface ConfirmStatus {
 
 export function startBuild(city: CityState, offers: PieceDef[]): BuildSession {
   updateOnline(city);
-  return { city, offers, offerTaken: offers.length === 0, held: null, heldOrigin: null };
+  return {
+    city,
+    offers,
+    offerTaken: offers.length === 0,
+    repairChosen: false,
+    scrapped: 0,
+    held: null,
+    heldOrigin: null,
+  };
 }
 
 export function pickOffer(s: BuildSession, index: number): boolean {
@@ -113,6 +125,7 @@ export function cancelHeld(s: BuildSession): void {
 export function scrapHeld(s: BuildSession): boolean {
   if (!s.held || s.held.tiles.some((t) => t.type === 'core')) return false;
   if (s.heldOrigin?.kind === 'offer') s.offerTaken = true;
+  else s.scrapped++;
   s.held = null;
   s.heldOrigin = null;
   updateOnline(s.city);
@@ -125,7 +138,27 @@ export function scrapAt(s: BuildSession, x: number, y: number): boolean {
   const tile = tileAt(s.city, x, y);
   if (!tile || tile.type === 'core') return false;
   scrapGroup(s.city, tile.groupId);
+  s.scrapped++;
   updateOnline(s.city);
+  return true;
+}
+
+/** Takes Repair Core instead of a piece. */
+export function takeRepair(s: BuildSession): boolean {
+  if (s.offerTaken || s.held) return false;
+  s.offerTaken = true;
+  s.repairChosen = true;
+  return true;
+}
+
+/** Replaces the offers. Only before an offer is taken and while no offer is held. */
+export function canReroll(s: BuildSession): boolean {
+  return !s.offerTaken && s.heldOrigin?.kind !== 'offer' && s.offers.length > 0;
+}
+
+export function reroll(s: BuildSession, offers: PieceDef[]): boolean {
+  if (!canReroll(s)) return false;
+  s.offers = offers;
   return true;
 }
 
