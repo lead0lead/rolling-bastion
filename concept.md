@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–2 merged into `main`. Phase 3a (firing arcs + icons/turrets) built on branch `phase-3a-arcs-graphics`, waiting for the user to try it before merging. |
-| **Current phase** | 3a — done, awaiting user check |
-| **Next step** | User plays with arcs (do they make placement more interesting?) and judges icons/barrels; then merge `phase-3a-arcs-graphics` → `main` and start Phase 3b (remaining tiles, synergies, upgrades, enemies, 12-minute run) on `phase-3b-layout-depth`. |
+| **Status** | Phases 0–3a merged into `main`. Phase 3b not started; branch `phase-3b-layout-depth` created (only this document update on it). Paused mid-brainstorm. |
+| **Current phase** | 3b — design questions open, no code yet |
+| **Next step** | Phase 3b brainstorm, one question at a time (§12 "Phase 3b design questions"): Q1 chains vs facing was asked but not answered — ask it again first. Then build 3b on `phase-3b-layout-depth`. |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
 | **Live version** | none (local only); app version 0.3.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-19 (Phase 3a arcs + graphics) |
+| **Last updated** | 2026-10-19 (end of session, before Phase 3b) |
 
 ---
 
@@ -665,6 +665,19 @@ decision milestone, change the design before building more content.
 
 **Open decisions (user)**
 
+- **Phase 3b design questions** (ask one at a time, in this order, before
+  building 3b):
+  1. *Asked 2026-10-19, not yet answered:* should weapon chains (§2.7)
+     require the same facing? A — yes, same type in a line **and** same
+     facing (Claude's recommendation: a "battery" of guns, rotation joins the
+     chain puzzle; a straight Gatling piece chains with itself). B — no,
+     facing doesn't matter.
+  2. Mortar arc (§2.10 left it open): 360° lobbed artillery (likely
+     recommendation, it is meant to sit deep inside) or an arc.
+  3. L3/L5 perks per tile type (§2.8 only gives two examples: Gatling L3 +1
+     projectile, Cannon L5 pierce 3): Claude proposes a full list as
+     starting values for the user to approve or change.
+
 - Final title (working title: *Rolling Bastion*).
 - Hosting for sharing (Phase 7): itch.io, Netlify/Vercel, or making the repo
   public for GitHub Pages.
@@ -744,6 +757,21 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-19 — End of session: 3a merged, 3b brainstorm started
+- Done: merged `phase-3a-arcs-graphics` into `main` (v0.3.0) and pushed;
+  created branch `phase-3b-layout-depth`.
+- Decisions: user tried 3a — "arcs work well", "very fun now"; asked to
+  merge and start 3b. User paused for the day mid-brainstorm.
+- State: `main` builds, 64/64 tests pass. No 3b code yet.
+- Next: new session asks the Phase 3b design questions in §12 (Q1 first,
+  it was asked but not answered), then builds 3b on
+  `phase-3b-layout-depth`. 3b is large: split into steps with commits (tiles
+  + adjacency buffs, chains + rows, upgrades + perks, timed expansion, new
+  enemies + wave table + elites, boss placeholder + win screen, Phase 3
+  pool), and hand over for the tuning pass at the end.
+- Watch out: the user prefers one question at a time with a recommended
+  option; answers come as a single letter.
 
 ### 2026-10-19 — Phase 3a: firing arcs and graphics
 - Done (branch `phase-3a-arcs-graphics`, v0.3.0): facing on pieces/tiles,
