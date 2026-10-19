@@ -1,7 +1,8 @@
 import type { EnemyType } from '../config/enemies';
+import { TILES, type TileType } from '../config/tiles';
 import { addXp, xpToNext } from './progression';
 import { spawnRing } from './spawner';
-import type { World } from './world';
+import { cityChanged, type World } from './world';
 
 /** Debug tooling (concept.md §8). Pure world mutations, bound to keys by the run scene. */
 
@@ -28,4 +29,27 @@ export function debugLayoutJson(w: World): string {
     gridSize: w.city.gridSize,
     tiles: w.city.tiles.map(({ type, gx, gy, hp, groupId }) => ({ type, gx, gy, hp, groupId })),
   });
+}
+
+/** Stress test: fills every empty cell with tiles of `type` (one new group). */
+export function debugFillGrid(w: World, type: TileType): void {
+  const city = w.city;
+  const groupId = city.nextGroupId++;
+  const taken = new Set(city.tiles.map((t) => `${t.gx},${t.gy}`));
+  for (let gy = 0; gy < city.gridSize; gy++) {
+    for (let gx = 0; gx < city.gridSize; gx++) {
+      if (taken.has(`${gx},${gy}`)) continue;
+      city.tiles.push({
+        id: city.nextTileId++,
+        type,
+        gx,
+        gy,
+        hp: TILES[type].maxHp,
+        groupId,
+        online: false,
+      });
+    }
+  }
+  if (city.typeLevels[type] === 0) city.typeLevels[type] = 1;
+  cityChanged(w);
 }

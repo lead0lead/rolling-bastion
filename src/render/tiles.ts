@@ -30,6 +30,16 @@ export interface TileDrawOptions {
 /** Low-HP thresholds and blink period (concept.md §3). */
 const DAMAGE = { cracks: 0.5, blink: 0.25, blinkPeriodMs: 700, blinkAlpha: 0.45 } as const;
 
+/** Alpha multiplier for the low-HP blink. */
+export function damageAlpha(hpFrac: number, timeMs: number): number {
+  const off = hpFrac < DAMAGE.blink && Math.floor(timeMs / (DAMAGE.blinkPeriodMs / 2)) % 2 === 1;
+  return off ? DAMAGE.blinkAlpha : 1;
+}
+
+export function showsCracks(hpFrac: number): boolean {
+  return hpFrac < DAMAGE.cracks;
+}
+
 /** Rounded square with a darker 2 px border (concept.md §6, placeholder look). */
 export function drawTile(
   g: Phaser.GameObjects.Graphics,
@@ -40,9 +50,7 @@ export function drawTile(
   opts: TileDrawOptions = {},
 ): void {
   const hpFrac = opts.hpFrac ?? 1;
-  const blinking =
-    hpFrac < DAMAGE.blink && Math.floor((opts.time ?? 0) / (DAMAGE.blinkPeriodMs / 2)) % 2 === 1;
-  const alpha = (opts.alpha ?? 1) * (blinking ? DAMAGE.blinkAlpha : 1);
+  const alpha = (opts.alpha ?? 1) * damageAlpha(hpFrac, opts.time ?? 0);
   const fill = opts.offline ? COLORS.offline : TILES[type].color;
   const inset = Math.max(1, Math.round(size * 0.04));
   const radius = Math.max(2, Math.round(size * 0.15));
@@ -57,11 +65,11 @@ export function drawTile(
     size - 2 * inset - 2,
     radius,
   );
-  if (hpFrac < DAMAGE.cracks) drawCracks(g, x, y, size, border, alpha);
+  if (showsCracks(hpFrac)) drawCracks(g, x, y, size, border, alpha);
   if (opts.offline) drawBrokenLink(g, x + size * 0.72, y + size * 0.28, size * 0.16, alpha);
 }
 
-function drawCracks(
+export function drawCracks(
   g: Phaser.GameObjects.Graphics,
   x: number,
   y: number,
@@ -94,9 +102,18 @@ function drawBrokenLink(
   g.lineBetween(cx - r * 0.3, cy - r * 1.1, cx + r * 0.3, cy + r * 1.1);
 }
 
-/** Reusable text objects for per-frame tile labels. */
+/**
+ * Reusable text objects for per-frame tile labels. Phaser redraws a text's
+ * texture on every style change (even to the same value), so properties are
+ * only set when they actually differ from last frame.
+ */
 export class LabelPool {
-  private readonly texts: Phaser.GameObjects.Text[] = [];
+  private readonly texts: {
+    obj: Phaser.GameObjects.Text;
+    text: string;
+    size: number;
+    color: string;
+  }[] = [];
   private used = 0;
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -106,28 +123,39 @@ export class LabelPool {
   }
 
   add(x: number, y: number, text: string, size: number, color: string, alpha = 1): void {
-    let t = this.texts[this.used];
-    if (!t) {
-      t = this.scene.add.text(0, 0, '', {
+    let entry = this.texts[this.used];
+    if (!entry) {
+      const obj = this.scene.add.text(0, 0, text, {
         fontFamily: 'monospace',
         fontStyle: 'bold',
+        fontSize: `${size}px`,
+        color,
         stroke: '#0d0f14',
         strokeThickness: 3,
       });
-      t.setOrigin(0.5).setDepth(10);
-      this.texts.push(t);
+      obj.setOrigin(0.5).setDepth(10);
+      entry = { obj, text, size, color };
+      this.texts.push(entry);
     }
     this.used++;
-    t.setPosition(x, y)
-      .setText(text)
-      .setFontSize(size)
-      .setColor(color)
-      .setAlpha(alpha)
-      .setVisible(true);
+    const { obj } = entry;
+    if (entry.text !== text) {
+      obj.setText(text);
+      entry.text = text;
+    }
+    if (entry.size !== size) {
+      obj.setFontSize(size);
+      entry.size = size;
+    }
+    if (entry.color !== color) {
+      obj.setColor(color);
+      entry.color = color;
+    }
+    obj.setPosition(x, y).setAlpha(alpha).setVisible(true);
   }
 
   end(): void {
-    for (let i = this.used; i < this.texts.length; i++) this.texts[i]?.setVisible(false);
+    for (let i = this.used; i < this.texts.length; i++) this.texts[i]?.obj.setVisible(false);
   }
 }
 

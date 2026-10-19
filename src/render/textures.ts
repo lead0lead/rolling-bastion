@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ENEMIES, ENEMY_TYPES } from '../config/enemies';
-import { COLORS } from './tiles';
+import { TILES, type TileType } from '../config/tiles';
+import { COLORS, drawCracks, drawTile } from './tiles';
 
 /** Procedural textures (concept.md §6: no external art in the prototype). */
 export const TEX = {
@@ -9,7 +10,12 @@ export const TEX = {
   shotSmall: 'shot-small',
   shotBig: 'shot-big',
   enemy: (type: string) => `enemy-${type}`,
+  tile: (type: TileType, offline: boolean) => `tile-${type}${offline ? '-off' : ''}`,
+  cracks: 'tile-cracks',
 } as const;
+
+/** Tile textures are drawn at this size and scaled to the cell size. */
+const TILE_TEX_PX = 64;
 
 export const BG_GRID_SIZE = 64;
 
@@ -60,6 +66,45 @@ export function createTextures(scene: Phaser.Scene): void {
   g.generateTexture(TEX.shotBig, 12, 12);
 
   g.destroy();
+  createTileTextures(scene);
+}
+
+/**
+ * Pre-rendered tiles (body + label), one per type and online state, so the
+ * city draws as batched sprites instead of re-tessellated Graphics each frame.
+ */
+function createTileTextures(scene: Phaser.Scene): void {
+  const size = TILE_TEX_PX;
+  const g = scene.make.graphics({}, false);
+  const label = scene.make.text({
+    style: {
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      fontSize: `${Math.round(size * 0.45)}px`,
+      stroke: '#0d0f14',
+      strokeThickness: 5,
+    },
+    add: false,
+  });
+  label.setOrigin(0.5).setPosition(size / 2, size / 2);
+  for (const type of Object.keys(TILES) as TileType[]) {
+    for (const offline of [false, true]) {
+      g.clear();
+      drawTile(g, 0, 0, size, type, { offline });
+      const tex = scene.textures.addDynamicTexture(TEX.tile(type, offline), size, size);
+      if (!tex) continue;
+      tex.draw(g);
+      if (TILES[type].label) {
+        label.setText(TILES[type].label).setColor(offline ? '#8a93a6' : '#ffffff');
+        tex.draw(label);
+      }
+    }
+  }
+  g.clear();
+  drawCracks(g, 0, 0, size, 0x0d0f14, 0.7);
+  scene.textures.addDynamicTexture(TEX.cracks, size, size)?.draw(g);
+  g.destroy();
+  label.destroy();
 }
 
 function toPoints(xy: number[]): Phaser.Math.Vector2[] {

@@ -76,12 +76,13 @@ export class HudScene extends Phaser.Scene {
     if (ui.debugOverlay) {
       this.debug.setText(
         [
-          `FPS ${this.game.loop.actualFps.toFixed(0)}`,
+          `FPS ${this.game.loop.actualFps.toFixed(0)}  ·  sim ${ui.simMs.toFixed(2)} ms  ·  draw prep ${ui.drawMs.toFixed(2)} ms`,
           `enemies ${w.enemies.length}  projectiles ${w.projectiles.length}  gems ${w.gems.length}`,
           `spawn budget ${budgetRate(w.time).toFixed(2)}/s  time ${w.time.toFixed(1)} s`,
           `E spawns: ${ui.debugEnemy}  ([ / ] to change)`,
           `god mode ${w.godMode ? 'ON' : 'off'} (I)`,
-          'G level · T +60 s · K kill all · P layout · F2 grow grid',
+          'G level · T +60 s · K kill all · P layout',
+          'F2 grow grid · F3 fill grid with Gatlings',
         ].join('\n'),
       );
     }

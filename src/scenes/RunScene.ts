@@ -5,9 +5,10 @@ import { PHASE2_POOL } from '../config/pieces';
 import { TILES } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
-import { drawTile, LabelPool, SpritePool } from '../render/tiles';
+import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
   debugAddTime,
+  debugFillGrid,
   debugKillAll,
   debugLayoutJson,
   debugLevelUp,
@@ -31,7 +32,13 @@ export interface RunUiState {
   world: World;
   debugOverlay: boolean;
   debugEnemy: string;
+  /** Smoothed ms per frame spent in the simulation and in building the frame's draw data. */
+  simMs: number;
+  drawMs: number;
 }
+
+/** Smoothing factor for the overlay timings. */
+const TIMING_SMOOTHING = 0.05;
 
 type MoveKeys = Record<
   'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd',
@@ -46,8 +53,8 @@ export class RunScene extends Phaser.Scene {
   private buildOpen = false;
   private keys!: MoveKeys;
   private bg!: Phaser.GameObjects.TileSprite;
-  private tilesG!: Phaser.GameObjects.Graphics;
-  private labels!: LabelPool;
+  private tileSprites!: SpritePool;
+  private crackSprites!: SpritePool;
   private enemySprites!: SpritePool;
   private shotSprites!: SpritePool;
   private gemSprites!: SpritePool;
@@ -61,15 +68,21 @@ export class RunScene extends Phaser.Scene {
   create(): void {
     createTextures(this);
     this.world = createWorld(nextSeed());
-    this.ui = { world: this.world, debugOverlay: false, debugEnemy: ENEMY_TYPES[0] ?? '' };
+    this.ui = {
+      world: this.world,
+      debugOverlay: false,
+      debugEnemy: ENEMY_TYPES[0] ?? '',
+      simMs: 0,
+      drawMs: 0,
+    };
     this.registry.set('run', this.ui);
     this.acc = 0;
     this.buildOpen = false;
 
     this.bg = this.add.tileSprite(0, 0, 10, 10, TEX.bgGrid).setOrigin(0).setDepth(-10);
     this.gemSprites = new SpritePool(this, 1);
-    this.tilesG = this.add.graphics().setDepth(2);
-    this.labels = new LabelPool(this);
+    this.tileSprites = new SpritePool(this, 2);
+    this.crackSprites = new SpritePool(this, 2.5);
     this.enemySprites = new SpritePool(this, 3);
     this.shotSprites = new SpritePool(this, 4);
 
@@ -102,6 +115,7 @@ export class RunScene extends Phaser.Scene {
     }
     this.acc += Math.min(delta / 1000, SIM.maxFrame);
     const input = this.moveInput();
+    const t0 = performance.now();
     while (this.acc >= SIM.dt) {
       step(w, input, SIM.dt);
       this.acc -= SIM.dt;
@@ -111,7 +125,11 @@ export class RunScene extends Phaser.Scene {
         break;
       }
     }
+    const t1 = performance.now();
     this.render(this.acc / SIM.dt, delta / 1000);
+    const t2 = performance.now();
+    this.ui.simMs += (t1 - t0 - this.ui.simMs) * TIMING_SMOOTHING;
+    this.ui.drawMs += (t2 - t1 - this.ui.drawMs) * TIMING_SMOOTHING;
     if (w.over) return;
     if (w.pendingLevelUps > 0) this.openBuild('level');
   }
@@ -182,6 +200,10 @@ export class RunScene extends Phaser.Scene {
           this.openBuild('expand');
         }
         break;
+      case 'F3':
+        e.preventDefault();
+        debugFillGrid(w, 'gatling');
+        break;
       case 'KeyG':
         debugLevelUp(w);
         break;
@@ -243,27 +265,27 @@ export class RunScene extends Phaser.Scene {
       .setSize(view.width + pad * 2, view.height + pad * 2)
       .setTilePosition(view.x - pad, view.y - pad);
 
-    // City tiles.
-    const g = this.tilesG;
-    g.clear();
-    this.labels.begin();
+    // City tiles: pre-rendered textures as pooled sprites.
     const cell = GRID.cellPx;
     const left = ox - (w.city.gridSize * cell) / 2;
     const top = oy - (w.city.gridSize * cell) / 2;
+    this.tileSprites.begin();
+    this.crackSprites.begin();
     for (const t of w.city.tiles) {
-      const x = left + t.gx * cell;
-      const y = top + t.gy * cell;
-      drawTile(g, x, y, cell, t.type, {
-        offline: !t.online,
-        hpFrac: t.hp / TILES[t.type].maxHp,
-        time: this.time.now,
-      });
-      const label = TILES[t.type].label;
-      if (label) {
-        this.labels.add(x + cell / 2, y + cell / 2, label, 15, t.online ? '#ffffff' : '#8a93a6');
+      const x = left + (t.gx + 0.5) * cell;
+      const y = top + (t.gy + 0.5) * cell;
+      const hpFrac = t.hp / TILES[t.type].maxHp;
+      const alpha = damageAlpha(hpFrac, this.time.now);
+      this.tileSprites
+        .add(x, y, TEX.tile(t.type, !t.online))
+        .setDisplaySize(cell, cell)
+        .setAlpha(alpha);
+      if (showsCracks(hpFrac)) {
+        this.crackSprites.add(x, y, TEX.cracks).setDisplaySize(cell, cell).setAlpha(alpha);
       }
     }
-    this.labels.end();
+    this.tileSprites.end();
+    this.crackSprites.end();
 
     // Enemies, projectiles, gems.
     this.enemySprites.begin();
