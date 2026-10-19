@@ -1,0 +1,645 @@
+# Rolling Bastion (working title) — Concept & Build Plan
+
+> A browser survivor-like where you steer a driving city through endless
+> monster hordes. The city is built from Tetris-like pieces on a small grid;
+> each tile can carry a weapon or ability, everything must stay connected to
+> the Core, and the challenge is squeezing the strongest build into very
+> little space while enemies tear pieces off it.
+
+This document is the **source of truth** for the project and the starting point
+for every Claude Code session. Keep it up to date whenever a feature ships or a
+decision is made.
+
+Full title: *Rolling Bastion* (working title, open decision). Short name for
+repo / URL / storage keys: `rolling-bastion`.
+
+---
+
+## Start Here — Instructions for Claude Code
+
+When the user says something like "look at concept.md and start" or "continue",
+do this, in order:
+
+1. **Read this whole document.** Then read §0 (current state), the last entries
+   of the session log, and the open questions again; they tell you where the
+   project stands.
+2. **Check the repository state:** `git status`, `git log --oneline -15`, the
+   current branch, the commit author identity, and whether build and tests
+   pass (once the project exists).
+3. **Tell the user in a few sentences** where the project stands and what you
+   will do next, according to the build phases. If §0 and the repository
+   disagree, say so and trust the repository.
+4. **Work on the next unfinished phase only.** If the repository is empty apart
+   from this file, that is Phase 0. Work on a feature branch, one commit per
+   step.
+5. **Stop at the end of each phase** and hand the build to the user to try.
+   Never go past the decision milestone named in §0 without the user's
+   explicit go-ahead.
+6. **Follow the repository rules in "How We Work" without exception.**
+7. **Ask instead of guessing** when something here is unclear, contradictory,
+   or marked as an open decision. Ask one question at a time.
+8. **Follow "When Things Go Wrong"** as soon as a problem resists a first fix.
+
+**Keeping this document current is part of the job.** A new session starts
+with no memory of earlier ones; this file and the git history are all it has.
+
+- After every completed step that changes the state of the project, update §0
+  in the same step.
+- At the end of every phase, and before ending any session (also when the user
+  says they are stopping, or when the context is getting full), update:
+  - §0: status, current phase, next step, live version.
+  - The session log: add an entry (format given there).
+  - The relevant content sections, so they describe the project **as built**.
+    Mark implemented sections with "(as implemented)" in their heading.
+  - Open questions: add new ones and known issues; remove resolved ones.
+- Record every decision the user makes (an approved value, a design change, a
+  rejected idea) in the relevant section and in the session log, with the
+  reason when one was given.
+- Never delete the plan for phases that are not built yet.
+- This document is committed to git: commit document updates together with the
+  code they describe.
+
+---
+
+## 0. Current State (read this first)
+
+| | |
+|---|---|
+| **Status** | Nothing built yet. Start with Phase 0. |
+| **Current phase** | 0 — not started |
+| **Next step** | Phase 0: project setup |
+| **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
+| **Live version** | none yet |
+| **Repository** | Private GitHub repository, branch `main` (URL to be filled in at Phase 0) |
+| **Play URL** | Runs locally: `npm install`, then `npm run dev` |
+| **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
+| **Last updated** | 2026-10-19 (initial plan, before any code) |
+
+---
+
+## 1. Core Concept
+
+A survivor-like ("bullet heaven") in the vein of *Vampire Survivors*, with the
+moving-city fantasy of *Monsters are Coming! Rock & Road* (Ludogram/Raw Fury,
+2025) — taken as inspiration only. The twist: **the city's shape is the
+build.** You assemble the city from tetromino-style pieces on a small grid.
+Pieces carry weapons and abilities on specific cells; where you put them
+decides what they buff, what they protect and what gets torn off first.
+
+You only steer the city. All tiles act automatically. The game pauses on
+every level-up so you can pick and place a new piece, and rearrange the city.
+
+Audience for the prototype: the developer and a few testers. Goal: find out
+whether the grid puzzle makes a survivor-like run more interesting.
+
+**Design pillars**
+
+- **Space is the resource.** Every decision is about which cell gets what. If
+  a feature doesn't interact with grid space, adjacency or connectivity, it
+  needs a strong reason to exist.
+- **Calm puzzle, hectic drive.** Placement happens in a paused, readable build
+  screen; combat is pure steering and dodging. Never require precise placement
+  under time pressure.
+- **Readable at a glance.** Any tile's function, and whether it is online,
+  must be readable from its colour and icon in under a second, in combat and in
+  the build screen.
+- **Power fantasy first.** Survivors-casual: the player should usually feel
+  strong. Losing tiles is chip damage and a reason to re-plan, not a run-ender.
+- **Connected or useless.** A tile only works while it has a path to the Core.
+
+**Targets**
+
+- Run length: 12:00 of survival, then a boss.
+- First level-up within ~15 s; level-ups roughly every 20–40 s early, ~45–60 s late.
+- Performance: stable 60 fps with 600 enemies and 300 projectiles on a mid-range
+  laptop in Chrome.
+- Prototype scope: ~12 tile types, ~14 piece shapes/variants, 6 enemy types
+  plus 1 boss.
+
+---
+
+## 2. Core Mechanics
+
+All numbers are **starting values to tune**, kept in `src/config/` (see §9).
+
+### 2.1 The grid
+
+- The city lives on a square grid. **Starting size 6×6**, expanding to **8×8**
+  at 4:00 and **10×10** at 8:00 (each expansion adds one ring of cells around
+  the current grid; the layout stays centred). Expansion happens with a free
+  build pause and a short "GRID EXPANDED" banner.
+- One cell = 32×32 world pixels. The city's world footprint is its occupied
+  cells; empty cells don't exist in the world (they're only build space).
+- The **Core** (1×1) starts at the grid centre and is placed automatically.
+- The city never rotates in the world; grid "up" is screen up.
+
+### 2.2 Pieces and tiles
+
+- A **piece** is a polyomino of 1–5 cells (shapes: monomino, domino, I3, L3,
+  the 7 tetrominoes, plus a few pentominoes later). Each cell of a piece is a
+  **tile** of a given type (Hull, Gatling, Generator, …). Piece definitions are
+  data: shape + tile type per cell.
+- Typical offers: one or two "function" tiles plus Hull filler, e.g. a T-piece
+  with a Cannon on the nose and three Hull, or an L-piece with Gatling, Gatling,
+  Generator.
+- After placement, **tiles are individual** for damage purposes. The piece
+  remains only as the grouping that moves together in the build screen.
+
+### 2.3 Placement and rearranging (build pause)
+
+- Triggered by: level-up, grid expansion. The game is fully paused.
+- The player chooses 1 of 3 offered pieces (see §2.8) and places it:
+  - Must lie fully inside the grid, on empty cells.
+  - Rotate in 90° steps (R or right-click). No mirroring (open: maybe later).
+- During the same pause the player may **move and rotate any already placed
+  piece** freely (drag). The Core can be moved too.
+- **Confirm rule:** the pause can only be closed when every tile is
+  orthogonally connected to the Core. Invalid cells and disconnected tiles are
+  highlighted red; the confirm button explains why it's disabled.
+- **Scrap:** any placed piece can be scrapped (removed for good) during the
+  pause, refunding 25% of the current level's XP requirement. This is the
+  escape hatch when space runs out or a layout can't be connected.
+- Edge case — **split pieces:** if destruction splits a piece into
+  disconnected parts, each part becomes its own movable group.
+- Edge case — **offline tiles at pause start** must be reconnected or scrapped
+  before confirming.
+
+### 2.4 Connectivity
+
+- Connectivity = orthogonal adjacency path through occupied tiles to the Core,
+  recalculated (flood fill) whenever a tile is destroyed.
+- **Disconnected tiles go offline:** they stop functioning (no firing, no
+  buffs) and are drawn greyed with a broken-link icon, but keep their HP, stay
+  part of the city's body and can still be hit. They come back online when
+  reconnected in the next build pause.
+- A **bridge tile** is a tile whose loss would disconnect others. The build
+  screen can show bridges with a toggle (helps the player plan redundancy;
+  also used by the Sapper, §4.3).
+
+### 2.5 Movement
+
+- Free 8-direction movement, WASD/arrows, no momentum (instant
+  start/stop, with a short 0.08 s ease to avoid jitter).
+- Base speed **150 px/s**. City size penalty: −2% per tile above 10 tiles,
+  floored at 55% of base. Each **Engine** tile adds +12% of base (applied
+  after the penalty).
+- The arena is unbounded; the camera follows the city.
+- The city's tiles are its hitbox. Enemies collide with tiles, not with a
+  single circle.
+
+### 2.6 Combat
+
+- Weapons **auto-target the nearest enemy within range**, 360°, measured from
+  the tile's centre. Projectiles pass over the city's own tiles (no line of
+  sight).
+- Enemies move towards the **nearest tile** and attack the tile they touch
+  (contact damage per second), so outer tiles take the hits.
+- Damage to a tile reduces its HP; at 0 HP the tile is **destroyed for good**
+  and its cell becomes empty. Connectivity is recalculated immediately.
+- **Lose condition:** the Core is destroyed. Nothing else ends the run.
+- **Win condition:** survive to 12:00 and defeat the boss. If the boss is
+  still alive at 14:00, it enrages (+100% damage).
+- Damaged (not destroyed) tiles do not heal by themselves; only Repair Bays
+  and the "Repair Core" level-up option heal.
+
+### 2.7 Synergies
+
+Three layout rules give placement its depth:
+
+1. **Exposure** — follows from §2.6: the outer ring takes all contact damage.
+2. **Adjacency buffs** — support tiles affect only their 4 orthogonal
+   neighbours. Same-type buffs stack additively, capped (see tile table).
+3. **Lines and rows** (the Tetris nod):
+   - **Weapon chains:** 3+ identical online weapon tiles in an unbroken
+     straight orthogonal line form a chain: every tile in it gets +50% damage
+     (3), +100% (4), +150% (5+). Drawn as a glowing link line. A tile can be
+     in a horizontal and a vertical chain; use the higher bonus, don't add.
+   - **Filled rows/columns:** a row or column of the *current* grid that is
+     completely filled with online tiles grants every tile in it +15% damage
+     and +15% max HP. Row and column bonuses stack (max +30%). Losing one tile
+     breaks it; grid expansion "unfills" all edge-to-edge lines, which is
+     intended.
+
+### 2.8 XP, levels and offers
+
+- Killed enemies drop **XP gems** (value 1, 3 or 10 by enemy type). A gem is
+  collected when it comes within the pickup radius (24 px) of **any** tile —
+  a wider city sweeps more XP. Magnet tiles increase the radius.
+- XP to next level: `5 + 4 × level` (starting value). Excess XP carries over;
+  multiple level-ups chain into consecutive build pauses.
+- **Level-up offer:** 3 pieces, weighted random from the pool, plus two fixed
+  options: **Repair Core** (heal Core 35% of max HP, instead of a piece) and
+  **Reroll** (2 per run).
+- **Duplicates upgrade instead of placing:** if an offered piece contains a
+  tile type the player already owns, the card shows an alternative "Upgrade
+  <type>" button. Taking it gives that whole tile type +1 level (max 5) and
+  the piece is not placed. Space and power are separate choices.
+  - Per level: +25% damage (weapons) or +20% effect (support).
+  - Level 3 and 5 add one named perk per type (e.g. Gatling L3: +1 projectile;
+    Cannon L5: shots pierce 3). Perks are listed per tile in the config.
+
+### 2.9 Tile catalogue (prototype)
+
+Colour codes are part of the readability pillar (§6).
+
+| Tile | HP | Function (level 1) | Placement tension | Phase |
+|---|---|---|---|---|
+| **Core** | 250 | Pistol: 8 dmg, 2 shots/s, range 200 | Wants to be buried | 1 |
+| **Hull** | 40 | None | Connector, cheap armour | 1 |
+| **Plating** | 120 | None | Outer edge | 3 |
+| **Gatling** | 35 | 4 dmg, 8 shots/s, range 220 | Chains well | 2 |
+| **Cannon** | 35 | 30 dmg, 0.8 shots/s, range 300, knockback | Chains well | 2 |
+| **Mortar** | 35 | 20 dmg AoE r=48, 0.5 shots/s, range 80–350 | Can sit deep inside | 3 |
+| **Saw** | 60 | 25 dmg/s to touching enemies | Must be on the edge | 3 |
+| **Generator** | 30 | +25% fire rate to neighbours (cap +75%) | Centre of a weapon cluster | 3 |
+| **Shield Emitter** | 30 | Neighbours take −40% damage (cap −60%) | Next to valuables | 3 |
+| **Repair Bay** | 30 | Heals neighbours 3 HP/s (not destroyed tiles) | Interior | 3 |
+| **Magnet** | 30 | +30% pickup radius city-wide (cap +150%) | Anywhere | 3 |
+| **Engine** | 30 | +12% base speed | Anywhere (rear by taste) | 3 |
+
+---
+
+## 3. Controls & Camera
+
+| Action | Input |
+|---|---|
+| Drive | WASD / arrow keys |
+| Pause menu | Esc |
+| Build: pick offer | Click card, or 1/2/3 |
+| Build: place / move piece | Drag with left mouse |
+| Build: rotate held piece | R or right-click |
+| Build: scrap piece | Drag onto scrap zone, or hover + X |
+| Build: toggle bridge view | B |
+| Build: confirm | Enter / button (disabled while invalid) |
+| Debug overlay | F1 (dev builds only, see §8) |
+
+**Camera:** top-down, follows the city centre with light smoothing, fixed zoom
+(prototype). At 10×10 the city is 320 px wide; zoom must keep at least ~400 px
+of space visible around the city on all sides at 1280×720 — zoom out stepwise
+on grid expansion if needed.
+
+**Readability rules (override visual style):**
+
+- Offline tiles are always visibly greyed with an icon.
+- Tile HP below 50% shows cracks; below 25% blinks slowly.
+- The build screen shows the grid large, centred, with the city as it is
+  (including damage) and the offered pieces beside it with tooltips listing
+  exact numbers.
+- Enemies, projectiles, gems and the city use distinct colour families so
+  they never blend (see §6).
+
+---
+
+## 4. Content & Structure
+
+### 4.1 Run structure (12:00)
+
+| Time | Event | New element |
+|---|---|---|
+| 0:00 | 6×6 grid, Core only | Swarmers |
+| 1:00 | | Runners |
+| 2:30 | Mini-wave spike | Brutes |
+| 4:00 | **Grid → 8×8** | Spitters |
+| 5:30 | | Sappers |
+| 7:00 | Elite Brute (drops 3 offers' worth of XP) | Bombers |
+| 8:00 | **Grid → 10×10** | All types mixed |
+| 10:00 | Final swarm escalation | Spawn rate ×1.5 |
+| 12:00 | **Boss** | Spawns stop except boss adds |
+
+Spawn rules: enemies spawn on a ring just outside the visible area around the
+city. Spawn budget per second grows over time from a wave table in config.
+Soft cap of 600 live enemies; beyond it, spawns are converted into elites.
+
+### 4.2 Piece pool
+
+- Phase 2 pool: Gatling and Cannon pieces in 3–4 shapes each, plus pure Hull
+  pieces.
+- Phase 3 pool: all tile types, ~14 piece definitions, weighted so support
+  tiles appear about 1 in 3 offers. Pentominoes only after 4:00.
+- Offers never show three cards of the same tile type.
+
+### 4.3 Enemies
+
+| Enemy | HP | Speed (px/s) | Damage | XP | Behaviour | Tests |
+|---|---|---|---|---|---|---|
+| **Swarmer** | 10 | 60 | 5/s contact | 1 | Walks to nearest tile | Outer armour |
+| **Runner** | 6 | 140 | 4/s contact | 1 | Comes in lines of 8–12 | DPS, chains |
+| **Brute** | 120 | 45 | 20/s contact | 10 | Tanky | Plating, Saws |
+| **Spitter** | 25 | 55 | 8 per shot, 1 shot/2 s, range 240 | 3 | Keeps distance, shoots nearest tile | Shields, Mortars |
+| **Sapper** | 30 | 90 | 15/s contact | 3 | Targets the nearest **bridge tile**, ignores others unless blocked | Redundant connections |
+| **Bomber** | 20 | 80 | 40 to every tile in a 3×3 area on contact, then dies | 3 | Rushes the city | Not stacking value in one blob |
+| **Boss: Colossus** | 6000 | 35 | 60/s contact | — | 3 phases: walks + summons Swarmers; adds Spitter volleys; charges in straight lines at <30% HP | Whole build |
+
+Enemy HP scales +6% per minute (starting value).
+
+---
+
+## 5. Story, Tone & Text
+
+Minimal for the prototype. Premise (draft, for the user to rewrite): *The
+world is ending in a tide of black shapes. The last city has torn itself from
+its foundations and rolls on, bolting on whatever it can salvage.*
+
+Tone: playful-grim, toy-like. UI text short and functional. Draft strings:
+
+- Level-up title: "Salvage!" (draft)
+- Grid expansion banner: "GRID EXPANDED" (draft)
+- Lose screen: "The Core has fallen." (draft)
+- Win screen: "The city rolls on." (draft)
+
+---
+
+## 6. Look
+
+**Style:** clean geometric — flat shapes, a dark background with a subtle grid
+pattern, bright tile colours, glow and screen-shake on impacts. Inspiration
+only: *Monsters are Coming* for the moving city fantasy; minimal geometric
+shooters for clarity.
+
+Concrete elements:
+
+- Tiles: rounded squares with a 2 px darker border; function shown by a
+  simple white icon (gun barrel, circle, bolt, cross…). Placed pieces get a
+  slightly lighter outline so piece groups are visible.
+- Colour families: **city** in cool/neutral (Hull grey, Plating steel blue);
+  **weapons** warm yellows/oranges; **support** greens/teals; **Core** white
+  with a pulse. **Enemies** are dark magenta/black shapes with a bright
+  outline. **Gems** cyan. **Enemy projectiles** red.
+- Effects: hit flash (white, 1 frame), death pop (particles), tile destruction
+  burst + small shake, chain link lines, generator pulse.
+- All visuals drawn procedurally (Phaser Graphics or generated textures) — no
+  external art needed in the prototype. Any external asset that is added gets
+  an entry with source and licence in `ASSETS.md`.
+
+---
+
+## 7. Audio
+
+Placeholder only in the prototype: a handful of CC0 sound effects (shot,
+hit, tile destroyed, level-up, gem pickup), from sources like Kenney or
+freesound (CC0 filter), each listed in `ASSETS.md`. One global mute toggle
+(M). No music yet. Gem pickup sounds are rate-limited to avoid noise.
+
+---
+
+## 8. UI, Progress & Saving
+
+**HUD:** run timer (top centre), XP bar (top, full width), level, Core HP
+bar (bottom centre), current grid size, reroll count.
+
+**Screens:** title (Start, Mute) → run → build pause overlay → lose/win
+summary (time survived, kills, level, final city layout snapshot) →
+restart.
+
+**Saving:** none. Only the mute setting is stored in `localStorage` under
+`rolling-bastion:settings` (wrapped in try/catch).
+
+**Debug tooling** (dev builds, or `?debug=1` in the URL):
+
+- F1 overlay: FPS, live enemy/projectile counts, current spawn budget,
+  game time.
+- Keys: `G` +1 level, `T` +60 s game time, `E` spawn 50 of the selected
+  enemy type, `[`/`]` change selected type, `I` god mode (Core invulnerable),
+  `K` kill all enemies, `P` print city layout JSON to console.
+- `?seed=<n>` for a fixed random seed (spawns and offers).
+- Live tuning: config values readable from a JSON override in
+  `localStorage` so values can be tweaked without rebuilding (stretch goal
+  for Phase 2).
+
+---
+
+## 9. Tech Stack & Code Structure
+
+| Part | Choice | Why |
+|---|---|---|
+| Language | TypeScript (strict) | Safety for the simulation logic |
+| Engine | Phaser 3 (latest 3.x) | Rendering, input, scenes, pooling, camera out of the box |
+| Build | Vite | Fast dev server, simple static build |
+| Tests | Vitest | Same toolchain as Vite |
+| Lint/format | ESLint + Prettier | Consistency |
+| Hosting | None for the prototype (local) | Decide when sharing (§12) |
+
+**Key technical rules**
+
+- **Simulation separate from rendering.** Grid model, connectivity,
+  synergies, combat maths, spawning and the XP/offer logic live in plain TS
+  modules under `src/sim/` with no Phaser imports. Phaser scenes read sim
+  state and render it, and translate input into sim commands. This keeps
+  the core unit-testable and allows a headless balance sim later.
+- **Fixed timestep** for the simulation (60 Hz), render interpolated.
+- **Seeded RNG** for all gameplay randomness.
+- **Content as data:** tiles, pieces, enemies, wave table and all tuning
+  numbers in `src/config/*.ts` (typed objects). No magic numbers in logic.
+- **Performance:** object pools for enemies, projectiles, gems; a uniform
+  spatial hash for enemy↔tile collision, targeting and gem pickup;
+  connectivity, chain and row bonuses recomputed only when the city changes
+  (placement, destruction, pause confirm), not every frame.
+- Units: world pixels and seconds throughout.
+
+**Data sketches**
+
+```ts
+type TileType = 'core' | 'hull' | 'plating' | 'gatling' | 'cannon' | 'mortar'
+  | 'saw' | 'generator' | 'shield' | 'repair' | 'magnet' | 'engine';
+
+interface PieceDef { id: string; cells: { x: number; y: number; tile: TileType }[]; weight: number; minTime?: number; }
+
+interface PlacedTile { id: number; type: TileType; gx: number; gy: number; hp: number; groupId: number; online: boolean; }
+
+interface CityState { gridSize: number; tiles: PlacedTile[]; typeLevels: Record<TileType, number>; }
+```
+
+**Folder structure**
+
+```
+src/
+  main.ts            // Phaser game config, boot
+  config/            // tiles.ts, pieces.ts, enemies.ts, waves.ts, balance.ts
+  sim/               // pure logic, no Phaser
+    grid.ts          // placement, rotation, bounds, expansion
+    connectivity.ts  // flood fill, bridge detection
+    synergies.ts     // adjacency, chains, filled rows
+    combat.ts        // targeting, damage, destruction
+    spawner.ts
+    progression.ts   // XP, levels, offers, upgrades
+    rng.ts
+  scenes/            // Boot, Title, Run, Build (overlay), Summary
+  render/            // tile/enemy drawing, effects, HUD
+  debug/
+tests/               // Vitest, mirrors src/sim
+```
+
+Ask the user before adding any library not listed here.
+
+---
+
+## 10. How We Work
+
+### Repository rules
+
+- Private GitHub repository. Everything is committed, including `concept.md`
+  and `CLAUDE.md`.
+- `.gitignore`: `node_modules/`, `dist/`, `.DS_Store`, `*.local`, `.env*`.
+- Commit messages: imperative, short subject line (`Add connectivity flood
+  fill`), body when useful.
+- **Commit author identity:** never change it. At the start of Phase 0,
+  show the user the output of `git config user.name` / `git config
+  user.email` and point it out if it reveals something they may not want in
+  the history (habit worth keeping even for a private repo).
+- If something is committed by mistake (secrets, large files): stop and tell
+  the user; no history rewrite unless asked.
+- Branches: `main` stays working. Each phase on `phase-N-<topic>`, merged
+  into `main` when the user has tried the phase and agreed.
+
+### Workflow
+
+- Start every session by reading §0, the session log, and the open questions.
+- New features: brainstorm with the user (questions one at a time, 2–3
+  approaches with a recommendation) → short design spec → implementation plan
+  → feature branch, one commit per step.
+- Build, type check and tests must pass before every commit.
+- No hosting yet: at the end of each phase, tell the user to run
+  `npm run dev` (and `npm run build && npm run preview` for a production
+  check) and what to try.
+- Unit-test pure logic (grid, connectivity, synergies, progression, combat
+  maths). Check behaviour manually on a production build.
+- **Decisions about feel and taste belong to the user.** After changing how
+  something feels or looks, hand over a build to try instead of judging it
+  yourself. Report tuning values changed.
+- Create a `CLAUDE.md` in Phase 0 summarising these rules and pointing here.
+
+### When Things Go Wrong
+
+Long unsuccessful attempts waste the user's usage limit and bury the session
+in noise. Prefer stopping early with a clear report.
+
+- **Three attempts, then stop.** If the same problem survives three distinct
+  fix attempts, stop. Report: what the symptom is, what was tried and why each
+  attempt failed, what you now suspect, and two or three options. Wait for the
+  user.
+- **Diagnose before fixing.** Reproduce the problem and find the cause
+  (logging, a minimal test, debug tooling) before changing code. Do not stack
+  speculative changes; revert a failed attempt before trying the next.
+- **Never make a check pass by weakening it.** Do not delete, skip, or loosen
+  tests, type checks, or lint rules to get past an error, and do not hide
+  errors with empty catches or ignore-comments. If a test is wrong, say so and
+  ask.
+- **Problems you cannot observe** (how something feels, looks, or sounds; a
+  bug only the user sees): do not iterate on guesses. Ask the user for exact
+  steps and what they saw, or add a way to display the relevant values.
+- **Broken build:** `main` must always build and run. If it breaks, tell the
+  user at once and propose reverting to the last good commit first, then fix
+  on a branch.
+- **Unexpected state** (unknown files, uncommitted changes you did not make,
+  history that does not match the log): stop and ask before changing anything.
+- **Stay in scope.** Do not refactor or "improve" unrelated code while fixing
+  something. Note the idea in the open questions instead.
+- **Write it down.** Record each failed approach and its cause in the session
+  log, and unresolved problems in the open questions, so a later session does
+  not repeat them.
+- **Keep sessions short.** At a phase boundary, or when the context is filling
+  up, update this document and suggest that the user start a fresh session.
+
+---
+
+## 11. Build Phases
+
+Each phase ends with something the user can try, and a short check by them.
+
+| Phase | Content | Done when |
+|---|---|---|
+| **0. Setup** | Vite + TS + Phaser scaffold, ESLint/Prettier, Vitest with one passing test, `.gitignore`, `CLAUDE.md`, version label on screen, `README` with start commands. Push to the private repo. | `npm run dev` opens a dark screen with the version label; `npm test` passes. |
+| **1. Grid sandbox** | `sim/grid.ts` + `connectivity.ts` with tests (placement, bounds, rotation, connectivity, bridge detection, split groups). Build screen as a standalone scene: offer 3 random pieces from a test pool, drag/rotate/move/scrap, red invalid feedback, confirm rule, bridge toggle. Grid expansion via debug key. | The user can build cities by hand and the rules feel right in the build screen. |
+| **2. Drive & fight** | City driving with size penalty, camera. Swarmers + Runners, spawner with wave table, spatial hash, pools. Core pistol, Gatling, Cannon with auto-targeting. Tile HP, destruction, offline tiles. XP gems, levels, offers (with Repair Core and reroll), build pause wired in. HUD, lose screen, debug tools. | A complete but simple run loop: drive, level, place, lose tiles, die. 60 fps at 600 enemies. |
+| **3. Layout depth — DECISION MILESTONE** | Remaining tiles (Plating, Mortar, Saw, Generator, Shield, Repair, Magnet, Engine). Adjacency buffs, weapon chains, filled-row bonuses with visuals. Duplicate upgrades with L3/L5 perks. Timed grid expansion. Brutes, Spitters, Sappers, Bombers, full 12-minute wave table, boss placeholder (big Brute) and win screen. One tuning pass with the user. | **The user plays several full runs and decides whether the grid puzzle is fun enough to continue**, or what to change first. |
+| **4. Boss & balance** | Colossus with 3 phases, enrage. Balance pass using debug tools and, optionally, a headless sim to compare builds. More piece shapes. | A run has a satisfying climax; no single obviously dominant build. |
+| **5. Look & juice** | Final geometric style per §6: icons, colours, effects, screen shake, damage cracks, chain/row visuals, title screen. | The game looks finished in screenshots and stays readable at 600 enemies. |
+| **6. Audio, menus, polish** | SFX set, mute, pause menu, summary screen with layout snapshot, settings. | Feature-complete prototype. |
+| **7. Shareable build** | Choose hosting (§12), deploy, `ASSETS.md` complete. | A link friends can open. |
+
+The early phases are the prototype. If the core idea does not work at the
+decision milestone, change the design before building more content.
+
+---
+
+## 12. Open Questions & Known Risks
+
+**Open decisions (user)**
+
+- Final title (working title: *Rolling Bastion*).
+- Hosting for sharing (Phase 7): itch.io, Netlify/Vercel, or making the repo
+  public for GitHub Pages.
+- Piece mirroring allowed or not.
+- Meta-progression after the decision milestone (unlocks, permanent stats).
+- Whether to try "fixed facing arcs" for some weapons later if auto-aim makes
+  layout too shallow (see risks).
+- All story and UI text in §5 is draft.
+
+**Risks**
+
+- **Auto-aim makes layout shallow.** Depth rests on exposure, adjacency and
+  lines/rows. *Mitigation:* check explicitly at Phase 3; fallback options are
+  directional weapons or range measured from the edge. *Checked:* Phase 3.
+- **Permanent destruction frustrates in a casual game.** *Mitigation:*
+  frequent level-ups, Repair Core option, scrap refund, tuned enemy damage;
+  watch whether players lose runs to snowballing tile loss. *Checked:*
+  Phases 2–3.
+- **Grid full too early → power stalls.** *Mitigation:* duplicate upgrades,
+  expansion timing. *Checked:* Phase 3.
+- **Build screen too fiddly/slow** (many pauses per run). *Mitigation:* keep
+  pieces small, keyboard shortcuts, measure average pause duration (target
+  <10 s). *Checked:* Phase 1–2.
+- **Performance with tile-based hitboxes.** *Mitigation:* spatial hash, pools,
+  recompute city-derived data only on change. *Checked:* Phase 2 (debug
+  spawn 600 enemies).
+
+**Known issues**
+
+- None yet.
+
+---
+
+## 13. Ideas for Later (not planned)
+
+- Meta-progression: unlockable tiles and starting Cores with passives (like
+  different cities in *Monsters are Coming*).
+- Directional weapons (fixed arcs) as a tile category.
+- Tile tags and sets (fire, frost, electric) with set bonuses.
+- Obstacles and terrain in the arena; roads.
+- Hero unit or pickup drone.
+- Mobile/touch controls, gamepad.
+- Daily seeded run with leaderboard.
+- Headless sim for automated balance comparisons.
+
+---
+
+## 14. Session Log
+
+One entry per working session, newest first. Keep entries short. This is the
+handover to the next session, which has no memory of this one.
+
+Format:
+
+```
+### YYYY-MM-DD — <phase and topic>
+- Done: what was built or changed (with version or branch).
+- Decisions: what the user decided, and why.
+- Tried and failed: approaches that did not work, and the cause.
+- State: does it build, do tests pass, what is deployed.
+- Next: the exact next step.
+- Watch out: anything a new session would otherwise get wrong.
+```
+
+### 2026-10-19 — Planning
+- Done: this concept document, from a brainstorming session. No code yet.
+- Decisions: browser, Phaser 3 + TS + Vite; player steers the city only
+  (free 8-dir), weapons auto-aim 360°; build pause on level-up with free
+  rearranging; tiles destroyed permanently, Core death = loss; pieces have
+  modules baked in; grid 6×6 → 10×10; adjacency + line/row synergies;
+  duplicates upgrade a tile type; 12-min timer + boss; level-ups as the only
+  acquisition; no meta-progression; clean geometric look; Sapper before the
+  decision milestone (Phase 3).
+- State: empty repository.
+- Next: Phase 0 (setup).
+- Watch out: all numbers are untested starting values; keep sim free of
+  Phaser imports; private repo, concept and CLAUDE.md are committed.
