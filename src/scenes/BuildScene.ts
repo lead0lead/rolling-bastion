@@ -3,7 +3,9 @@ import { OFFERS } from '../config/balance';
 import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
-import { COLORS, drawTile, LabelPool } from '../render/tiles';
+import { barrelFor } from '../render/icons';
+import { createTextures, TEX } from '../render/textures';
+import { COLORS, damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
   canReroll,
   cancelHeld,
@@ -23,7 +25,14 @@ import {
   type BuildSession,
 } from '../sim/build';
 import { findBridges } from '../sim/connectivity';
-import { cellKey, createCity, tileAt, type CityState, type PlacedTile } from '../sim/grid';
+import {
+  cellKey,
+  createCity,
+  facingAngle,
+  tileAt,
+  type CityState,
+  type PlacedTile,
+} from '../sim/grid';
 import type { BuildResult } from '../sim/progression';
 import { rollOffers } from '../sim/progression';
 import { createRng, type Rng } from '../sim/rng';
@@ -52,6 +61,11 @@ const REPAIR = { x: 1010, y: 508, w: 240, h: 40 };
 const REROLL = { x: 1010, y: 556, w: 240, h: 40 };
 const CONFIRM = { x: 1010, y: 640, w: 240, h: 56 };
 const SCRAP = { x: 30, y: 590, w: 250, h: 106 };
+/** Arc wedges in the build screen: radius in cells and opacity (direction and width only, not range). */
+const ARC_PREVIEW_CELLS = 1.6;
+const ARC_FILL_ALPHA = 0.18;
+const ARC_LINE_ALPHA = 0.55;
+const OFFLINE_TINT = 0x8a93a6;
 /** Pointer travel (px) that turns a click into a drag. */
 const DRAG_THRESHOLD = 6;
 
@@ -82,7 +96,13 @@ export class BuildScene extends Phaser.Scene {
   private session!: BuildSession;
   private rerollsLeft = 0;
   private g!: Phaser.GameObjects.Graphics;
-  private labels!: LabelPool;
+  /** Overlay graphics (outlines, arcs, frames) above the tile sprites. */
+  private fg!: Phaser.GameObjects.Graphics;
+  /** Arc wedges, between the grid and the tile sprites so tiles stay readable. */
+  private arcs!: Phaser.GameObjects.Graphics;
+  private tileImgs!: SpritePool;
+  private crackImgs!: SpritePool;
+  private barrelImgs!: SpritePool;
   private cardTexts: Phaser.GameObjects.Text[] = [];
   private confirmText!: Phaser.GameObjects.Text;
   private repairText!: Phaser.GameObjects.Text;
@@ -91,6 +111,7 @@ export class BuildScene extends Phaser.Scene {
   private statusText!: Phaser.GameObjects.Text;
   private tooltip!: Phaser.GameObjects.Text;
   private showBridges = false;
+  private showArcs = false;
   private pointer = { x: 0, y: 0 };
   private press: { x: number; y: number; picked: boolean } | null = null;
   private flash: { text: string; until: number } | null = null;
@@ -113,8 +134,13 @@ export class BuildScene extends Phaser.Scene {
     this.cardTexts = [];
     const { width, height } = this.scale;
     this.add.rectangle(0, 0, width, height, COLORS.background, this.run ? 0.94 : 1).setOrigin(0);
+    createTextures(this);
     this.g = this.add.graphics();
-    this.labels = new LabelPool(this);
+    this.tileImgs = new SpritePool(this, 1);
+    this.crackImgs = new SpritePool(this, 1.1);
+    this.barrelImgs = new SpritePool(this, 1.2);
+    this.fg = this.add.graphics().setDepth(3);
+    this.arcs = this.add.graphics().setDepth(0.5);
     const text = { fontFamily: 'monospace', color: COLORS.text };
 
     this.add
@@ -131,7 +157,7 @@ export class BuildScene extends Phaser.Scene {
           'Rotate: R / right-click',
           'Put back: Esc',
           'Scrap: drag onto SCRAP, or hover + X',
-          'Bridges: B',
+          'Bridges: B · Arcs: V',
           'Confirm: Enter',
           ...(DEBUG ? ['', 'Debug:', 'F2  expand grid', 'Del destroy hovered tile'] : []),
         ].join('\n'),
@@ -165,7 +191,7 @@ export class BuildScene extends Phaser.Scene {
         fontSize: '13px',
         color: COLORS.textWarn,
         align: 'right',
-        wordWrap: { width: CONFIRM.w + 60 },
+        wordWrap: { width: CONFIRM.w + 180 },
       })
       .setOrigin(1, 1);
     this.tooltip = this.add
@@ -340,6 +366,9 @@ export class BuildScene extends Phaser.Scene {
       case 'KeyB':
         this.showBridges = !this.showBridges;
         break;
+      case 'KeyV':
+        this.showArcs = !this.showArcs;
+        break;
       case 'Enter':
       case 'NumpadEnter':
         this.tryConfirm();
@@ -398,20 +427,66 @@ export class BuildScene extends Phaser.Scene {
   // ---------------------------------------------------------------- render
 
   override update(): void {
-    const g = this.g;
-    g.clear();
-    this.labels.begin();
+    this.g.clear();
+    this.fg.clear();
+    this.arcs.clear();
+    for (const pool of [this.tileImgs, this.crackImgs, this.barrelImgs]) pool.begin();
     this.drawGrid();
     this.drawCards();
     this.drawPanels();
     this.drawHeld();
-    this.labels.end();
+    for (const pool of [this.tileImgs, this.crackImgs, this.barrelImgs]) pool.end();
     this.updateTooltip();
     this.updateStatus();
   }
 
+  /** One tile from the shared textures: body + icon, cracks, barrel along its facing. */
+  private drawTileImage(
+    x: number,
+    y: number,
+    cs: number,
+    t: Pick<PlacedTile, 'type' | 'facing' | 'online'> & { hp?: number },
+    alpha = 1,
+  ): void {
+    const hpFrac = (t.hp ?? TILES[t.type].maxHp) / TILES[t.type].maxHp;
+    const a = alpha * damageAlpha(hpFrac, this.time.now);
+    const cx = x + cs / 2;
+    const cy = y + cs / 2;
+    this.tileImgs.add(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(cs, cs).setAlpha(a);
+    if (showsCracks(hpFrac)) {
+      this.crackImgs.add(cx, cy, TEX.cracks).setDisplaySize(cs, cs).setAlpha(a);
+    }
+    const barrel = barrelFor(t.type);
+    if (barrel) {
+      const img = this.barrelImgs
+        .add(cx, cy, TEX.barrel(barrel))
+        .setDisplaySize(cs, cs)
+        .setRotation(facingAngle(t.facing))
+        .setAlpha(a);
+      if (t.online) img.clearTint();
+      else img.setTint(OFFLINE_TINT);
+    }
+  }
+
+  /** Faint wedge showing an arc weapon's facing and arc width (concept.md §2.10). */
+  private drawArc(cx: number, cy: number, cs: number, t: Pick<PlacedTile, 'type' | 'facing'>) {
+    const weapon = TILES[t.type].weapon;
+    if (!weapon || weapon.arcDeg >= 360) return;
+    const half = (weapon.arcDeg * Math.PI) / 360;
+    const mid = facingAngle(t.facing);
+    const r = cs * ARC_PREVIEW_CELLS;
+    const g = this.arcs;
+    g.fillStyle(TILES[t.type].color, ARC_FILL_ALPHA);
+    g.slice(cx, cy, r, mid - half, mid + half, false);
+    g.fillPath();
+    g.lineStyle(2, TILES[t.type].color, ARC_LINE_ALPHA);
+    g.slice(cx, cy, r, mid - half, mid + half, false);
+    g.strokePath();
+  }
+
   private drawGrid(): void {
     const g = this.g;
+    const fg = this.fg;
     const r = this.gridRect();
     const cs = this.cellPx();
     const city = this.city;
@@ -424,35 +499,33 @@ export class BuildScene extends Phaser.Scene {
       }
     }
 
+    // Hovered group: what a click would pick up; its arcs are shown too.
+    let hoveredGroup = -1;
+    if (!this.session.held && inRect(r, this.pointer.x, this.pointer.y)) {
+      const c = this.cellAt(this.pointer.x, this.pointer.y);
+      hoveredGroup = tileAt(city, c.x, c.y)?.groupId ?? -1;
+    }
+
     const bridges = this.showBridges ? findBridges(city) : new Set<number>();
     for (const t of city.tiles) {
       const px = r.x + t.gx * cs;
       const py = r.y + t.gy * cs;
-      drawTile(g, px, py, cs, t.type, {
-        offline: !t.online,
-        hpFrac: t.hp / TILES[t.type].maxHp,
-        time: this.time.now,
-      });
-      this.label(t.type, px + cs / 2, py + cs / 2, cs, !t.online);
+      this.drawTileImage(px, py, cs, t);
+      if (this.showArcs || t.groupId === hoveredGroup)
+        this.drawArc(px + cs / 2, py + cs / 2, cs, t);
       if (!t.online) {
-        g.lineStyle(2, COLORS.invalid, 1);
-        g.strokeRect(px + 1, py + 1, cs - 2, cs - 2);
+        fg.lineStyle(2, COLORS.invalid, 1);
+        fg.strokeRect(px + 1, py + 1, cs - 2, cs - 2);
       }
       if (bridges.has(t.id)) {
-        g.lineStyle(3, COLORS.bridge, 1);
-        g.strokeCircle(px + cs / 2, py + cs / 2, cs * 0.34);
+        fg.lineStyle(3, COLORS.bridge, 1);
+        fg.strokeCircle(px + cs / 2, py + cs / 2, cs * 0.34);
       }
     }
     this.drawGroupOutlines(city.tiles, r.x, r.y, cs, COLORS.groupOutline, 0.45);
-
-    // Hovered group (what a click would pick up).
-    if (!this.session.held && inRect(r, this.pointer.x, this.pointer.y)) {
-      const c = this.cellAt(this.pointer.x, this.pointer.y);
-      const hovered = tileAt(city, c.x, c.y);
-      if (hovered) {
-        const group = city.tiles.filter((t) => t.groupId === hovered.groupId);
-        this.drawGroupOutlines(group, r.x, r.y, cs, COLORS.hover, 1, 3);
-      }
+    if (hoveredGroup >= 0) {
+      const group = city.tiles.filter((t) => t.groupId === hoveredGroup);
+      this.drawGroupOutlines(group, r.x, r.y, cs, COLORS.hover, 1, 3);
     }
   }
 
@@ -466,25 +539,25 @@ export class BuildScene extends Phaser.Scene {
     alpha: number,
     width = 2,
   ): void {
-    const g = this.g;
+    const fg = this.fg;
     const group = new Map(tiles.map((t) => [cellKey(t.gx, t.gy), t.groupId]));
-    g.lineStyle(width, color, alpha);
+    fg.lineStyle(width, color, alpha);
     for (const t of tiles) {
       const x = ox + t.gx * cs;
       const y = oy + t.gy * cs;
       const same = (dx: number, dy: number) =>
         group.get(cellKey(t.gx + dx, t.gy + dy)) === t.groupId;
-      if (!same(0, -1)) g.lineBetween(x, y, x + cs, y);
-      if (!same(0, 1)) g.lineBetween(x, y + cs, x + cs, y + cs);
-      if (!same(-1, 0)) g.lineBetween(x, y, x, y + cs);
-      if (!same(1, 0)) g.lineBetween(x + cs, y, x + cs, y + cs);
+      if (!same(0, -1)) fg.lineBetween(x, y, x + cs, y);
+      if (!same(0, 1)) fg.lineBetween(x, y + cs, x + cs, y + cs);
+      if (!same(-1, 0)) fg.lineBetween(x, y, x, y + cs);
+      if (!same(1, 0)) fg.lineBetween(x + cs, y, x + cs, y + cs);
     }
   }
 
   private drawHeld(): void {
     const s = this.session;
     if (!s.held) return;
-    const g = this.g;
+    const fg = this.fg;
     const r = this.gridRect();
     const cs = this.cellPx();
     const { x: px, y: py } = this.pointer;
@@ -498,11 +571,11 @@ export class BuildScene extends Phaser.Scene {
         if (!cell) return;
         const x = r.x + cell.x * cs;
         const y = r.y + cell.y * cs;
-        drawTile(g, x, y, cs, t.type, { alpha: 0.75, hpFrac: t.hp / TILES[t.type].maxHp });
-        this.label(t.type, x + cs / 2, y + cs / 2, cs, false, 0.75);
+        this.drawTileImage(x, y, cs, { ...t, online: true }, 0.75);
+        this.drawArc(x + cs / 2, y + cs / 2, cs, t);
         const bad = preview.problems.has(cellKey(cell.x, cell.y));
-        g.lineStyle(3, bad ? COLORS.invalid : COLORS.valid, 1);
-        g.strokeRect(x + 2, y + 2, cs - 4, cs - 4);
+        fg.lineStyle(3, bad ? COLORS.invalid : COLORS.valid, 1);
+        fg.strokeRect(x + 2, y + 2, cs - 4, cs - 4);
       });
       return;
     }
@@ -513,12 +586,12 @@ export class BuildScene extends Phaser.Scene {
     for (const t of s.held.tiles) {
       const x = ox + t.gx * cs;
       const y = oy + t.gy * cs;
-      drawTile(g, x, y, cs, t.type, { alpha: 0.6, hpFrac: t.hp / TILES[t.type].maxHp });
-      this.label(t.type, x + cs / 2, y + cs / 2, cs, false, 0.6);
+      this.drawTileImage(x, y, cs, { ...t, online: true }, 0.6);
+      this.drawArc(x + cs / 2, y + cs / 2, cs, t);
     }
     if (inRect(SCRAP, px, py)) {
-      g.lineStyle(3, COLORS.invalid, 1);
-      g.strokeRect(SCRAP.x, SCRAP.y, SCRAP.w, SCRAP.h);
+      fg.lineStyle(3, COLORS.invalid, 1);
+      fg.strokeRect(SCRAP.x, SCRAP.y, SCRAP.w, SCRAP.h);
     }
   }
 
@@ -542,8 +615,13 @@ export class BuildScene extends Phaser.Scene {
       const ox = r.x + (r.w - w * cs) / 2;
       const oy = r.y + 44 + (r.h - 44 - h * cs) / 2;
       for (const c of def.cells) {
-        drawTile(g, ox + c.x * cs, oy + c.y * cs, cs, c.tile, { alpha });
-        this.label(c.tile, ox + c.x * cs + cs / 2, oy + c.y * cs + cs / 2, cs, false, alpha);
+        this.drawTileImage(
+          ox + c.x * cs,
+          oy + c.y * cs,
+          cs,
+          { ...c, type: c.tile, online: true },
+          alpha,
+        );
       }
     });
   }
@@ -595,12 +673,6 @@ export class BuildScene extends Phaser.Scene {
     g.strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
   }
 
-  private label(type: TileType, x: number, y: number, cs: number, offline: boolean, alpha = 1) {
-    const text = TILES[type].label;
-    if (!text) return;
-    this.labels.add(x, y, text, Math.round(cs * 0.45), offline ? '#8a93a6' : '#ffffff', alpha);
-  }
-
   private updateTooltip(): void {
     const s = this.session;
     const i = s.held ? -1 : this.cardAt(this.pointer.x, this.pointer.y);
@@ -620,7 +692,7 @@ export class BuildScene extends Phaser.Scene {
     const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
     const lines = [
       `Grid ${city.gridSize}×${city.gridSize}  ·  ${city.tiles.length} tiles`,
-      `Bridges view: ${this.showBridges ? 'ON' : 'off'}`,
+      `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
       this.run && this.run.refundPerScrap > 0
         ? `Scrap refund: ${this.run.refundPerScrap} XP per piece` +
           (this.session.scrapped ? ` (${this.session.scrapped} scrapped)` : '')
