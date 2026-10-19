@@ -143,9 +143,15 @@ export function scrapAt(s: BuildSession, x: number, y: number): boolean {
   return true;
 }
 
-/** Takes Repair Core instead of a piece. */
-export function takeRepair(s: BuildSession): boolean {
-  if (s.offerTaken || s.held) return false;
+/** Takes Repair Core instead of a piece, or un-chooses it again. */
+export function toggleRepair(s: BuildSession): boolean {
+  if (s.held) return false;
+  if (s.repairChosen) {
+    s.repairChosen = false;
+    s.offerTaken = false;
+    return true;
+  }
+  if (s.offerTaken) return false;
   s.offerTaken = true;
   s.repairChosen = true;
   return true;

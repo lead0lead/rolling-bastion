@@ -14,7 +14,7 @@ import {
   scrapAt,
   scrapHeld,
   startBuild,
-  takeRepair,
+  toggleRepair,
 } from '../src/sim/build';
 import { createCity, tileAt } from '../src/sim/grid';
 
@@ -138,10 +138,13 @@ describe('build session', () => {
 describe('build session: run options', () => {
   it('Repair Core counts as taking the offer', () => {
     const s = session();
-    expect(takeRepair(s)).toBe(true);
+    expect(toggleRepair(s)).toBe(true);
     expect(s.repairChosen).toBe(true);
     expect(pickOffer(s, 0)).toBe(false);
     expect(confirmStatus(s)).toEqual({ ok: true });
+    expect(toggleRepair(s)).toBe(true);
+    expect(s.repairChosen).toBe(false);
+    expect(pickOffer(s, 0)).toBe(true);
   });
 
   it('rerolls only before an offer is taken or held', () => {

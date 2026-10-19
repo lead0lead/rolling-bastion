@@ -5,6 +5,7 @@ import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
 import { COLORS, drawTile, LabelPool } from '../render/tiles';
 import {
+  canReroll,
   cancelHeld,
   confirmStatus,
   debugDestroyAt,
@@ -13,24 +14,44 @@ import {
   pickOffer,
   pickUpAt,
   previewAt,
+  reroll,
   rotate,
   scrapAt,
   scrapHeld,
   startBuild,
+  toggleRepair,
   type BuildSession,
 } from '../sim/build';
 import { findBridges } from '../sim/connectivity';
 import { cellKey, createCity, tileAt, type CityState, type PlacedTile } from '../sim/grid';
+import type { BuildResult } from '../sim/progression';
 import { rollOffers } from '../sim/progression';
 import { createRng, type Rng } from '../sim/rng';
+
+/** Data for a build pause inside a run. Without it the scene runs as a sandbox. */
+export interface BuildSceneData {
+  city: CityState;
+  offers: PieceDef[];
+  title: string;
+  /** HP Repair Core would heal now. */
+  coreHeal: number;
+  rerollsLeft: number;
+  /** XP refunded per placed piece scrapped. */
+  refundPerScrap: number;
+  /** New offers, spending one reroll; null if none left. */
+  reroll: () => PieceDef[] | null;
+  done: (result: BuildResult) => void;
+}
 
 // Screen layout (1280×720).
 const GRID_CENTRE = { x: 620, y: 390 };
 const GRID_MAX_PX = 540;
 const GRID_MAX_CELL = 64;
-const CARDS = { x: 1010, y: 90, w: 240, h: 150, gap: 15, cell: 22 };
-const CONFIRM = { x: 1010, y: 610, w: 240, h: 56 };
-const SCRAP = { x: 30, y: 560, w: 250, h: 106 };
+const CARDS = { x: 1010, y: 80, w: 240, h: 130, gap: 12, cell: 20 };
+const REPAIR = { x: 1010, y: 508, w: 240, h: 40 };
+const REROLL = { x: 1010, y: 556, w: 240, h: 40 };
+const CONFIRM = { x: 1010, y: 640, w: 240, h: 56 };
+const SCRAP = { x: 30, y: 590, w: 250, h: 106 };
 /** Pointer travel (px) that turns a click into a drag. */
 const DRAG_THRESHOLD = 6;
 
@@ -50,17 +71,22 @@ function cardRect(i: number): Rect {
 }
 
 /**
- * Build pause (concept.md §2.3), here as a standalone sandbox: confirm rolls
- * a fresh offer and the same city carries on.
+ * Build pause (concept.md §2.3). In a run it edits the run's city and reports
+ * back through `done`; without data it is the Phase 1 sandbox, where confirm
+ * rolls a fresh offer and the same city carries on.
  */
 export class BuildScene extends Phaser.Scene {
+  private run: BuildSceneData | null = null;
   private rng!: Rng;
   private city!: CityState;
   private session!: BuildSession;
+  private rerollsLeft = 0;
   private g!: Phaser.GameObjects.Graphics;
   private labels!: LabelPool;
   private cardTexts: Phaser.GameObjects.Text[] = [];
   private confirmText!: Phaser.GameObjects.Text;
+  private repairText!: Phaser.GameObjects.Text;
+  private rerollText!: Phaser.GameObjects.Text;
   private reasonText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private tooltip!: Phaser.GameObjects.Text;
@@ -69,26 +95,38 @@ export class BuildScene extends Phaser.Scene {
   private press: { x: number; y: number; picked: boolean } | null = null;
   private flash: { text: string; until: number } | null = null;
   private pauseStartedAt = 0;
-  private pauseDurations: number[] = [];
 
   constructor() {
     super('Build');
   }
 
+  init(data: Partial<BuildSceneData>): void {
+    this.run = data.city ? (data as BuildSceneData) : null;
+  }
+
   create(): void {
     this.rng = createRng(SEED);
-    this.city = createCity();
+    this.city = this.run?.city ?? createCity();
+    this.rerollsLeft = this.run?.rerollsLeft ?? 0;
+    this.press = null;
+    this.flash = null;
+    this.cardTexts = [];
+    const { width, height } = this.scale;
+    this.add.rectangle(0, 0, width, height, COLORS.background, this.run ? 0.94 : 1).setOrigin(0);
     this.g = this.add.graphics();
     this.labels = new LabelPool(this);
     const text = { fontFamily: 'monospace', color: COLORS.text };
 
-    this.add.text(GRID_CENTRE.x, 28, 'Salvage!', { ...text, fontSize: '28px' }).setOrigin(0.5, 0);
+    this.add
+      .text(GRID_CENTRE.x, 28, this.run?.title ?? 'Salvage!', { ...text, fontSize: '28px' })
+      .setOrigin(0.5, 0);
     this.add
       .text(
         30,
         90,
         [
           'Pick a piece: click or 1/2/3',
+          ...(this.run ? ['Repair Core: 4 · Reroll: 5'] : []),
           'Move: drag (or click, then click)',
           'Rotate: R / right-click',
           'Put back: Esc',
@@ -100,7 +138,7 @@ export class BuildScene extends Phaser.Scene {
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
       )
       .setOrigin(0, 0);
-    this.statusText = this.add.text(30, 420, '', {
+    this.statusText = this.add.text(30, 440, '', {
       ...text,
       fontSize: '14px',
       color: COLORS.textDim,
@@ -114,6 +152,12 @@ export class BuildScene extends Phaser.Scene {
         ...text,
         fontSize: '20px',
       })
+      .setOrigin(0.5);
+    this.repairText = this.add
+      .text(REPAIR.x + REPAIR.w / 2, REPAIR.y + REPAIR.h / 2, '', { ...text, fontSize: '14px' })
+      .setOrigin(0.5);
+    this.rerollText = this.add
+      .text(REROLL.x + REROLL.w / 2, REROLL.y + REROLL.h / 2, '', { ...text, fontSize: '14px' })
       .setOrigin(0.5);
     this.reasonText = this.add
       .text(CONFIRM.x + CONFIRM.w, CONFIRM.y - 8, '', {
@@ -143,16 +187,19 @@ export class BuildScene extends Phaser.Scene {
       })
       .setOrigin(1, 0);
 
-    this.newPause();
+    this.newPause(this.run?.offers ?? rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
     this.bindInput();
   }
 
-  private newPause(): void {
-    const offers = rollOffers(this.rng, SANDBOX_POOL, OFFERS.count);
+  private newPause(offers: PieceDef[]): void {
     this.session = startBuild(this.city, offers);
     this.pauseStartedAt = this.time.now;
+    this.showOffers();
+  }
+
+  private showOffers(): void {
     for (const t of this.cardTexts) t.destroy();
-    this.cardTexts = offers.map((def, i) => {
+    this.cardTexts = this.session.offers.map((def, i) => {
       const r = cardRect(i);
       return this.add.text(r.x + 12, r.y + 10, `${i + 1}  ${pieceSummary(def)}`, {
         fontFamily: 'monospace',
@@ -161,6 +208,11 @@ export class BuildScene extends Phaser.Scene {
         wordWrap: { width: CARDS.w - 24 },
       });
     });
+  }
+
+  /** Run-only options are shown when the pause has offers (not for a grid expansion). */
+  private hasRunOptions(): boolean {
+    return this.run !== null && this.session.offers.length > 0;
   }
 
   // ---------------------------------------------------------------- layout
@@ -207,6 +259,14 @@ export class BuildScene extends Phaser.Scene {
       }
       if (inRect(CONFIRM, p.x, p.y)) {
         this.tryConfirm();
+        return;
+      }
+      if (this.hasRunOptions() && inRect(REPAIR, p.x, p.y)) {
+        this.tryRepair();
+        return;
+      }
+      if (this.hasRunOptions() && inRect(REROLL, p.x, p.y)) {
+        this.tryReroll();
         return;
       }
       const card = this.cardAt(p.x, p.y);
@@ -258,6 +318,12 @@ export class BuildScene extends Phaser.Scene {
         pickOffer(s, index);
         break;
       }
+      case 'Digit4':
+        if (this.hasRunOptions()) this.tryRepair();
+        break;
+      case 'Digit5':
+        if (this.hasRunOptions()) this.tryReroll();
+        break;
       case 'KeyR':
         rotate(s);
         break;
@@ -290,10 +356,39 @@ export class BuildScene extends Phaser.Scene {
     }
   }
 
+  /** Repair Core is pointless (and disabled) while the Core is at full HP. */
+  private canRepair(): boolean {
+    return (this.run?.coreHeal ?? 0) > 0 || this.session.repairChosen;
+  }
+
+  private tryRepair(): void {
+    if (this.canRepair()) toggleRepair(this.session);
+    else this.showFlash('The Core is at full HP');
+  }
+
+  private tryReroll(): void {
+    if (!this.run || !canReroll(this.session)) return;
+    const offers = this.run.reroll();
+    if (!offers) {
+      this.showFlash('No rerolls left');
+      return;
+    }
+    this.rerollsLeft--;
+    reroll(this.session, offers);
+    this.showOffers();
+  }
+
   private tryConfirm(): void {
-    if (!confirmStatus(this.session).ok) return;
-    this.pauseDurations.push((this.time.now - this.pauseStartedAt) / 1000);
-    this.newPause();
+    const s = this.session;
+    if (!confirmStatus(s).ok) return;
+    const durations = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
+    durations.push((this.time.now - this.pauseStartedAt) / 1000);
+    this.registry.set('pauseDurations', durations);
+    if (this.run) {
+      this.run.done({ repair: s.repairChosen, scrapped: s.scrapped });
+      return;
+    }
+    this.newPause(rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
   }
 
   private showFlash(text: string): void {
@@ -333,7 +428,11 @@ export class BuildScene extends Phaser.Scene {
     for (const t of city.tiles) {
       const px = r.x + t.gx * cs;
       const py = r.y + t.gy * cs;
-      drawTile(g, px, py, cs, t.type, { offline: !t.online });
+      drawTile(g, px, py, cs, t.type, {
+        offline: !t.online,
+        hpFrac: t.hp / TILES[t.type].maxHp,
+        time: this.time.now,
+      });
       this.label(t.type, px + cs / 2, py + cs / 2, cs, !t.online);
       if (!t.online) {
         g.lineStyle(2, COLORS.invalid, 1);
@@ -399,7 +498,7 @@ export class BuildScene extends Phaser.Scene {
         if (!cell) return;
         const x = r.x + cell.x * cs;
         const y = r.y + cell.y * cs;
-        drawTile(g, x, y, cs, t.type, { alpha: 0.75 });
+        drawTile(g, x, y, cs, t.type, { alpha: 0.75, hpFrac: t.hp / TILES[t.type].maxHp });
         this.label(t.type, x + cs / 2, y + cs / 2, cs, false, 0.75);
         const bad = preview.problems.has(cellKey(cell.x, cell.y));
         g.lineStyle(3, bad ? COLORS.invalid : COLORS.valid, 1);
@@ -414,7 +513,7 @@ export class BuildScene extends Phaser.Scene {
     for (const t of s.held.tiles) {
       const x = ox + t.gx * cs;
       const y = oy + t.gy * cs;
-      drawTile(g, x, y, cs, t.type, { alpha: 0.6 });
+      drawTile(g, x, y, cs, t.type, { alpha: 0.6, hpFrac: t.hp / TILES[t.type].maxHp });
       this.label(t.type, x + cs / 2, y + cs / 2, cs, false, 0.6);
     }
     if (inRect(SCRAP, px, py)) {
@@ -441,7 +540,7 @@ export class BuildScene extends Phaser.Scene {
       const w = Math.max(...def.cells.map((c) => c.x)) + 1;
       const h = Math.max(...def.cells.map((c) => c.y)) + 1;
       const ox = r.x + (r.w - w * cs) / 2;
-      const oy = r.y + 52 + (r.h - 52 - h * cs) / 2;
+      const oy = r.y + 44 + (r.h - 44 - h * cs) / 2;
       for (const c of def.cells) {
         drawTile(g, ox + c.x * cs, oy + c.y * cs, cs, c.tile, { alpha });
         this.label(c.tile, ox + c.x * cs + cs / 2, oy + c.y * cs + cs / 2, cs, false, alpha);
@@ -451,10 +550,25 @@ export class BuildScene extends Phaser.Scene {
 
   private drawPanels(): void {
     const g = this.g;
+    const s = this.session;
     g.lineStyle(2, COLORS.panelBorder, 1);
     g.strokeRoundedRect(SCRAP.x, SCRAP.y, SCRAP.w, SCRAP.h, 8);
 
-    const status = confirmStatus(this.session);
+    const runOptions = this.hasRunOptions();
+    this.repairText.setVisible(runOptions);
+    this.rerollText.setVisible(runOptions);
+    if (runOptions && this.run) {
+      const repairOn = (!s.offerTaken || s.repairChosen) && !s.held && this.canRepair();
+      const rerollOn = canReroll(s) && this.rerollsLeft > 0;
+      this.drawButton(REPAIR, repairOn, s.repairChosen);
+      this.drawButton(REROLL, rerollOn, false);
+      this.repairText
+        .setText(`4  Repair Core  +${Math.round(this.run.coreHeal)} HP`)
+        .setAlpha(repairOn ? 1 : 0.4);
+      this.rerollText.setText(`5  Reroll  (${this.rerollsLeft} left)`).setAlpha(rerollOn ? 1 : 0.4);
+    }
+
+    const status = confirmStatus(s);
     const hovered = status.ok && inRect(CONFIRM, this.pointer.x, this.pointer.y);
     g.fillStyle(status.ok ? (hovered ? 0x4fd18b : 0x3ab577) : 0x2a2f3a, 1);
     g.fillRoundedRect(CONFIRM.x, CONFIRM.y, CONFIRM.w, CONFIRM.h, 8);
@@ -463,11 +577,22 @@ export class BuildScene extends Phaser.Scene {
       status.block === 'holding'
         ? 'Place the held piece (Esc puts it back)'
         : status.block === 'no_offer_taken'
-          ? 'Pick one of the offered pieces'
+          ? this.run
+            ? 'Pick a piece or Repair Core'
+            : 'Pick one of the offered pieces'
           : status.block === 'disconnected'
             ? `${status.offline} tile${status.offline === 1 ? ' is' : 's are'} not connected to the Core — reconnect or scrap`
             : '',
     );
+  }
+
+  private drawButton(r: Rect, enabled: boolean, selected: boolean): void {
+    const g = this.g;
+    const hovered = enabled && !selected && inRect(r, this.pointer.x, this.pointer.y);
+    g.fillStyle(selected ? 0x2f5d48 : COLORS.panel, 1);
+    g.fillRoundedRect(r.x, r.y, r.w, r.h, 8);
+    g.lineStyle(2, hovered ? COLORS.hover : selected ? COLORS.valid : COLORS.panelBorder, 1);
+    g.strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
   }
 
   private label(type: TileType, x: number, y: number, cs: number, offline: boolean, alpha = 1) {
@@ -491,11 +616,15 @@ export class BuildScene extends Phaser.Scene {
 
   private updateStatus(): void {
     const city = this.city;
-    const d = this.pauseDurations;
+    const d = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
     const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
     const lines = [
       `Grid ${city.gridSize}×${city.gridSize}  ·  ${city.tiles.length} tiles`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}`,
+      this.run && this.run.refundPerScrap > 0
+        ? `Scrap refund: ${this.run.refundPerScrap} XP per piece` +
+          (this.session.scrapped ? ` (${this.session.scrapped} scrapped)` : '')
+        : '',
       d.length ? `Pause: last ${d.at(-1)?.toFixed(1)} s · avg ${avg.toFixed(1)} s` : '',
     ];
     if (this.flash && this.time.now < this.flash.until) lines.push('', this.flash.text);

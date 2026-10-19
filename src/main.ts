@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { BuildScene } from './scenes/BuildScene';
+import { HudScene } from './scenes/HudScene';
+import { RunScene } from './scenes/RunScene';
+import { SummaryScene } from './scenes/SummaryScene';
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -12,5 +15,5 @@ new Phaser.Game({
     width: 1280,
     height: 720,
   },
-  scene: [BootScene, BuildScene],
+  scene: [BootScene, RunScene, HudScene, BuildScene, SummaryScene],
 });

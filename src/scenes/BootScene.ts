@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SANDBOX } from '../debug/flags';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -6,7 +7,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Phase 1: the build screen runs as a standalone sandbox.
-    this.scene.start('Build');
+    // `?sandbox=1` opens the standalone build screen from Phase 1.
+    this.scene.start(SANDBOX ? 'Build' : 'Run');
   }
 }
