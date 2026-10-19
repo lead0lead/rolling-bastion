@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phase 0 built on branch `phase-0-setup`, waiting for the user to try it before merging into `main`. |
-| **Current phase** | 0 — done, awaiting user check |
-| **Next step** | User runs `npm install && npm run dev`, confirms; then merge `phase-0-setup` → `main` and start Phase 1 (grid sandbox) on `phase-1-grid-sandbox`. |
+| **Status** | Phase 0 merged into `main`. Phase 1 (grid sandbox) built on branch `phase-1-grid-sandbox`, waiting for the user to try it before merging. |
+| **Current phase** | 1 — done, awaiting user check |
+| **Next step** | User tries the build screen (`npm run dev`) and confirms the rules feel right, plus answers the Phase 1 open questions in §12; then merge `phase-1-grid-sandbox` → `main` and start Phase 2 (drive & fight) on `phase-2-drive-fight`. |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
-| **Live version** | none (local only); app version 0.0.1 |
+| **Live version** | none (local only); app version 0.1.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-19 (Phase 0 setup) |
+| **Last updated** | 2026-10-19 (Phase 1 grid sandbox) |
 
 ---
 
@@ -145,7 +145,7 @@ All numbers are **starting values to tune**, kept in `src/config/` (see §9).
 - After placement, **tiles are individual** for damage purposes. The piece
   remains only as the grouping that moves together in the build screen.
 
-### 2.3 Placement and rearranging (build pause)
+### 2.3 Placement and rearranging (build pause) (as implemented, Phase 1 sandbox)
 
 - Triggered by: level-up, grid expansion. The game is fully paused.
 - The player chooses 1 of 3 offered pieces (see §2.8) and places it:
@@ -164,7 +164,27 @@ All numbers are **starting values to tune**, kept in `src/config/` (see §9).
 - Edge case — **offline tiles at pause start** must be reconnected or scrapped
   before confirming.
 
-### 2.4 Connectivity
+As implemented (Phase 1, `src/sim/build.ts` + `src/scenes/BuildScene.ts`):
+
+- Exactly one offer must be taken per pause (placed, or picked and scrapped)
+  before confirming. A picked offer can be put back (Esc / release outside
+  the grid) and another picked, until one is placed.
+- Picking up: press on a card or a placed tile. Drag and release to drop, or
+  click once to carry it and click again to drop. The piece is held by the
+  cell you grabbed; rotation keeps that cell under the pointer.
+- An invalid drop (out of bounds / overlap) keeps the piece in hand with
+  red cells; releasing outside the grid and scrap zone puts it back where it
+  came from. Disconnected placement is allowed but shown red (grey tile, red
+  frame, broken-link mark) and blocks confirm.
+- Confirm is disabled while holding a piece, before taking an offer, or while
+  any tile is offline; the reason is shown above the button.
+- The Core can be moved but not scrapped. Scrap refund (25% XP) is not wired
+  yet: there is no XP until Phase 2.
+- Sandbox only: confirming rolls a fresh offer from `SANDBOX_POOL` and the
+  same city carries on. The screen shows the last and average pause
+  duration (for the "build screen too slow" risk, target <10 s).
+
+### 2.4 Connectivity (as implemented: flood fill + brute-force bridges, `src/sim/connectivity.ts`)
 
 - Connectivity = orthogonal adjacency path through occupied tiles to the Core,
   recalculated (flood fill) whenever a tile is destroyed.
@@ -398,6 +418,8 @@ restart.
 
 - F1 overlay: FPS, live enemy/projectile counts, current spawn budget,
   game time.
+- Build screen (Phase 1): `F2` expand grid, `Delete` destroy the hovered
+  tile (tests splits and offline tiles).
 - Keys: `G` +1 level, `T` +60 s game time, `E` spawn 50 of the selected
   enemy type, `[`/`]` change selected type, `I` god mode (Core invulnerable),
   `K` kill all enemies, `P` print city layout JSON to console.
@@ -461,11 +483,12 @@ src/
     synergies.ts     // adjacency, chains, filled rows
     combat.ts        // targeting, damage, destruction
     spawner.ts
+    build.ts         // build-pause session: pick, move, rotate, scrap, confirm rule
     progression.ts   // XP, levels, offers, upgrades
     rng.ts
   scenes/            // Boot, Title, Run, Build (overlay), Summary
   render/            // tile/enemy drawing, effects, HUD
-  debug/
+  debug/             // flags.ts: DEBUG (dev or ?debug=1), SEED (?seed=)
 tests/               // Vitest, mirrors src/sim
 ```
 
@@ -574,6 +597,11 @@ decision milestone, change the design before building more content.
 - Whether to try "fixed facing arcs" for some weapons later if auto-aim makes
   layout too shallow (see risks).
 - All story and UI text in §5 is draft.
+- Phase 1 build-screen calls made without asking (confirm or change):
+  one offer must be taken per pause (no "skip"); scrapping a fresh offer
+  counts as taking it; an invalid drop keeps the piece in hand; tile labels
+  are placeholder letters/symbols in white with a dark outline (real icons in
+  Phase 5); offer card piece previews are small (22 px cells).
 
 **Risks**
 
@@ -597,6 +625,9 @@ decision milestone, change the design before building more content.
 
 - Production build warns that the bundle chunk is >500 kB (it is Phaser).
   Harmless for now; could split Phaser into its own chunk later.
+- Build-screen interaction (drag, click-carry, rotate, scrap) is covered by
+  sim unit tests but was not clicked through by Claude; only a static
+  screenshot was checked.
 
 ---
 
@@ -630,6 +661,25 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-19 — Phase 1: grid sandbox
+- Done: `src/config/` (tiles.ts with all 12 tile types, pieces.ts with
+  `SANDBOX_POOL` built from ASCII pictures, balance.ts), `src/sim/grid.ts`
+  (placement, rotation, bounds, lift/drop groups, expansion, destruction with
+  group splitting), `connectivity.ts` (online flood fill, bridges),
+  `build.ts` (build-pause session), `progression.ts` (`rollOffers`), 35
+  tests. `BuildScene` sandbox with all Phase 1 controls; Boot goes straight to
+  it. Version 0.1.0. Branch `phase-1-grid-sandbox`.
+- Decisions: user approved Phase 0 and asked to merge and start Phase 1.
+  Claude's own calls are listed in §12 for the user to confirm.
+- Tried and failed: headless Firefox screenshots are blank with WebGL
+  (`--screenshot`, even with `preserveDrawingBuffer`); forcing the Canvas
+  renderer in a scratch copy of `dist/` works for visual checks. The game
+  itself is fine.
+- State: typecheck, lint, 35/35 tests and build pass. Not deployed.
+- Next: user tries the sandbox; on approval merge into `main`, then Phase 2.
+- Watch out: `pkill -f <pattern>` inside a Bash call kills the calling shell
+  if the pattern appears in its own command line.
 
 ### 2026-10-19 — Phase 0: setup
 - Done: Vite 8 + TypeScript 6.0 (strict) + Phaser 3.90.0 scaffold, ESLint
