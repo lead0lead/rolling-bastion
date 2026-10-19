@@ -4,6 +4,7 @@ import { ENEMY_TYPES } from '../config/enemies';
 import { PHASE2_POOL } from '../config/pieces';
 import { TILES } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
+import { barrelFor } from '../render/icons';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
@@ -14,7 +15,7 @@ import {
   debugLevelUp,
   debugSpawn,
 } from '../sim/debugActions';
-import { expandGrid } from '../sim/grid';
+import { expandGrid, facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollOffers, scrapRefund } from '../sim/progression';
 import { step, type MoveInput } from '../sim/step';
 import { cityChanged, createWorld, type World } from '../sim/world';
@@ -26,6 +27,10 @@ const TILE_LOSS_SHAKE = { ms: 120, intensity: 0.004 } as const;
 /** How long an enemy flashes white after a hit (s). */
 const HIT_FLASH = 0.05;
 const DEBUG_SPAWN_COUNT = 50;
+/** Barrel turn smoothing rate (1/s); barrels ease toward the weapon's aim. */
+const BARREL_TURN_RATE = 18;
+/** Tint for barrels of offline weapons. */
+const OFFLINE_TINT = 0x8a93a6;
 
 /** Shared with the HUD scene through the registry. */
 export interface RunUiState {
@@ -55,6 +60,9 @@ export class RunScene extends Phaser.Scene {
   private bg!: Phaser.GameObjects.TileSprite;
   private tileSprites!: SpritePool;
   private crackSprites!: SpritePool;
+  private barrelSprites!: SpritePool;
+  /** Current drawn barrel angle per weapon tile id. */
+  private barrelAngles = new Map<number, number>();
   private enemySprites!: SpritePool;
   private shotSprites!: SpritePool;
   private gemSprites!: SpritePool;
@@ -83,6 +91,8 @@ export class RunScene extends Phaser.Scene {
     this.gemSprites = new SpritePool(this, 1);
     this.tileSprites = new SpritePool(this, 2);
     this.crackSprites = new SpritePool(this, 2.5);
+    this.barrelSprites = new SpritePool(this, 2.6);
+    this.barrelAngles.clear();
     this.enemySprites = new SpritePool(this, 3);
     this.shotSprites = new SpritePool(this, 4);
 
@@ -234,6 +244,15 @@ export class RunScene extends Phaser.Scene {
 
   // ----------------------------------------------------------------- render
 
+  /** Eases a barrel's drawn angle toward `target` along the shorter way round. */
+  private turnBarrel(id: number, target: number, frameDt: number): number {
+    const current = this.barrelAngles.get(id) ?? target;
+    const diff = Phaser.Math.Angle.Wrap(target - current);
+    const next = current + diff * (1 - Math.exp(-BARREL_TURN_RATE * frameDt));
+    this.barrelAngles.set(id, next);
+    return next;
+  }
+
   private targetZoom(): number {
     const citySpan = this.world.city.gridSize * GRID.cellPx + 2 * CAMERA.marginPx;
     return Math.min(CAMERA.maxZoom, this.scale.height / citySpan);
@@ -271,6 +290,7 @@ export class RunScene extends Phaser.Scene {
     const top = oy - (w.city.gridSize * cell) / 2;
     this.tileSprites.begin();
     this.crackSprites.begin();
+    this.barrelSprites.begin();
     for (const t of w.city.tiles) {
       const x = left + (t.gx + 0.5) * cell;
       const y = top + (t.gy + 0.5) * cell;
@@ -283,7 +303,20 @@ export class RunScene extends Phaser.Scene {
       if (showsCracks(hpFrac)) {
         this.crackSprites.add(x, y, TEX.cracks).setDisplaySize(cell, cell).setAlpha(alpha);
       }
+      const barrel = barrelFor(t.type);
+      if (barrel) {
+        const rest = facingAngle(t.facing);
+        const aim = t.online ? (w.weapons.get(t.id)?.aim ?? rest) : rest;
+        const img = this.barrelSprites
+          .add(x, y, TEX.barrel(barrel))
+          .setDisplaySize(cell, cell)
+          .setRotation(this.turnBarrel(t.id, aim, frameDt))
+          .setAlpha(alpha);
+        if (t.online) img.clearTint();
+        else img.setTint(OFFLINE_TINT);
+      }
     }
+    this.barrelSprites.end();
     this.tileSprites.end();
     this.crackSprites.end();
 

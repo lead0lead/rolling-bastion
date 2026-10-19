@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { ENEMIES, ENEMY_TYPES } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
-import { COLORS, drawCracks, drawTile } from './tiles';
+import { BARREL_TYPES, drawBarrel, drawIcon, type BarrelType } from './icons';
+import { COLORS, drawCracks, drawOfflineMark, drawTile } from './tiles';
 
 /** Procedural textures (concept.md §6: no external art in the prototype). */
 export const TEX = {
@@ -11,6 +12,7 @@ export const TEX = {
   shotBig: 'shot-big',
   enemy: (type: string) => `enemy-${type}`,
   tile: (type: TileType, offline: boolean) => `tile-${type}${offline ? '-off' : ''}`,
+  barrel: (type: BarrelType) => `barrel-${type}`,
   cracks: 'tile-cracks',
 } as const;
 
@@ -76,35 +78,25 @@ export function createTextures(scene: Phaser.Scene): void {
 function createTileTextures(scene: Phaser.Scene): void {
   const size = TILE_TEX_PX;
   const g = scene.make.graphics({}, false);
-  const label = scene.make.text({
-    style: {
-      fontFamily: 'monospace',
-      fontStyle: 'bold',
-      fontSize: `${Math.round(size * 0.45)}px`,
-      stroke: '#0d0f14',
-      strokeThickness: 5,
-    },
-    add: false,
-  });
-  label.setOrigin(0.5).setPosition(size / 2, size / 2);
   for (const type of Object.keys(TILES) as TileType[]) {
     for (const offline of [false, true]) {
       g.clear();
       drawTile(g, 0, 0, size, type, { offline });
-      const tex = scene.textures.addDynamicTexture(TEX.tile(type, offline), size, size);
-      if (!tex) continue;
-      tex.draw(g);
-      if (TILES[type].label) {
-        label.setText(TILES[type].label).setColor(offline ? '#8a93a6' : '#ffffff');
-        tex.draw(label);
-      }
+      const body = offline ? COLORS.offline : TILES[type].color;
+      drawIcon(g, type, size, offline ? 0x8a93a6 : 0xffffff, body);
+      if (offline) drawOfflineMark(g, 0, 0, size);
+      scene.textures.addDynamicTexture(TEX.tile(type, offline), size, size)?.draw(g);
     }
+  }
+  for (const type of BARREL_TYPES) {
+    g.clear();
+    drawBarrel(g, type, size);
+    scene.textures.addDynamicTexture(TEX.barrel(type), size, size)?.draw(g);
   }
   g.clear();
   drawCracks(g, 0, 0, size, 0x0d0f14, 0.7);
   scene.textures.addDynamicTexture(TEX.cracks, size, size)?.draw(g);
   g.destroy();
-  label.destroy();
 }
 
 function toPoints(xy: number[]): Phaser.Math.Vector2[] {

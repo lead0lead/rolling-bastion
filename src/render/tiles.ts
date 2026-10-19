@@ -66,7 +66,6 @@ export function drawTile(
     radius,
   );
   if (showsCracks(hpFrac)) drawCracks(g, x, y, size, border, alpha);
-  if (opts.offline) drawBrokenLink(g, x + size * 0.72, y + size * 0.28, size * 0.16, alpha);
 }
 
 export function drawCracks(
@@ -89,6 +88,17 @@ export function drawCracks(
 }
 
 /** Small broken-chain mark for offline tiles. */
+/** Broken-link mark for offline tiles, in the tile's top-right corner. */
+export function drawOfflineMark(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  size: number,
+  alpha = 1,
+): void {
+  drawBrokenLink(g, x + size * 0.76, y + size * 0.24, size * 0.14, alpha);
+}
+
 function drawBrokenLink(
   g: Phaser.GameObjects.Graphics,
   cx: number,
