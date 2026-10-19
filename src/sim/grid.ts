@@ -1,6 +1,6 @@
 import { GRID } from '../config/balance';
 import type { PieceDef } from '../config/pieces';
-import { TILES, type TileType } from '../config/tiles';
+import { TILES, type Facing, type TileType } from '../config/tiles';
 
 export interface Cell {
   x: number;
@@ -15,6 +15,8 @@ export interface PlacedTile {
   hp: number;
   groupId: number;
   online: boolean;
+  /** Compass facing; turns with the piece (concept.md §2.10). */
+  facing: Facing;
 }
 
 export interface CityState {
@@ -58,6 +60,7 @@ export function createCity(gridSize: number = GRID.startSize): CityState {
         hp: TILES.core.maxHp,
         groupId: 1,
         online: true,
+        facing: 0,
       },
     ],
     typeLevels,
@@ -127,6 +130,7 @@ export function heldFromPiece(city: CityState, def: PieceDef): HeldGroup {
     hp: TILES[c.tile].maxHp,
     groupId,
     online: false,
+    facing: c.facing,
   }));
   return { groupId, tiles, anchor: centralCell(tiles) };
 }
@@ -158,7 +162,7 @@ export function rotateHeld(held: HeldGroup, quarterTurns = 1): HeldGroup {
   let tiles = held.tiles.map((t) => ({ ...t }));
   let anchor = { ...held.anchor };
   for (let i = 0; i < turns; i++) {
-    tiles = tiles.map((t) => ({ ...t, gx: -t.gy, gy: t.gx }));
+    tiles = tiles.map((t) => ({ ...t, gx: -t.gy, gy: t.gx, facing: turnFacing(t.facing, 1) }));
     anchor = { x: -anchor.y, y: anchor.x };
   }
   const minX = Math.min(...tiles.map((t) => t.gx));
@@ -168,6 +172,15 @@ export function rotateHeld(held: HeldGroup, quarterTurns = 1): HeldGroup {
     tiles: tiles.map((t) => ({ ...t, gx: t.gx - minX, gy: t.gy - minY })),
     anchor: { x: anchor.x - minX, y: anchor.y - minY },
   };
+}
+
+export function turnFacing(f: Facing, quarterTurns: number): Facing {
+  return ((((f + quarterTurns) % 4) + 4) % 4) as Facing;
+}
+
+/** Facing as a screen angle in radians (0 = right, y down). */
+export function facingAngle(f: Facing): number {
+  return ((f - 1) * Math.PI) / 2;
 }
 
 /** Removes a placed group for good. */

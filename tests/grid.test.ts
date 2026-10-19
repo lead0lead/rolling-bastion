@@ -18,9 +18,9 @@ const L_PIECE: PieceDef = {
   id: 'test-l',
   weight: 1,
   cells: [
-    { x: 0, y: 0, tile: 'gatling' },
-    { x: 0, y: 1, tile: 'hull' },
-    { x: 1, y: 1, tile: 'cannon' },
+    { x: 0, y: 0, tile: 'gatling', facing: 0 },
+    { x: 0, y: 1, tile: 'hull', facing: 0 },
+    { x: 1, y: 1, tile: 'cannon', facing: 0 },
   ],
 };
 
@@ -57,9 +57,9 @@ describe('rotateCells', () => {
     // L:  g.     rotated cw:  hg
     //     hc                  c.
     const r = rotateCells(L_PIECE.cells, 1);
-    expect(r).toContainEqual({ x: 1, y: 0, tile: 'gatling' });
-    expect(r).toContainEqual({ x: 0, y: 0, tile: 'hull' });
-    expect(r).toContainEqual({ x: 0, y: 1, tile: 'cannon' });
+    expect(r).toContainEqual({ x: 1, y: 0, tile: 'gatling', facing: 0 });
+    expect(r).toContainEqual({ x: 0, y: 0, tile: 'hull', facing: 0 });
+    expect(r).toContainEqual({ x: 0, y: 1, tile: 'cannon', facing: 0 });
   });
 });
 

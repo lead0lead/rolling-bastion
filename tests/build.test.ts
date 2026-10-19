@@ -22,11 +22,15 @@ const DOMINO: PieceDef = {
   id: 'test-domino',
   weight: 1,
   cells: [
-    { x: 0, y: 0, tile: 'gatling' },
-    { x: 1, y: 0, tile: 'hull' },
+    { x: 0, y: 0, tile: 'gatling', facing: 0 },
+    { x: 1, y: 0, tile: 'hull', facing: 0 },
   ],
 };
-const MONO: PieceDef = { id: 'test-mono', weight: 1, cells: [{ x: 0, y: 0, tile: 'hull' }] };
+const MONO: PieceDef = {
+  id: 'test-mono',
+  weight: 1,
+  cells: [{ x: 0, y: 0, tile: 'hull', facing: 0 }],
+};
 
 function session() {
   return startBuild(createCity(6), [DOMINO, MONO]); // core at 3,3

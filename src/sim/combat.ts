@@ -1,7 +1,7 @@
 import { COMBAT, UPGRADES } from '../config/balance';
 import { ENEMIES } from '../config/enemies';
-import { TILES } from '../config/tiles';
-import { destroyTile, type PlacedTile } from './grid';
+import { TILES, type WeaponDef } from '../config/tiles';
+import { destroyTile, facingAngle, type PlacedTile } from './grid';
 import { dropGem } from './progression';
 import { cityChanged, tileCentre, type Enemy, type Projectile, type World } from './world';
 
@@ -13,8 +13,37 @@ export function damageMultiplier(w: World, t: PlacedTile): number {
   return 1 + UPGRADES.damagePerLevel * (level - 1);
 }
 
-/** Nearest live enemy within `range` of (x, y), or undefined. */
-export function nearestEnemy(w: World, x: number, y: number, range: number): Enemy | undefined {
+/** Firing arc as a unit facing vector and cos(half angle); null for 360°. */
+export interface Arc {
+  fx: number;
+  fy: number;
+  cosHalf: number;
+}
+
+export function weaponArc(t: PlacedTile, weapon: WeaponDef): Arc | null {
+  if (weapon.arcDeg >= 360) return null;
+  const a = facingAngle(t.facing);
+  return { fx: Math.cos(a), fy: Math.sin(a), cosHalf: Math.cos((weapon.arcDeg * Math.PI) / 360) };
+}
+
+/** True if the offset (dx, dy) lies inside the arc (d2 = dx² + dy²). */
+export function inArc(arc: Arc | null, dx: number, dy: number, d2: number): boolean {
+  if (!arc) return true;
+  const dot = dx * arc.fx + dy * arc.fy;
+  const limit = arc.cosHalf;
+  // dot ≥ |d|·cosHalf, without the square root.
+  if (limit >= 0) return dot >= 0 && dot * dot >= d2 * limit * limit;
+  return dot >= 0 || dot * dot <= d2 * limit * limit;
+}
+
+/** Nearest live enemy within `range` of (x, y) and inside `arc`, or undefined. */
+export function nearestEnemy(
+  w: World,
+  x: number,
+  y: number,
+  range: number,
+  arc: Arc | null = null,
+): Enemy | undefined {
   let best: Enemy | undefined;
   let bestD2 = range * range;
   for (const e of w.enemies) {
@@ -22,7 +51,7 @@ export function nearestEnemy(w: World, x: number, y: number, range: number): Ene
     const dx = e.x - x;
     const dy = e.y - y;
     const d2 = dx * dx + dy * dy;
-    if (d2 <= bestD2) {
+    if (d2 <= bestD2 && inArc(arc, dx, dy, d2)) {
       bestD2 = d2;
       best = e;
     }
@@ -30,25 +59,38 @@ export function nearestEnemy(w: World, x: number, y: number, range: number): Ene
   return best;
 }
 
-/** Online weapon tiles auto-target the nearest enemy in range, 360° (concept.md §2.6). */
+/**
+ * Online weapon tiles auto-target the nearest enemy in range and inside their
+ * firing arc (concept.md §2.6, §2.10). While cooling down they still re-aim
+ * every `aimInterval` so barrels can track targets.
+ */
 export function updateWeapons(w: World, dt: number): void {
   for (const t of w.cache.weapons) {
     const weapon = TILES[t.type].weapon;
     if (!weapon) continue;
     const interval = 1 / weapon.fireRate;
-    let cd = (w.cooldowns.get(t.id) ?? w.rng.next() * interval) - dt;
-    if (cd > 0) {
-      w.cooldowns.set(t.id, cd);
-      continue;
+    let st = w.weapons.get(t.id);
+    if (!st) {
+      st = { cooldown: w.rng.next() * interval, aim: facingAngle(t.facing), aimTimer: 0 };
+      w.weapons.set(t.id, st);
     }
+    st.cooldown -= dt;
+    st.aimTimer -= dt;
+    const ready = st.cooldown <= 0;
+    if (!ready && st.aimTimer > 0) continue;
+
     const c = tileCentre(w, t);
-    const target = nearestEnemy(w, c.x, c.y, weapon.range);
+    const target = nearestEnemy(w, c.x, c.y, weapon.range, weaponArc(t, weapon));
+    st.aimTimer = COMBAT.aimInterval;
+    st.aim = target ? Math.atan2(target.y - c.y, target.x - c.x) : facingAngle(t.facing);
+    if (!ready) continue;
     if (!target) {
-      w.cooldowns.set(t.id, COMBAT.retargetDelay);
+      st.cooldown = COMBAT.retargetDelay;
       continue;
     }
+
     const spread = ((w.rng.next() * 2 - 1) * weapon.spreadDeg * Math.PI) / 180;
-    const angle = Math.atan2(target.y - c.y, target.x - c.x) + spread;
+    const angle = st.aim + spread;
     const p = w.projectilePool.pop() ?? ({} as Projectile);
     p.x = p.px = c.x;
     p.y = p.py = c.y;
@@ -61,8 +103,7 @@ export function updateWeapons(w: World, dt: number): void {
     p.source = t.type;
     p.dead = false;
     w.projectiles.push(p);
-    cd += interval;
-    w.cooldowns.set(t.id, Math.max(cd, 0));
+    st.cooldown = Math.max(st.cooldown + interval, 0);
   }
 }
 
@@ -121,7 +162,7 @@ export function damageTile(w: World, t: PlacedTile, amount: number): void {
   if (t.hp > 0) return;
   const c = tileCentre(w, t);
   destroyTile(w.city, t.id);
-  w.cooldowns.delete(t.id);
+  w.weapons.delete(t.id);
   cityChanged(w);
   w.events.push({ kind: 'tileDestroyed', x: c.x, y: c.y, type: t.type });
   if (t.type === 'core') w.over = true;

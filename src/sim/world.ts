@@ -40,6 +40,13 @@ export interface Projectile {
   dead: boolean;
 }
 
+/** Per-weapon-tile state. `aim` is the barrel angle (rad) the renderer turns toward. */
+export interface WeaponState {
+  cooldown: number;
+  aim: number;
+  aimTimer: number;
+}
+
 export interface Gem {
   x: number;
   y: number;
@@ -87,8 +94,8 @@ export interface World {
   projectilePool: Projectile[];
   hash: SpatialHash;
   spawn: { budget: number; next: { id: SpawnGroupId; count: number } | null; spikeIndex: number };
-  /** Seconds until each weapon tile (by id) may fire again. */
-  cooldowns: Map<number, number>;
+  /** State of each weapon tile, by tile id. */
+  weapons: Map<number, WeaponState>;
   xp: number;
   level: number;
   pendingLevelUps: number;
@@ -123,7 +130,7 @@ export function createWorld(seed: number): World {
     projectilePool: [],
     hash: new SpatialHash(GRID.cellPx),
     spawn: { budget: 0, next: null, spikeIndex: 0 },
-    cooldowns: new Map(),
+    weapons: new Map(),
     xp: 0,
     level: 1,
     pendingLevelUps: 0,

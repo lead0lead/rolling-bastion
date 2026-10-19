@@ -47,6 +47,7 @@ export function debugFillGrid(w: World, type: TileType): void {
         hp: TILES[type].maxHp,
         groupId,
         online: false,
+        facing: 0,
       });
     }
   }

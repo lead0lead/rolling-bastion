@@ -1,9 +1,11 @@
-import type { TileType } from './tiles';
+import type { Facing, TileType } from './tiles';
 
 export interface PieceCell {
   x: number;
   y: number;
   tile: TileType;
+  /** Facing of the tile when the piece is unrotated (matters for arc weapons). */
+  facing: Facing;
 }
 
 export interface PieceDef {
@@ -17,16 +19,23 @@ export interface PieceDef {
 
 /**
  * Builds a piece from an ASCII picture: one row per string, one character per
- * cell, '.' for empty. Characters map to tile types via `legend`.
+ * cell, '.' for empty. Characters map to tile types via `legend`. Every tile
+ * faces `facing` (default up: the side drawn at the top is the piece's front).
  */
-function piece(id: string, rows: string[], legend: Record<string, TileType>, weight = 1): PieceDef {
+function piece(
+  id: string,
+  rows: string[],
+  legend: Record<string, TileType>,
+  weight = 1,
+  facing: Facing = 0,
+): PieceDef {
   const cells: PieceCell[] = [];
   rows.forEach((row, y) => {
     [...row].forEach((ch, x) => {
       if (ch === '.') return;
       const tile = legend[ch];
       if (!tile) throw new Error(`piece ${id}: unknown legend char '${ch}'`);
-      cells.push({ x, y, tile });
+      cells.push({ x, y, tile, facing });
     });
   });
   return { id, cells, weight };

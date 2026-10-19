@@ -26,6 +26,7 @@ export function cityFrom(rows: string[]): CityState {
         hp: TILES[type].maxHp,
         groupId,
         online: false,
+        facing: 0,
       });
     });
   });

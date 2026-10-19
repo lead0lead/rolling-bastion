@@ -12,6 +12,9 @@ export type TileType =
   | 'magnet'
   | 'engine';
 
+/** Compass facing in quarter turns clockwise from up: 0 up, 1 right, 2 down, 3 left. */
+export type Facing = 0 | 1 | 2 | 3;
+
 export type TileFamily = 'core' | 'structure' | 'weapon' | 'support';
 
 export interface WeaponDef {
@@ -26,6 +29,8 @@ export interface WeaponDef {
   spreadDeg: number;
   /** Knockback impulse on hit (px/s). */
   knockback: number;
+  /** Firing arc in degrees, centred on the tile's facing; 360 = all around (concept.md §2.10). */
+  arcDeg: number;
 }
 
 export interface TileDef {
@@ -57,6 +62,7 @@ export const TILES: Record<TileType, TileDef> = {
       projectileRadius: 3,
       spreadDeg: 0,
       knockback: 0,
+      arcDeg: 360,
     },
   },
   hull: {
@@ -81,15 +87,16 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 35,
     color: 0xf2b134,
     label: 'G',
-    description: '4 dmg, 8 shots/s, range 220.',
+    description: '4 dmg, 8 shots/s, range 270, fires in a 180° arc.',
     weapon: {
       damage: 4,
       fireRate: 8,
-      range: 220,
+      range: 270,
       projectileSpeed: 620,
       projectileRadius: 2.5,
       spreadDeg: 4,
       knockback: 0,
+      arcDeg: 180,
     },
   },
   cannon: {
@@ -98,15 +105,16 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 35,
     color: 0xf08a24,
     label: 'C',
-    description: '30 dmg, 0.8 shots/s, range 300, knockback.',
+    description: '30 dmg, 0.8 shots/s, range 380, fires in a 90° arc, knockback.',
     weapon: {
       damage: 30,
       fireRate: 0.8,
-      range: 300,
+      range: 380,
       projectileSpeed: 460,
       projectileRadius: 5,
       spreadDeg: 0,
       knockback: 220,
+      arcDeg: 90,
     },
   },
   mortar: {

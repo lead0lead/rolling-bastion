@@ -68,6 +68,8 @@ export const ENEMY_PHYSICS = {
 export const COMBAT = {
   /** Retry delay when a weapon finds no target (s). */
   retargetDelay: 0.1,
+  /** How often a cooling-down weapon re-aims at its nearest target (s), for turning barrels. */
+  aimInterval: 0.1,
   /** Projectiles live for range / speed × this. */
   projectileLifeFactor: 1.15,
 } as const;

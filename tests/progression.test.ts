@@ -13,8 +13,12 @@ describe('rollOffers', () => {
 
   it('respects weights', () => {
     const pool = [
-      { id: 'common', weight: 99, cells: [{ x: 0, y: 0, tile: 'hull' as const }] },
-      { id: 'rare', weight: 1, cells: [{ x: 0, y: 0, tile: 'hull' as const }] },
+      {
+        id: 'common',
+        weight: 99,
+        cells: [{ x: 0, y: 0, tile: 'hull' as const, facing: 0 as const }],
+      },
+      { id: 'rare', weight: 1, cells: [{ x: 0, y: 0, tile: 'hull' as const, facing: 0 as const }] },
     ];
     const rng = createRng(1);
     let common = 0;
