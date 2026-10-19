@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Nothing built yet. Start with Phase 0. |
-| **Current phase** | 0 — not started |
-| **Next step** | Phase 0: project setup |
+| **Status** | Phase 0 built on branch `phase-0-setup`, waiting for the user to try it before merging into `main`. |
+| **Current phase** | 0 — done, awaiting user check |
+| **Next step** | User runs `npm install && npm run dev`, confirms; then merge `phase-0-setup` → `main` and start Phase 1 (grid sandbox) on `phase-1-grid-sandbox`. |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
-| **Live version** | none yet |
-| **Repository** | Private GitHub repository, branch `main` (URL to be filled in at Phase 0) |
+| **Live version** | none (local only); app version 0.0.1 |
+| **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-19 (initial plan, before any code) |
+| **Last updated** | 2026-10-19 (Phase 0 setup) |
 
 ---
 
@@ -412,8 +412,8 @@ restart.
 
 | Part | Choice | Why |
 |---|---|---|
-| Language | TypeScript (strict) | Safety for the simulation logic |
-| Engine | Phaser 3 (latest 3.x) | Rendering, input, scenes, pooling, camera out of the box |
+| Language | TypeScript (strict), pinned 6.0.x — 7.x is not yet supported by typescript-eslint | Safety for the simulation logic |
+| Engine | Phaser 3 (pinned 3.90.0, latest 3.x; Phaser 4 exists but is not used) | Rendering, input, scenes, pooling, camera out of the box |
 | Build | Vite | Fast dev server, simple static build |
 | Tests | Vitest | Same toolchain as Vite |
 | Lint/format | ESLint + Prettier | Consistency |
@@ -595,7 +595,8 @@ decision milestone, change the design before building more content.
 
 **Known issues**
 
-- None yet.
+- Production build warns that the bundle chunk is >500 kB (it is Phaser).
+  Harmless for now; could split Phaser into its own chunk later.
 
 ---
 
@@ -629,6 +630,21 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-19 — Phase 0: setup
+- Done: Vite 8 + TypeScript 6.0 (strict) + Phaser 3.90.0 scaffold, ESLint
+  (typescript-eslint strict, Phaser imports banned in `src/sim/`) + Prettier,
+  Vitest with a seeded RNG (`src/sim/rng.ts`, mulberry32) and 3 tests,
+  `.gitignore`, `CLAUDE.md`, `README.md`, Boot scene with title and version
+  label (from `package.json` via Vite `define`). Branch `phase-0-setup`.
+- Decisions: none by the user yet. Tooling choices: TS pinned to 6.0.x
+  (typescript-eslint peer range is <6.1); package.json is imported as JSON
+  in `vite.config.ts` instead of adding `@types/node` (not on the library
+  list). All dependencies pinned exactly.
+- Tried and failed: nothing notable.
+- State: typecheck, lint, tests (3/3) and build pass. Not deployed.
+- Next: user tries Phase 0; on approval merge into `main`, then Phase 1.
+- Watch out: git author is `lead0lead` with a GitHub noreply email (fine).
 
 ### 2026-10-19 — Planning
 - Done: this concept document, from a brainstorming session. No code yet.
