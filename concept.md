@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phase 0 merged into `main`. Phase 1 (grid sandbox) built on branch `phase-1-grid-sandbox`, waiting for the user to try it before merging. |
-| **Current phase** | 1 — done, awaiting user check |
-| **Next step** | User tries the build screen (`npm run dev`) and confirms the rules feel right, plus answers the Phase 1 open questions in §12; then merge `phase-1-grid-sandbox` → `main` and start Phase 2 (drive & fight) on `phase-2-drive-fight`. |
+| **Status** | Phases 0–1 merged into `main`. Phase 2 (drive & fight) built on branch `phase-2-drive-fight`, waiting for the user to try it before merging. |
+| **Current phase** | 2 — done, awaiting user check |
+| **Next step** | User plays a few runs (`npm run dev`), checks 60 fps with 600 enemies (F1, E, I) on their machine, and gives pacing feedback (see §12); then merge `phase-2-drive-fight` → `main` and start Phase 3 (layout depth, decision milestone) on `phase-3-layout-depth`. |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
-| **Live version** | none (local only); app version 0.1.0 |
+| **Live version** | none (local only); app version 0.2.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-19 (Phase 1 grid sandbox) |
+| **Last updated** | 2026-10-19 (Phase 2 drive & fight) |
 
 ---
 
@@ -196,7 +196,7 @@ As implemented (Phase 1, `src/sim/build.ts` + `src/scenes/BuildScene.ts`):
   screen can show bridges with a toggle (helps the player plan redundancy;
   also used by the Sapper, §4.3).
 
-### 2.5 Movement
+### 2.5 Movement (as implemented)
 
 - Free 8-direction movement, WASD/arrows, no momentum (instant
   start/stop, with a short 0.08 s ease to avoid jitter).
@@ -206,8 +206,11 @@ As implemented (Phase 1, `src/sim/build.ts` + `src/scenes/BuildScene.ts`):
 - The arena is unbounded; the camera follows the city.
 - The city's tiles are its hitbox. Enemies collide with tiles, not with a
   single circle.
+- As implemented: the ease is an exponential approach with time constant
+  0.08 s; the city's world position is its grid centre, so grid expansion
+  and rearranging don't move it. Numbers in `MOVE` (`src/config/balance.ts`).
 
-### 2.6 Combat
+### 2.6 Combat (as implemented for Core pistol, Gatling, Cannon)
 
 - Weapons **auto-target the nearest enemy within range**, 360°, measured from
   the tile's centre. Projectiles pass over the city's own tiles (no line of
@@ -221,6 +224,11 @@ As implemented (Phase 1, `src/sim/build.ts` + `src/scenes/BuildScene.ts`):
   still alive at 14:00, it enrages (+100% damage).
 - Damaged (not destroyed) tiles do not heal by themselves; only Repair Bays
   and the "Repair Core" level-up option heal.
+- As implemented: weapons fire projectiles (speed, size, spread, knockback per
+  weapon in `TILES[*].weapon`); a projectile hits the first enemy it touches
+  and is gone. Enemies push each other apart and are pushed out of tiles;
+  an enemy within 1 px of a tile damages that one tile. Win condition and
+  boss are not built yet (Phase 3/4).
 
 ### 2.7 Synergies
 
@@ -240,7 +248,7 @@ Three layout rules give placement its depth:
      breaks it; grid expansion "unfills" all edge-to-edge lines, which is
      intended.
 
-### 2.8 XP, levels and offers
+### 2.8 XP, levels and offers (as implemented except duplicate upgrades)
 
 - Killed enemies drop **XP gems** (value 1, 3 or 10 by enemy type). A gem is
   collected when it comes within the pickup radius (24 px) of **any** tile —
@@ -250,6 +258,11 @@ Three layout rules give placement its depth:
 - **Level-up offer:** 3 pieces, weighted random from the pool, plus two fixed
   options: **Repair Core** (heal Core 35% of max HP, instead of a piece) and
   **Reroll** (2 per run).
+- As implemented: Repair Core heals up to 35% of max HP, is a toggle in the
+  build screen and is disabled at full HP. Reroll and Repair are also on
+  keys 4 / 5. Scrap refund is 25% of the current level's requirement per
+  placed piece (scrapping a fresh offer refunds nothing). Gems are cyan
+  diamonds; beyond 400 live gems new XP is added to an existing gem.
 - **Duplicates upgrade instead of placing:** if an offered piece contains a
   tile type the player already owns, the card shows an alternative "Upgrade
   <type>" button. Taking it gives that whole tile type +1 level (max 5) and
@@ -330,6 +343,14 @@ Spawn rules: enemies spawn on a ring just outside the visible area around the
 city. Spawn budget per second grows over time from a wave table in config.
 Soft cap of 600 live enemies; beyond it, spawns are converted into elites.
 
+As implemented (Phase 2, `src/config/waves.ts`, `src/sim/spawner.ts`): spawn
+groups (single Swarmer, Swarmer pack 3–5, Runner line 8–12) are picked by
+weight from the current wave entry and spawned when the budget covers their
+cost; budget/s is interpolated 0.9 (0:00) → 2.0 (1:00) → 3.5 (4:00) → 6
+(8:00) → 9 (10:00) → 10 (12:00). 2:30 spike: 40 Swarmers around the ring.
+Above 600 live enemies spawns are skipped (elites not built yet). Enemies
+left far behind are moved back onto the ring ahead of the city.
+
 ### 4.2 Piece pool
 
 - Phase 2 pool: Gatling and Cannon pieces in 3–4 shapes each, plus pure Hull
@@ -404,8 +425,8 @@ freesound (CC0 filter), each listed in `ASSETS.md`. One global mute toggle
 
 ## 8. UI, Progress & Saving
 
-**HUD:** run timer (top centre), XP bar (top, full width), level, Core HP
-bar (bottom centre), current grid size, reroll count.
+**HUD (as implemented):** run timer (top centre), XP bar (top, full width), level, Core HP
+bar (bottom centre), current grid size, reroll count, kills.
 
 **Screens:** title (Start, Mute) → run → build pause overlay → lose/win
 summary (time survived, kills, level, final city layout snapshot) →
@@ -417,13 +438,17 @@ restart.
 **Debug tooling** (dev builds, or `?debug=1` in the URL):
 
 - F1 overlay: FPS, live enemy/projectile counts, current spawn budget,
-  game time.
+  game time. (as implemented, plus gem count, god mode and selected enemy)
+- Run (as implemented): `F2` grows the grid and opens a free build pause.
 - Build screen (Phase 1): `F2` expand grid, `Delete` destroy the hovered
   tile (tests splits and offline tiles).
 - Keys: `G` +1 level, `T` +60 s game time, `E` spawn 50 of the selected
   enemy type, `[`/`]` change selected type, `I` god mode (Core invulnerable),
   `K` kill all enemies, `P` print city layout JSON to console.
 - `?seed=<n>` for a fixed random seed (spawns and offers).
+- `?sandbox=1` opens the Phase 1 build-screen sandbox instead of a run.
+- `npm run bench`: simulation performance check (600 enemies, 300
+  projectiles), outside `npm test`.
 - Live tuning: config values readable from a JSON override in
   `localStorage` so values can be tweaked without rebuilding (stretch goal
   for Phase 2).
@@ -483,12 +508,18 @@ src/
     synergies.ts     // adjacency, chains, filled rows
     combat.ts        // targeting, damage, destruction
     spawner.ts
-    build.ts         // build-pause session: pick, move, rotate, scrap, confirm rule
-    progression.ts   // XP, levels, offers, upgrades
+    build.ts         // build-pause session: pick, move, rotate, scrap, repair, reroll
+    progression.ts   // XP, levels, offers, gems, build results
     rng.ts
-  scenes/            // Boot, Title, Run, Build (overlay), Summary
-  render/            // tile/enemy drawing, effects, HUD
-  debug/             // flags.ts: DEBUG (dev or ?debug=1), SEED (?seed=)
+    world.ts         // run state, city cache (cells, centres, speed, weapons)
+    step.ts          // fixed tick: movement, spawner, enemies, weapons, gems
+    enemies.ts       // chase, separation, tile collision, contact damage
+    spatialHash.ts   // enemy hash for projectile hits and separation
+    debugActions.ts
+  scenes/            // Boot, Run, Hud, Build (overlay + ?sandbox=1), Summary
+  render/            // tiles.ts (tile drawing, label/sprite pools), textures.ts
+  debug/             // flags.ts: DEBUG (dev or ?debug=1), SEED (?seed=), SANDBOX
+bench/               // sim.perf.ts, run with npm run bench
 tests/               // Vitest, mirrors src/sim
 ```
 
@@ -626,8 +657,19 @@ decision milestone, change the design before building more content.
 - Production build warns that the bundle chunk is >500 kB (it is Phaser).
   Harmless for now; could split Phaser into its own chunk later.
 - Build-screen interaction (drag, click-carry, rotate, scrap) is covered by
-  sim unit tests but was not clicked through by Claude; only a static
-  screenshot was checked.
+  sim unit tests but was not clicked through by Claude; only static
+  screenshots were checked.
+- Pacing (Phase 2, measured with a headless bot that drives to the nearest
+  gem, never places pieces): first level-up at ~26 s (target ~15 s), next
+  at ~40 s; a Core-only city dies at ~55–60 s. With placed weapons a human
+  should last much longer — needs the user's feel check.
+- At 6×6 the camera zoom is ~0.73 (city small on screen) because §3 keeps
+  400 px visible around the city at 720 px height. Worth checking by feel.
+- Sim performance (`npm run bench`, Node, this dev machine): ~2 ms average
+  per tick with 600 enemies and 300 projectiles, p99 ~3 ms; rare 15–40 ms
+  outliers (likely GC). Browser fps at 600 enemies not yet measured on the
+  user's machine.
+- Spawns above the 600 enemy cap are skipped, not turned into elites.
 
 ---
 
@@ -661,6 +703,27 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-19 — Phase 2: drive & fight
+- Done: config for enemies (Swarmer, Runner), waves (groups, table, 2:30
+  spike), weapons on tiles (Core pistol, Gatling, Cannon), `PHASE2_POOL`,
+  balance sections (MOVE, CAMERA, SPAWN, COMBAT, XP, LEVEL_UP, SIM,
+  UPGRADES). Sim: `world.ts`, `step.ts`, `spawner.ts`, `enemies.ts`,
+  `combat.ts`, `spatialHash.ts`, progression (XP, gems, build results),
+  build session (Repair Core toggle, reroll, scrap count), debug actions.
+  Scenes: Run (fixed step, interpolation, camera, pooled sprites), Hud,
+  Summary (lose screen), Build as overlay. Boot starts a run; `?sandbox=1`
+  for the old sandbox. 55 tests, `npm run bench`. Version 0.2.0.
+- Decisions: user approved Phase 1 ("looks nice") and asked to continue.
+  Phase 1 build-screen calls in §12 were not commented on and are kept.
+- Tried and failed: Vitest 5 has no `bench` export; replaced with a timed
+  test file under `bench/` and its own config.
+- State: typecheck, lint, 55/55 tests, build pass. Bench ~2 ms/tick.
+  Not deployed.
+- Next: user plays runs and checks fps; on approval merge, then Phase 3.
+- Watch out: Vitest 5 hides console output of passing tests unless
+  `--silent=false`. Headless screenshot tooling lives only in the session
+  scratchpad (Firefox `--screenshot`, Canvas renderer forced, keys injected).
 
 ### 2026-10-19 — Phase 1: grid sandbox
 - Done: `src/config/` (tiles.ts with all 12 tile types, pieces.ts with
