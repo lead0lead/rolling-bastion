@@ -18,8 +18,9 @@ npm run bench      # simulation performance check
 URL options: `?debug=1` (debug keys in production builds; always on in dev),
 `?seed=<n>` (fixed random seed), `?sandbox=1` (standalone build screen).
 
-Controls: WASD / arrows to drive. Debug: F1 overlay, G level up, T +60 s,
-E spawn 50 enemies ([ / ] change type), I god mode, K kill all, P print
-layout, F2 grow grid.
+Controls: WASD / arrows to drive. Build screen: R rotate, B bridges, V firing
+arcs. Debug: F1 overlay, G level up, T +60 s, E spawn 50 enemies ([ / ]
+change type), I god mode, K kill all, P print layout, F2 grow grid, F3 fill
+grid with Gatlings.
 
 Requires a current Node.js (developed on Node 26).

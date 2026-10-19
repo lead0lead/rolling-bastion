@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–1 merged into `main`. Phase 2 (drive & fight) built on branch `phase-2-drive-fight`, waiting for the user to try it before merging. |
-| **Current phase** | 2 — done, awaiting user check |
-| **Next step** | User confirms the frame-rate fix on their machine (F2 ×2, F3, F1); then merge `phase-2-drive-fight` → `main`. Then Phase 3, which now starts with firing arcs + turret/icon graphics (§2.10, §6). Decided: arcs + graphics are built first as step **3a** on `phase-3a-arcs-graphics` and handed over on their own, then the rest of Phase 3 (3b). |
+| **Status** | Phases 0–2 merged into `main`. Phase 3a (firing arcs + icons/turrets) built on branch `phase-3a-arcs-graphics`, waiting for the user to try it before merging. |
+| **Current phase** | 3a — done, awaiting user check |
+| **Next step** | User plays with arcs (do they make placement more interesting?) and judges icons/barrels; then merge `phase-3a-arcs-graphics` → `main` and start Phase 3b (remaining tiles, synergies, upgrades, enemies, 12-minute run) on `phase-3b-layout-depth`. |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
-| **Live version** | none (local only); app version 0.2.0 |
+| **Live version** | none (local only); app version 0.3.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-19 (Phase 2 drive & fight) |
+| **Last updated** | 2026-10-19 (Phase 3a arcs + graphics) |
 
 ---
 
@@ -291,7 +291,7 @@ Colour codes are part of the readability pillar (§6).
 | **Magnet** | 30 | +30% pickup radius city-wide (cap +150%) | Anywhere | 3 |
 | **Engine** | 30 | +12% base speed | Anywhere (rear by taste) | 3 |
 
-### 2.10 Firing arcs (design, decided 2026-10-19, to build in Phase 3)
+### 2.10 Firing arcs (as implemented, Phase 3a)
 
 The user wanted to try weapons that only fire in an arc, so facing becomes
 part of the layout puzzle (this replaces the "auto-aim makes layout shallow"
@@ -312,9 +312,16 @@ fallback from §12).
   target within its arc and rests along its facing when idle. Arcs are drawn
   as faint wedges in the build screen (for the held/hovered piece, plus a
   toggle to show all), not in combat.
-- Implementation sketch: `arcDeg` on `WeaponDef` (360 = no arc), `facing`
-  per piece cell and `PlacedTile`, rotated with the piece; per-weapon last
-  aim angle kept for rendering.
+- As implemented: `arcDeg` on `WeaponDef` (360 = no arc); `Facing` (0 up,
+  1 right, 2 down, 3 left) on `PieceCell` and `PlacedTile`, turned by
+  `rotateHeld`. All pieces face up unrotated (the side drawn at the top of a
+  piece is its front). `World.weapons` keeps cooldown and aim per weapon tile;
+  cooling-down weapons re-aim every 0.1 s (`COMBAT.aimInterval`) so barrels
+  track. Barrels ease toward the aim (render-side, rate 18/s) and rest along
+  the facing when idle or offline (offline barrels tinted grey).
+- Build screen wedges show direction and width only, with a fixed radius of
+  1.6 cells (range is in the card tooltip); drawn under the tiles. Shown for
+  the held piece and the hovered group; **V** toggles all arcs.
 
 ---
 
@@ -329,6 +336,7 @@ fallback from §12).
 | Build: rotate held piece | R or right-click |
 | Build: scrap piece | Drag onto scrap zone, or hover + X |
 | Build: toggle bridge view | B |
+| Build: toggle all firing arcs | V |
 | Build: confirm | Enter / button (disabled while invalid) |
 | Debug overlay | F1 (dev builds only, see §8) |
 
@@ -429,6 +437,12 @@ Concrete elements:
   procedural icons, and weapons get turning barrels that show where they aim
   (§2.10). A first version of this comes with firing arcs in Phase 3, ahead
   of the full look pass in Phase 5.
+- As implemented (3a, `src/render/icons.ts`, `textures.ts`): every tile type
+  has an icon baked into a 64 px texture (online and offline variants) —
+  Core ring, Hull rivets, Plating frame, Gatling/Cannon turret base, Mortar
+  tube, Saw blade, Generator bolt, Shield crest, Repair cross, Magnet
+  horseshoe, Engine chevrons. Core, Gatling and Cannon have separate barrel
+  sprites. Run and build screen both draw tiles as pooled sprites.
 
 - Tiles: rounded squares with a 2 px darker border; function shown by a
   simple white icon (gun barrel, circle, bolt, cross…). Placed pieces get a
@@ -694,9 +708,9 @@ decision milestone, change the design before building more content.
 - Sim performance (`npm run bench`, Node, this dev machine): ~2 ms average
   per tick with 600 enemies and 300 projectiles, p99 ~3 ms; rare 15–40 ms
   outliers (likely GC).
-- The build screen still draws tiles as Graphics + text every frame; with a
-  full 10×10 grid it may feel sluggish (it is paused, so no gameplay
-  impact). To be redone with the icon textures in Phase 3.
+- Mortar (Phase 3b) has an icon but no barrel; its arc is still undecided
+  (§2.10 says later tiles get decided when built).
+- Arc tuning (widths, +range) is untested by the user: starting values.
 - Spawns above the 600 enemy cap are skipped, not turned into elites.
 
 ---
@@ -730,6 +744,24 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-19 — Phase 3a: firing arcs and graphics
+- Done (branch `phase-3a-arcs-graphics`, v0.3.0): facing on pieces/tiles,
+  arc targeting (Gatling 180°/270 range, Cannon 90°/380, Core 360°), aim
+  state per weapon; procedural icons for all 12 tile types and barrel
+  sprites that turn toward targets; build screen redrawn with the same
+  textures (fixes its large-grid slowness), arc wedges under tiles, V toggle.
+  64 tests.
+- Decisions: user confirmed 60 fps after the fix and said to merge Phase 2
+  and start 3a. Claude's calls: all pieces face up unrotated; wedges show
+  direction/width only (fixed 1.6-cell radius), not range.
+- Tried and failed: a Python edit dropped a `*/`, commenting out
+  `scrapGroup` — caught by typecheck. Wedges first drawn over tiles were
+  muddy; moved under the tiles.
+- State: typecheck, lint, 64/64 tests, build pass. Pushed. Not merged.
+- Next: user tries arcs; then merge and Phase 3b.
+- Watch out: headless screenshots only show the game with the Canvas
+  renderer forced; WebGL timings come from the rAF wrapper.
 
 ### 2026-10-19 — Phase 2 feedback: performance fix, arcs and graphics design
 - Done: frame-rate fix on `phase-2-drive-fight`. The user saw 30 fps with
