@@ -67,7 +67,7 @@ with no memory of earlier ones; this file and the git history are all it has.
 |---|---|
 | **Status** | Phases 0–1 merged into `main`. Phase 2 (drive & fight) built on branch `phase-2-drive-fight`, waiting for the user to try it before merging. |
 | **Current phase** | 2 — done, awaiting user check |
-| **Next step** | User plays a few runs (`npm run dev`), checks 60 fps with 600 enemies (F1, E, I) on their machine, and gives pacing feedback (see §12); then merge `phase-2-drive-fight` → `main` and start Phase 3 (layout depth, decision milestone) on `phase-3-layout-depth`. |
+| **Next step** | User confirms the frame-rate fix on their machine (F2 ×2, F3, F1); then merge `phase-2-drive-fight` → `main`. Then Phase 3, which now starts with firing arcs + turret/icon graphics (§2.10, §6). Open: build that first as its own step, or inside Phase 3 (§12). |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
 | **Live version** | none (local only); app version 0.2.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
@@ -212,8 +212,9 @@ As implemented (Phase 1, `src/sim/build.ts` + `src/scenes/BuildScene.ts`):
 
 ### 2.6 Combat (as implemented for Core pistol, Gatling, Cannon)
 
-- Weapons **auto-target the nearest enemy within range**, 360°, measured from
-  the tile's centre. Projectiles pass over the city's own tiles (no line of
+- Weapons **auto-target the nearest enemy within range** and within their
+  firing arc (§2.10; 360° for the Core pistol), measured from the tile's
+  centre. Projectiles pass over the city's own tiles (no line of
   sight).
 - Enemies move towards the **nearest tile** and attack the tile they touch
   (contact damage per second), so outer tiles take the hits.
@@ -280,8 +281,8 @@ Colour codes are part of the readability pillar (§6).
 | **Core** | 250 | Pistol: 8 dmg, 2 shots/s, range 200 | Wants to be buried | 1 |
 | **Hull** | 40 | None | Connector, cheap armour | 1 |
 | **Plating** | 120 | None | Outer edge | 3 |
-| **Gatling** | 35 | 4 dmg, 8 shots/s, range 220 | Chains well | 2 |
-| **Cannon** | 35 | 30 dmg, 0.8 shots/s, range 300, knockback | Chains well | 2 |
+| **Gatling** | 35 | 4 dmg, 8 shots/s, range 220 (270 with its 180° arc, §2.10) | Chains well, facing | 2 |
+| **Cannon** | 35 | 30 dmg, 0.8 shots/s, range 300 (380 with its 90° arc, §2.10), knockback | Chains well, edge + facing | 2 |
 | **Mortar** | 35 | 20 dmg AoE r=48, 0.5 shots/s, range 80–350 | Can sit deep inside | 3 |
 | **Saw** | 60 | 25 dmg/s to touching enemies | Must be on the edge | 3 |
 | **Generator** | 30 | +25% fire rate to neighbours (cap +75%) | Centre of a weapon cluster | 3 |
@@ -289,6 +290,31 @@ Colour codes are part of the readability pillar (§6).
 | **Repair Bay** | 30 | Heals neighbours 3 HP/s (not destroyed tiles) | Interior | 3 |
 | **Magnet** | 30 | +30% pickup radius city-wide (cap +150%) | Anywhere | 3 |
 | **Engine** | 30 | +12% base speed | Anywhere (rear by taste) | 3 |
+
+### 2.10 Firing arcs (design, decided 2026-10-19, to build in Phase 3)
+
+The user wanted to try weapons that only fire in an arc, so facing becomes
+part of the layout puzzle (this replaces the "auto-aim makes layout shallow"
+fallback from §12).
+
+- **Which tiles:** Cannon 90° arc, Gatling 180° arc. Core pistol stays
+  360°. Later tiles (Mortar, Saw) get decided when they are built.
+- **Facing is set by rotating the piece.** Each arc tile carries a facing
+  (up/right/down/left) in its piece definition; rotating the piece with R
+  rotates the facing. No separate per-tile control. The city never rotates
+  in the world, so facing is a fixed compass direction: the player also
+  steers to bring guns to bear.
+- **Compensation: more range** for arc weapons. Starting values: Cannon
+  300 → 380, Gatling 220 → 270 (tune in Phase 3).
+- **Targeting:** nearest enemy that is within range *and* within the arc
+  (angle from the tile centre to the enemy, centred on the facing).
+- **Readability:** weapon tiles get a barrel that turns toward the current
+  target within its arc and rests along its facing when idle. Arcs are drawn
+  as faint wedges in the build screen (for the held/hovered piece, plus a
+  toggle to show all), not in combat.
+- Implementation sketch: `arcDeg` on `WeaponDef` (360 = no arc), `facing`
+  per piece cell and `PlacedTile`, rotated with the piece; per-weapon last
+  aim angle kept for rendering.
 
 ---
 
@@ -398,6 +424,11 @@ only: *Monsters are Coming* for the moving city fantasy; minimal geometric
 shooters for clarity.
 
 Concrete elements:
+
+- **Decided 2026-10-19 (user):** letters are not enough. Tiles get real
+  procedural icons, and weapons get turning barrels that show where they aim
+  (§2.10). A first version of this comes with firing arcs in Phase 3, ahead
+  of the full look pass in Phase 5.
 
 - Tiles: rounded squares with a 2 px darker border; function shown by a
   simple white icon (gun barrel, circle, bolt, cross…). Placed pieces get a
@@ -605,7 +636,7 @@ Each phase ends with something the user can try, and a short check by them.
 | **0. Setup** | Vite + TS + Phaser scaffold, ESLint/Prettier, Vitest with one passing test, `.gitignore`, `CLAUDE.md`, version label on screen, `README` with start commands. Push to the private repo. | `npm run dev` opens a dark screen with the version label; `npm test` passes. |
 | **1. Grid sandbox** | `sim/grid.ts` + `connectivity.ts` with tests (placement, bounds, rotation, connectivity, bridge detection, split groups). Build screen as a standalone scene: offer 3 random pieces from a test pool, drag/rotate/move/scrap, red invalid feedback, confirm rule, bridge toggle. Grid expansion via debug key. | The user can build cities by hand and the rules feel right in the build screen. |
 | **2. Drive & fight** | City driving with size penalty, camera. Swarmers + Runners, spawner with wave table, spatial hash, pools. Core pistol, Gatling, Cannon with auto-targeting. Tile HP, destruction, offline tiles. XP gems, levels, offers (with Repair Core and reroll), build pause wired in. HUD, lose screen, debug tools. | A complete but simple run loop: drive, level, place, lose tiles, die. 60 fps at 600 enemies. |
-| **3. Layout depth — DECISION MILESTONE** | Remaining tiles (Plating, Mortar, Saw, Generator, Shield, Repair, Magnet, Engine). Adjacency buffs, weapon chains, filled-row bonuses with visuals. Duplicate upgrades with L3/L5 perks. Timed grid expansion. Brutes, Spitters, Sappers, Bombers, full 12-minute wave table, boss placeholder (big Brute) and win screen. One tuning pass with the user. | **The user plays several full runs and decides whether the grid puzzle is fun enough to continue**, or what to change first. |
+| **3. Layout depth — DECISION MILESTONE** | Firing arcs for Gatling/Cannon (§2.10) with turret barrels, arc wedges in the build screen and procedural icons for all tiles (replacing letters); build screen tiles drawn as textures too. Remaining tiles (Plating, Mortar, Saw, Generator, Shield, Repair, Magnet, Engine). Adjacency buffs, weapon chains, filled-row bonuses with visuals. Duplicate upgrades with L3/L5 perks. Timed grid expansion. Brutes, Spitters, Sappers, Bombers, full 12-minute wave table, boss placeholder (big Brute) and win screen. One tuning pass with the user. | **The user plays several full runs and decides whether the grid puzzle is fun enough to continue**, or what to change first. |
 | **4. Boss & balance** | Colossus with 3 phases, enrage. Balance pass using debug tools and, optionally, a headless sim to compare builds. More piece shapes. | A run has a satisfying climax; no single obviously dominant build. |
 | **5. Look & juice** | Final geometric style per §6: icons, colours, effects, screen shake, damage cracks, chain/row visuals, title screen. | The game looks finished in screenshots and stays readable at 600 enemies. |
 | **6. Audio, menus, polish** | SFX set, mute, pause menu, summary screen with layout snapshot, settings. | Feature-complete prototype. |
@@ -625,8 +656,9 @@ decision milestone, change the design before building more content.
   public for GitHub Pages.
 - Piece mirroring allowed or not.
 - Meta-progression after the decision milestone (unlocks, permanent stats).
-- Whether to try "fixed facing arcs" for some weapons later if auto-aim makes
-  layout too shallow (see risks).
+- Scheduling of firing arcs + icons: a separate first step of Phase 3 that
+  the user tries on its own (Claude's recommendation), or built together with
+  the rest of Phase 3.
 - All story and UI text in §5 is draft.
 - Phase 1 build-screen calls made without asking (confirm or change):
   one offer must be taken per pause (no "skip"); scrapping a fresh offer
@@ -637,8 +669,11 @@ decision milestone, change the design before building more content.
 **Risks**
 
 - **Auto-aim makes layout shallow.** Depth rests on exposure, adjacency and
-  lines/rows. *Mitigation:* check explicitly at Phase 3; fallback options are
-  directional weapons or range measured from the edge. *Checked:* Phase 3.
+  lines/rows. *Mitigation:* firing arcs for Gatling and Cannon (§2.10),
+  decided 2026-10-19. *Checked:* Phase 3.
+- **Arcs make the early game too weak** (few weapons, not covering every
+  side). *Mitigation:* Core pistol stays 360°, arc weapons get more range;
+  tune in Phase 3. *Checked:* Phase 3.
 - **Permanent destruction frustrates in a casual game.** *Mitigation:*
   frequent level-ups, Repair Core option, scrap refund, tuned enemy damage;
   watch whether players lose runs to snowballing tile loss. *Checked:*
@@ -659,16 +694,12 @@ decision milestone, change the design before building more content.
 - Build-screen interaction (drag, click-carry, rotate, scrap) is covered by
   sim unit tests but was not clicked through by Claude; only static
   screenshots were checked.
-- Pacing (Phase 2, measured with a headless bot that drives to the nearest
-  gem, never places pieces): first level-up at ~26 s (target ~15 s), next
-  at ~40 s; a Core-only city dies at ~55–60 s. With placed weapons a human
-  should last much longer — needs the user's feel check.
-- At 6×6 the camera zoom is ~0.73 (city small on screen) because §3 keeps
-  400 px visible around the city at 720 px height. Worth checking by feel.
 - Sim performance (`npm run bench`, Node, this dev machine): ~2 ms average
   per tick with 600 enemies and 300 projectiles, p99 ~3 ms; rare 15–40 ms
-  outliers (likely GC). Browser fps at 600 enemies not yet measured on the
-  user's machine.
+  outliers (likely GC).
+- The build screen still draws tiles as Graphics + text every frame; with a
+  full 10×10 grid it may feel sluggish (it is paused, so no gameplay
+  impact). To be redone with the icon textures in Phase 3.
 - Spawns above the 600 enemy cap are skipped, not turned into elites.
 
 ---
@@ -677,7 +708,6 @@ decision milestone, change the design before building more content.
 
 - Meta-progression: unlockable tiles and starting Cores with passives (like
   different cities in *Monsters are Coming*).
-- Directional weapons (fixed arcs) as a tile category.
 - Tile tags and sets (fire, frost, electric) with set bonuses.
 - Obstacles and terrain in the arena; roads.
 - Hero unit or pickup drone.
@@ -703,6 +733,31 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-19 — Phase 2 feedback: performance fix, arcs and graphics design
+- Done: frame-rate fix on `phase-2-drive-fight`. The user saw 30 fps with
+  only 27 enemies and 3 projectiles but a large city. Diagnosed with a
+  scratch build without tile drawing (53 ms → 4 ms per frame in headless
+  WebGL): run tiles were redrawn every frame as Graphics rounded rects plus
+  text labels, and Phaser's `Text.setColor` re-renders the text texture on
+  every call. Now tiles are pre-rendered textures per type/online state drawn
+  as pooled sprites (cracks as an overlay sprite), and `LabelPool` only sets
+  changed properties. After: 4.6 ms per frame. Added F3 (fill grid with
+  Gatlings) and sim/draw-prep timings in the F1 overlay.
+- Decisions: pacing and feel approved ("building your base is genuinely
+  fun"). Concept changes: real tile icons and aim indication instead of
+  letters; firing arcs as an experiment. Brainstorm results (§2.10): facing
+  set by rotating the piece (A); Cannon 90° and Gatling 180° arcs, Core 360°
+  (B); arc weapons get more range (A); turning barrels + arc wedges in the
+  build screen only (A).
+- Tried and failed: caching label styles alone barely changed the headless
+  measurement (15.4 → 14.7 ms, Canvas renderer); the tile Graphics were the
+  main cost.
+- State: typecheck, lint, 55/55 tests, build pass. Pushed. Not merged.
+- Next: user confirms the fps fix; merge Phase 2; answer the scheduling
+  question in §12; then Phase 3.
+- Watch out: headless Firefox WebGL is software-rendered; compare scripts'
+  per-frame time (rAF wrapper) between builds rather than reading FPS.
 
 ### 2026-10-19 — Phase 2: drive & fight
 - Done: config for enemies (Swarmer, Runner), waves (groups, table, 2:30
