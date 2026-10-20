@@ -6,7 +6,7 @@ import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
-import { COLORS, css } from '../render/palette';
+import { COLORS, css, FONT } from '../render/palette';
 import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
   canReroll,
@@ -171,10 +171,14 @@ export class BuildScene extends Phaser.Scene {
     this.fg = this.add.graphics().setDepth(3);
     this.arcs = this.add.graphics().setDepth(0.5);
     this.lines = this.add.graphics().setDepth(1.15);
-    const text = { fontFamily: 'monospace', color: COLORS.text };
+    const text = { fontFamily: FONT.family, fontStyle: FONT.weight, color: COLORS.text };
 
     this.add
-      .text(GRID_CENTRE.x, 28, this.run?.title ?? 'Salvage!', { ...text, fontSize: '28px' })
+      .text(GRID_CENTRE.x, 28, this.run?.title ?? 'Salvage!', {
+        ...text,
+        fontStyle: FONT.bold,
+        fontSize: '28px',
+      })
       .setOrigin(0.5, 0);
     this.add
       .text(
@@ -258,7 +262,8 @@ export class BuildScene extends Phaser.Scene {
     this.cardTexts = this.session.offers.map((def, i) => {
       const r = cardRect(i);
       return this.add.text(r.x + 12, r.y + 10, `${i + 1}  ${pieceSummary(def)}`, {
-        fontFamily: 'monospace',
+        fontFamily: FONT.family,
+        fontStyle: FONT.weight,
         fontSize: '13px',
         color: COLORS.text,
         wordWrap: { width: CARDS.w - 24 },
@@ -272,7 +277,8 @@ export class BuildScene extends Phaser.Scene {
         : '';
       return this.add
         .text(r.x + r.w / 2, r.y + r.h / 2, label, {
-          fontFamily: 'monospace',
+          fontFamily: FONT.family,
+          fontStyle: FONT.weight,
           fontSize: '12px',
           color: COLORS.text,
         })

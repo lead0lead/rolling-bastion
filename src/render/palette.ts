@@ -58,3 +58,14 @@ export const COLORS = {
 export function css(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
+
+/**
+ * UI font (concept.md §6): Fredoka, bundled in public/fonts and loaded before
+ * the game starts (main.ts); rounded system fonts as fallback.
+ */
+export const FONT = {
+  family: 'Fredoka, "Arial Rounded MT Bold", "Trebuchet MS", sans-serif',
+  /** CSS weight for normal UI text, and for titles and banners. */
+  weight: '500',
+  bold: '600',
+} as const;

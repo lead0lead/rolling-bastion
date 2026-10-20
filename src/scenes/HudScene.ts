@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GRID } from '../config/balance';
 import { BOSS, ENEMIES } from '../config/enemies';
-import { COLORS } from '../render/palette';
+import { COLORS, FONT } from '../render/palette';
 import { budgetRate } from '../sim/spawner';
 import { coreTile } from '../sim/grid';
 import { xpToNext } from '../sim/progression';
@@ -29,9 +29,11 @@ export class HudScene extends Phaser.Scene {
   }
 
   create(): void {
-    const text = { fontFamily: 'monospace', color: COLORS.text };
+    const text = { fontFamily: FONT.family, fontStyle: FONT.weight, color: COLORS.text };
     this.g = this.add.graphics();
-    this.timer = this.add.text(640, 16, '', { ...text, fontSize: '26px' }).setOrigin(0.5, 0);
+    this.timer = this.add
+      .text(640, 16, '', { ...text, fontStyle: FONT.bold, fontSize: '26px' })
+      .setOrigin(0.5, 0);
     this.level = this.add.text(12, 16, '', { ...text, fontSize: '18px' });
     this.info = this.add
       .text(1268, 16, '', { ...text, fontSize: '14px', color: COLORS.textDim, align: 'right' })
@@ -43,7 +45,12 @@ export class HudScene extends Phaser.Scene {
       .text(640, BOSS_BAR.y - 4, '', { ...text, fontSize: '13px' })
       .setOrigin(0.5, 1);
     this.banner = this.add
-      .text(640, 120, 'GRID EXPANDED', { ...text, fontSize: '32px', color: COLORS.textInfo })
+      .text(640, 120, 'GRID EXPANDED', {
+        ...text,
+        fontStyle: FONT.bold,
+        fontSize: '32px',
+        color: COLORS.textInfo,
+      })
       .setOrigin(0.5)
       .setVisible(false);
     this.debug = this.add.text(12, 50, '', {

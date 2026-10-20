@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TILES, type TileType } from '../config/tiles';
-import { COLORS } from './palette';
+import { COLORS, FONT } from './palette';
 
 export interface TileDrawOptions {
   offline?: boolean;
@@ -122,8 +122,8 @@ export class LabelPool {
     let entry = this.texts[this.used];
     if (!entry) {
       const obj = this.scene.add.text(0, 0, text, {
-        fontFamily: 'monospace',
-        fontStyle: 'bold',
+        fontFamily: FONT.family,
+        fontStyle: FONT.bold,
         fontSize: `${size}px`,
         color,
         stroke: '#0d0f14',

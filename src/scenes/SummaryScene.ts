@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS } from '../render/palette';
+import { COLORS, FONT } from '../render/palette';
 
 export interface SummaryData {
   time: number;
@@ -16,7 +16,7 @@ export class SummaryScene extends Phaser.Scene {
   }
 
   create(data: SummaryData): void {
-    const text = { fontFamily: 'monospace', color: COLORS.text };
+    const text = { fontFamily: FONT.family, fontStyle: FONT.weight, color: COLORS.text };
     const mins = Math.floor(data.time / 60);
     const secs = Math.floor(data.time % 60)
       .toString()
@@ -25,6 +25,7 @@ export class SummaryScene extends Phaser.Scene {
     this.add
       .text(640, 240, data.won ? 'The city rolls on.' : 'The Core has fallen.', {
         ...text,
+        fontStyle: FONT.bold,
         fontSize: '36px',
         color: data.won ? COLORS.textInfo : COLORS.text,
       })
