@@ -4,6 +4,9 @@ Browser survivor-like: steer a driving city built from Tetris-like pieces
 through endless monster hordes. See [`concept.md`](concept.md) for the full
 concept and build plan.
 
+**Play:** https://lead0lead.github.io/rolling-bastion/ (deployed from `main`
+by GitHub Actions).
+
 ## Run
 
 ```sh

@@ -70,8 +70,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | **Next step** | Set up GitHub Pages deployment (§12 "Phase 7"). |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
 | **Live version** | none (local only); app version 0.7.0 |
-| **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
-| **Play URL** | Runs locally: `npm install`, then `npm run dev` |
+| **Repository** | Public GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` (made public 2026-10-20 for GitHub Pages, user's decision) |
+| **Play URL** | https://lead0lead.github.io/rolling-bastion/ — deployed by `.github/workflows/deploy.yml` on every push to `main` (lint, tests and build must pass). Locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
 | **Last updated** | 2026-10-20 (Phase 6 merged, Phase 7 starting) |
 
@@ -726,7 +726,7 @@ run → pause → settings → back → resume, quit with confirm).
 | Build | Vite | Fast dev server, simple static build |
 | Tests | Vitest | Same toolchain as Vite |
 | Lint/format | ESLint + Prettier | Consistency |
-| Hosting | None for the prototype (local) | Decide when sharing (§12) |
+| Hosting | GitHub Pages (Phase 7, decided 2026-10-20), built and deployed by GitHub Actions on push to `main` | Free, public repo, one link to share |
 
 **Key technical rules**
 
@@ -950,7 +950,14 @@ decision milestone, change the design before building more content.
   3. *Answered 2026-10-20:* L3/L5 perks approved as proposed (A),
      recorded in §2.8.
 - Final title (working title: *Rolling Bastion*).
-- Hosting for sharing (Phase 7): *decided 2026-10-20 (user):* GitHub Pages.
+- Hosting for sharing (Phase 7): *decided 2026-10-20 (user):* GitHub Pages,
+  repository made public (option A; alternatives were GitHub Pro with a
+  private repo, or a separate public repo with only the built game). The
+  history was scanned for secrets first: none; commits use the GitHub
+  no-reply address.
+- Code licence: the public repository has no licence file, so the code is
+  "all rights reserved" by default. Add one (e.g. MIT) only if the user
+  wants others to reuse it.
 - Piece mirroring allowed or not.
 - Meta-progression after the decision milestone (unlocks, permanent stats).
 - All story and UI text in §5 is draft.
