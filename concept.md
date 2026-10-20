@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–4 merged into `main` (v0.5.0). User played Phase 4: "boss feels good" (2026-10-20). Branch `phase-5-look-juice` created. |
-| **Current phase** | 5 — Look & juice: design decided (§6, agar.io-like), building |
-| **Next step** | Build Phase 5 on `phase-5-look-juice` in steps: light palette + outlines, Fredoka font, enemy blobs with faces + wobble/squash, effects (pops, bursts, bounce, flashes), title screen, 600-enemy readability check; then hand over. |
+| **Status** | Phases 0–4 merged into `main` (v0.5.0). Phase 5 built on `phase-5-look-juice` (v0.6.0), pushed, not merged. Handed to the user to try. |
+| **Current phase** | 5 — Look & juice: done, waiting for the user's look and frame-rate check |
+| **Next step** | User plays: look and feel (agar.io style, faces, effects), frame rate with 600 enemies (F1 overlay). Feedback, then merge and Phase 6 (audio, menus, polish) on the user's go-ahead. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
-| **Live version** | none (local only); app version 0.5.0 |
+| **Live version** | none (local only); app version 0.6.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (Phase 4 merged, Phase 5 starting) |
+| **Last updated** | 2026-10-20 (Phase 5 built, handed over) |
 
 ---
 
@@ -542,7 +542,7 @@ Tone: playful-grim, toy-like. UI text short and functional. Draft strings:
 
 ---
 
-## 6. Look
+## 6. Look (as implemented, Phase 5)
 
 **Style (decided 2026-10-20, user: "simple and colorful and fun graphics,
 similar to agar.io"; replaces the earlier dark neon style):** light and
@@ -581,9 +581,33 @@ Concrete elements:
   horseshoe, Engine chevrons. Core, Gatling and Cannon have separate barrel
   sprites. Run and build screen both draw tiles as pooled sprites.
 
-- Tiles: rounded squares with a 2 px darker border; function shown by a
-  simple white icon (gun barrel, circle, bolt, cross…). Placed pieces get a
-  slightly lighter outline so piece groups are visible.
+- As implemented (Phase 5): colours in `src/render/palette.ts` (UI,
+  bars, shots, gems) plus the tile and enemy configs; effect strengths in
+  `src/config/fx.ts`. Tiles: rounded squares (radius 24%) with a thick
+  outline (8.5%) in a darker shade of the fill; candy colours (Hull light
+  grey-blue, Plating blue, Gatling yellow, Cannon orange, Mortar deep
+  orange, Saw lemon, Generator green, Shield cyan, Repair lime, Magnet
+  teal, Engine mint, Core white). Chains: dark ink line with white dots;
+  filled lines: pale blue frame. Enemies: swarmer pink-red, Runner lilac,
+  Brute red, Spitter pink, Sapper violet with yellow hard hat, Bomber dark
+  red with fuse, Colossus magenta; drawn at 3× resolution, elites with a
+  gold ring. Gems blue, player shots yellow/orange, shells brown, enemy
+  shots red — all shiny dots with a highlight.
+- Effects as implemented: confetti pops on kills (enemy colour, white,
+  gold), tumbling square debris on tile loss, idle wobble and hit squash on
+  enemies (boss squashes 80% less), white hit flash 0.04 s, Core pulse,
+  Generator pulse rings, gem twinkle, placement bounce in the build screen,
+  shake on tile loss and boss phase change. Particles capped at 700.
+  Headless screenshots use the Canvas renderer, which ignores tints, so
+  confetti showed white there; in WebGL it is coloured (not checked by
+  Claude).
+- HUD text has a white outline so it reads over crowds.
+- Title screen (`TitleScene`, render-only): letters in tile colours with a
+  darker stroke, bouncing in a wave; pulsing start prompt; three-line
+  controls hint; demo city (Gatlings, Generators, Shields around the Core)
+  drifting, turning its barrels toward chasing blobs that pop near it.
+  Boot goes to the title; the lose/win screen still restarts straight into
+  a run.
 - Colour families: **city** in cool/neutral (Hull grey, Plating steel blue);
   **weapons** warm yellows/oranges; **support** greens/teals; **Core** white
   with a pulse. **Enemies** bright red/pink/purple blobs (was: dark
@@ -614,7 +638,8 @@ HP bar under the timer while the boss lives; "GRID EXPANDED" banner.
 
 **Screens:** title (Start, Mute) → run → build pause overlay → lose/win
 summary (time survived, kills, level, final city layout snapshot) →
-restart.
+restart. As implemented: title (no Mute yet, Phase 6) → run → summary →
+restart into a new run; no layout snapshot yet (Phase 6).
 
 **Saving:** none. Only the mute setting is stored in `localStorage` under
 `rolling-bastion:settings` (wrapped in try/catch).
@@ -712,8 +737,11 @@ src/
     enemies.ts       // chase, separation, tile collision, contact damage
     spatialHash.ts   // enemy hash for projectile hits and separation
     debugActions.ts
-  scenes/            // Boot, Run, Hud, Build (overlay + ?sandbox=1), Summary
-  render/            // tiles.ts (tile drawing, sprite pools), textures.ts, icons.ts, lines.ts (chains/rows)
+  scenes/            // Boot, Title, Run, Hud, Build (overlay + ?sandbox=1), Summary
+  render/            // palette.ts (colours, font), tiles.ts (tile drawing, sprite pools),
+                     // textures.ts, icons.ts, lines.ts (chains/rows), particles.ts
+  config/fx.ts       // effect strengths (render-only)
+public/fonts/        // Fredoka.ttf + OFL.txt (see ASSETS.md)
   debug/             // flags.ts: DEBUG (dev or ?debug=1), SEED (?seed=), SANDBOX
 bench/               // sim.perf.ts (npm run bench), balance.sim.ts (npm run sim)
 tests/               // Vitest, mirrors src/sim
@@ -936,7 +964,12 @@ decision milestone, change the design before building more content.
   queries now cover the radius of an elite Brute. Still far under budget;
   watch it in the 600-enemy late game.
 - Mortar has no turning barrel (360° lobbed, so it would not show much);
-  shells look like flat orange balls without a lob arc.
+  shells look like flat brown dots without a lob arc.
+- Phase 5 effects (wobble per enemy, particles, pulses) are untested for
+  frame rate in WebGL: headless checks only work with the Canvas renderer.
+  Check with F1 at 600 enemies.
+- `LabelPool` in `src/render/tiles.ts` is unused since Phase 3a icons
+  (could be removed).
 - Bridge detection is brute force and now runs on every city change (for
   Sappers); fine at ≤100 tiles.
 - Magnet gem drift scans up to 9×9 cells per gem each tick at high Magnet
@@ -974,6 +1007,29 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Phase 5: look & juice
+- Done (branch `phase-5-look-juice`, v0.6.0): light agar.io-like palette
+  with thick same-hue outlines (`palette.ts`); bundled Fredoka font
+  (`ASSETS.md`); enemies as bright blobs with per-type faces, wobble and
+  hit squash at 3× texture resolution; confetti pops, tile debris, Core
+  and Generator pulses, gem twinkle, placement bounce, shakes
+  (`config/fx.ts`, `render/particles.ts`); title screen with demo city;
+  HUD text outlines. 110 tests (render-only phase).
+- Decisions (user): visuals "simple and colorful and fun, similar to
+  agar.io" — Claude's translation approved (A); enemy faces (A); Fredoka
+  font (A); medium effects, "Reduce effects" in Phase 6 (A); lively title
+  screen (A).
+- Tried and failed: white chain lines were weak on yellow tiles → dark ink;
+  the Colossus stayed flat because it is hit every frame → boss squash
+  ×0.2; headless screenshots barely advance game time, so effects were
+  checked by injecting events / drawing particles frozen.
+- State: typecheck, lint, format, 110/110 tests and build pass. Pushed,
+  not merged.
+- Next: user checks look, feel and frame rate; merge; Phase 6 on go-ahead.
+- Watch out: Canvas renderer ignores tints (confetti looks white in
+  headless shots). The `.shot/` harness pages load the font from
+  `../public/fonts`.
 
 ### 2026-10-20 — Phase 4 merged
 - Decisions: user played Phase 4: "boss feels good, merge and continue".
