@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–5 merged into `main` (v0.6.0). User on Phase 5: "its awesome" (2026-10-20). Branch `phase-6-audio-menus` created. |
-| **Current phase** | 6 — Audio, menus, polish: design decided (§7, §8), building |
-| **Next step** | Build Phase 6 on `phase-6-audio-menus`: settings store, Kenney CC0 sound effects, pause menu + settings panel, end screen with city snapshot and damage bars, Reduce effects + Show FPS; then hand over. |
+| **Status** | Phases 0–5 merged into `main` (v0.6.0). Phase 6 built on `phase-6-audio-menus` (v0.7.0), pushed, not merged. Handed to the user to try. |
+| **Current phase** | 6 — Audio, menus, polish: done, waiting for the user's check (sounds especially) |
+| **Next step** | User listens to the sounds and tries the pause menu, settings and end screen; feedback, then merge and Phase 7 (shareable build: choose hosting, §12) on the user's go-ahead. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
-| **Live version** | none (local only); app version 0.6.0 |
+| **Live version** | none (local only); app version 0.7.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (Phase 5 merged, Phase 6 starting) |
+| **Last updated** | 2026-10-20 (Phase 6 built, handed over) |
 
 ---
 
@@ -385,7 +385,9 @@ fallback from §12).
 | Action | Input |
 |---|---|
 | Drive | WASD / arrow keys |
-| Pause menu | Esc |
+| Pause menu | Esc or P (as implemented) |
+| Mute | M (anywhere) |
+| Settings | S on the title screen, or from the pause menu |
 | Build: pick offer | Click card, or 1/2/3 |
 | Build: upgrade instead | Click the card's upgrade strip, or Shift+1/2/3 |
 | Build: place / move piece | Drag with left mouse |
@@ -621,11 +623,23 @@ Concrete elements:
 
 ---
 
-## 7. Audio
+## 7. Audio (as implemented, Phase 6)
 
 **Decided 2026-10-20 (user):** sound effects come from CC0 sample packs
 (Kenney: Interface Sounds, Impact Sounds, Digital Audio), files in the
 repo, each listed in `ASSETS.md`. No music for now (user, 2026-10-20).
+
+As implemented: 24 sounds in `public/sfx/` (converted to 64 kbps mono
+MP3, 152 KB in total; mapping in `ASSETS.md`), volumes and minimum gaps per
+sound in `src/config/audio.ts`, played by `src/audio/sfx.ts` with a small
+random pitch spread. Combat: Gatling/Core, Cannon and Mortar volleys, shell
+blasts, Bomber explosions, enemy pops, Spitter and boss shots, gem pickups,
+tile loss; events: level-up, upgrade, grid expansion, boss arrival and
+phase changes, charge telegraphs, win, lose; build screen and menus: pick,
+place, rotate, scrap, refused action, confirm, toggles, clicks. The sim
+reports shots and gem pickups as counters (`World.tally`), not events.
+Claude chose the sounds by their names without hearing them — the user
+judges them.
 
 Placeholder only in the prototype: a handful of CC0 sound effects (shot,
 hit, tile destroyed, level-up, gem pickup), from sources like Kenney or
@@ -659,6 +673,16 @@ including damage (on a loss the Core's cell as an empty outline); damage
 by weapon type as small coloured bars with percentages; buttons Play again
 (Enter) and Title (Esc). No personal bests (keeps "no saving").
 
+As implemented (Phase 6): `PauseScene`, `SettingsScene` (shared
+`MenuPanel` in `src/render/menu.ts`: mouse, Up/Down, Enter, Left/Right),
+`SummaryScene` rewritten; settings in `src/settings.ts` (validated on
+load), Reduce effects via `src/render/effects.ts`; Show FPS in the HUD top
+left. Keys are ignored for 150 ms after a menu opens or a scene wakes, so
+the key that closed a panel can't also trigger the scene below.
+Restart/Quit need a second Enter/click within 3 s. Flows were checked by
+driving a headless browser with key presses (title → settings → back,
+run → pause → settings → back → resume, quit with confirm).
+
 **Saving:** none. Only the settings are stored in `localStorage` under
 `rolling-bastion:settings` (wrapped in try/catch).
 
@@ -672,7 +696,8 @@ by weapon type as small coloured bars with percentages; buttons Play again
 - Keys: `G` +1 level, `T` +60 s game time, `E` spawn 50 of the selected
   enemy type (one Colossus), `[`/`]` change selected type, `I` god mode
   (Core invulnerable), `K` kill all enemies but the boss, `H` boss −35%
-  max HP, `P` print city layout JSON to console.
+  max HP, `L` print city layout JSON to console (was `P` until Phase 6;
+  P now pauses).
 - `?seed=<n>` for a fixed random seed (spawns and offers).
 - `?sandbox=1` opens the Phase 1 build-screen sandbox instead of a run.
 - `npm run bench`: simulation performance check (600 enemies, 300
@@ -755,11 +780,17 @@ src/
     enemies.ts       // chase, separation, tile collision, contact damage
     spatialHash.ts   // enemy hash for projectile hits and separation
     debugActions.ts
-  scenes/            // Boot, Title, Run, Hud, Build (overlay + ?sandbox=1), Summary
+  scenes/            // Boot (loads sounds), Title, Run, Hud, Build (overlay + ?sandbox=1),
+                     // Pause, Settings, Summary
+  audio/sfx.ts       // sound loading and rate-limited playback
+  settings.ts        // saved player settings (localStorage)
   render/            // palette.ts (colours, font), tiles.ts (tile drawing, sprite pools),
-                     // textures.ts, icons.ts, lines.ts (chains/rows), particles.ts
+                     // textures.ts, icons.ts, lines.ts (chains/rows), particles.ts,
+                     // menu.ts (menu panel), effects.ts (Reduce effects)
   config/fx.ts       // effect strengths (render-only)
+  config/audio.ts    // sound list, volumes, rate limits
 public/fonts/        // Fredoka.ttf + OFL.txt (see ASSETS.md)
+public/sfx/          // Kenney CC0 sounds (see ASSETS.md)
   debug/             // flags.ts: DEBUG (dev or ?debug=1), SEED (?seed=), SANDBOX
 bench/               // sim.perf.ts (npm run bench), balance.sim.ts (npm run sim)
 tests/               // Vitest, mirrors src/sim
@@ -994,6 +1025,9 @@ decision milestone, change the design before building more content.
 - Phase 5 effects (wobble per enemy, particles, pulses) are untested for
   frame rate in WebGL: headless checks only work with the Canvas renderer.
   Check with F1 at 600 enemies.
+- Sound choice and volumes are untested by ear (Claude cannot listen).
+- Phase 6 interaction flows were checked with a headless browser using
+  the Canvas renderer; the real game uses WebGL.
 - `LabelPool` in `src/render/tiles.ts` is unused since Phase 3a icons
   (could be removed).
 - Bridge detection is brute force and now runs on every city change (for
@@ -1033,6 +1067,26 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Phase 6: audio, menus, polish
+- Done (branch `phase-6-audio-menus`, v0.7.0): settings store; 24 Kenney
+  CC0 sounds wired to combat, events, build screen and menus; pause menu
+  (Esc/P) and settings panel (volume, mute/M, Reduce effects, Show FPS),
+  also from the title (S); end screen with the final city, damage by
+  weapon bars, Play again / Title. Debug layout print moved P → L.
+  113 tests.
+- Decisions (user): CC0 sample packs (A); no music for now (A); pause
+  menu and settings as proposed (A); end screen without personal bests (A).
+- Tried and failed: Chrome's `--screenshot` and DevTools captures are
+  blank with WebGL, so flows were driven over the DevTools protocol (Node's
+  built-in WebSocket) against a Canvas copy of the game (`.shot/game.html`,
+  driver script in the session scratchpad). A first flow run pressed S
+  while Boot was still loading sounds.
+- State: typecheck, lint, format, 113/113 tests and build pass. Pushed,
+  not merged.
+- Next: user listens and tries menus; merge; Phase 7 on go-ahead.
+- Watch out: scenes woken from under a panel ignore keys for 150 ms
+  (`WAKE_KEY_GRACE_MS`); keep that when adding panels.
 
 ### 2026-10-20 — Phase 5 merged
 - Decisions: user played Phase 5: "its awesome, please continue". Look
