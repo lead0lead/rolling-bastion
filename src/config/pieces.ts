@@ -27,6 +27,7 @@ function piece(
   rows: string[],
   legend: Record<string, TileType>,
   weight = 1,
+  minTime?: number,
   facing: Facing = 0,
 ): PieceDef {
   const cells: PieceCell[] = [];
@@ -38,7 +39,7 @@ function piece(
       cells.push({ x, y, tile, facing });
     });
   });
-  return { id, cells, weight };
+  return minTime === undefined ? { id, cells, weight } : { id, cells, weight, minTime };
 }
 
 const L = {
@@ -89,4 +90,40 @@ export const PHASE2_POOL: PieceDef[] = [
   piece('domino-hull', ['hh'], L, 0.5),
   piece('i3-hull', ['hhh'], L, 0.5),
   piece('o-hull', ['hh', 'hh'], L, 0.4),
+];
+
+/** Pentominoes are offered from 4:00 (concept.md §4.2). */
+const PENTOMINO_TIME = 240;
+
+/**
+ * Phase 3 pool (concept.md §4.2): all tile types. Weighted so that pieces
+ * whose main tile is a support tile make up about a third of the offers
+ * before 4:00. Starting values to tune.
+ */
+export const PHASE3_POOL: PieceDef[] = [
+  // Weapons
+  piece('domino-gatling', ['gh'], L),
+  piece('l3-gatling', ['g.', 'hg'], L),
+  piece('i3-gatling', ['ggg'], L, 0.6),
+  piece('t-cannon', ['hch', '.h.'], L),
+  piece('s-cannon', ['.ch', 'hc.'], L, 0.8),
+  piece('l3-mortar', ['m.', 'hh'], L, 0.8),
+  piece('domino-saw', ['sh'], L, 0.8),
+  // Structure
+  piece('l3-plating', ['p.', 'pp'], L, 0.6),
+  piece('i3-plating', ['ppp'], L, 0.4),
+  piece('mono-hull', ['h'], L, 0.3),
+  piece('o-hull', ['hh', 'hh'], L, 0.3),
+  // Support
+  piece('domino-generator', ['eg'], L, 0.8),
+  piece('domino-shield', ['dh'], L, 0.8),
+  piece('l3-repair', ['r.', 'hh'], L, 0.8),
+  piece('domino-magnet', ['uh'], L, 0.8),
+  piece('domino-engine', ['nh'], L, 0.8),
+  // Pentominoes, from 4:00
+  piece('i5-gatling', ['hgggh'], L, 0.6, PENTOMINO_TIME),
+  piece('t5-cannon', ['ccc', '.h.', '.h.'], L, 0.5, PENTOMINO_TIME),
+  piece('u5-mortar', ['h.h', 'mmm'], L, 0.5, PENTOMINO_TIME),
+  piece('x5-generator', ['.g.', 'geg', '.g.'], L, 0.4, PENTOMINO_TIME),
+  piece('l5-plating', ['p...', 'pppp'], L, 0.3, PENTOMINO_TIME),
 ];

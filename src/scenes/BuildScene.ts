@@ -61,7 +61,17 @@ export interface BuildSceneData {
 const GRID_CENTRE = { x: 620, y: 390 };
 const GRID_MAX_PX = 540;
 const GRID_MAX_CELL = 64;
-const CARDS = { x: 1010, y: 80, w: 240, h: 130, gap: 12, cell: 20 };
+const CARDS = {
+  x: 1010,
+  y: 80,
+  w: 240,
+  h: 130,
+  gap: 12,
+  /** Preview cell size, and the preview area below the card title. */
+  cell: 20,
+  previewTop: 44,
+  previewPad: 4,
+};
 /** "Upgrade <type>" strip at the bottom of a card (inset, height). */
 const UPGRADE_STRIP = { inset: 8, h: 24 };
 const REPAIR = { x: 1010, y: 508, w: 240, h: 40 };
@@ -667,13 +677,15 @@ export class BuildScene extends Phaser.Scene {
       g.lineStyle(2, hovered ? COLORS.hover : COLORS.panelBorder, 1);
       g.strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
 
-      const cs = CARDS.cell;
       const w = Math.max(...def.cells.map((c) => c.x)) + 1;
       const h = Math.max(...def.cells.map((c) => c.y)) + 1;
-      const ox = r.x + (r.w - w * cs) / 2;
       const strip =
         s.upgrades[i] && this.hasRunOptions() ? UPGRADE_STRIP.h + UPGRADE_STRIP.inset : 0;
-      const oy = r.y + 44 + (r.h - 44 - strip - h * cs) / 2;
+      // Shrink tall pieces so the preview never runs into the upgrade strip.
+      const room = r.h - CARDS.previewTop - strip - CARDS.previewPad;
+      const cs = Math.min(CARDS.cell, Math.floor(room / h));
+      const ox = r.x + (r.w - w * cs) / 2;
+      const oy = r.y + CARDS.previewTop + (room - h * cs) / 2;
       for (const c of def.cells) {
         this.drawTileImage(
           ox + c.x * cs,

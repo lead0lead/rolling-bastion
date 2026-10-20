@@ -3,7 +3,7 @@ import type { PieceDef } from '../config/pieces';
 import type { TileType } from '../config/tiles';
 import { coreTile } from './grid';
 import type { Rng } from './rng';
-import { applyUpgrade } from './upgrades';
+import { applyUpgrade, upgradeType } from './upgrades';
 import { cityCentre, cityChanged, gridTopLeft, tileAtCell, type World } from './world';
 
 /** Weighted random pick of `count` distinct pieces from the pool. */
@@ -23,6 +23,26 @@ export function rollOffers(rng: Rng, pool: readonly PieceDef[], count: number): 
     }
     offers.push(...remaining.splice(index, 1));
   }
+  return offers;
+}
+
+/**
+ * Level-up offers for a run (concept.md §4.2): only pieces whose `minTime`
+ * has passed, and never every card with the same main tile type.
+ */
+export function rollRunOffers(
+  rng: Rng,
+  pool: readonly PieceDef[],
+  count: number,
+  time: number,
+): PieceDef[] {
+  const available = pool.filter((p) => (p.minTime ?? 0) <= time);
+  const offers = rollOffers(rng, available, count);
+  const type = offers[0] && upgradeType(offers[0]);
+  if (offers.length < 3 || !offers.every((p) => upgradeType(p) === type)) return offers;
+  const others = available.filter((p) => upgradeType(p) !== type);
+  const swap = rollOffers(rng, others, 1)[0];
+  if (swap) offers[offers.length - 1] = swap;
   return offers;
 }
 

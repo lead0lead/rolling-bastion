@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
 import { ENEMY_TYPES } from '../config/enemies';
-import { PHASE2_POOL } from '../config/pieces';
+import { PHASE3_POOL } from '../config/pieces';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { drawSynergyLines } from '../render/lines';
@@ -16,7 +16,7 @@ import {
   debugSpawn,
 } from '../sim/debugActions';
 import { expandGrid, facingAngle } from '../sim/grid';
-import { applyBuildResult, repairCoreAmount, rollOffers, scrapRefund } from '../sim/progression';
+import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
 import { step, type MoveInput } from '../sim/step';
 import { bossEnraged, cityChanged, createWorld, type CityCache, type World } from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
@@ -175,7 +175,7 @@ export class RunScene extends Phaser.Scene {
     const w = this.world;
     const data: BuildSceneData = {
       city: w.city,
-      offers: kind === 'level' ? rollOffers(w.rng, PHASE2_POOL, OFFERS.count) : [],
+      offers: kind === 'level' ? rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time) : [],
       title:
         kind === 'level' ? `Salvage!  Level ${w.level - w.pendingLevelUps + 1}` : 'GRID EXPANDED',
       coreHeal: repairCoreAmount(w),
@@ -184,7 +184,7 @@ export class RunScene extends Phaser.Scene {
       reroll: () => {
         if (w.rerolls <= 0) return null;
         w.rerolls--;
-        return rollOffers(w.rng, PHASE2_POOL, OFFERS.count);
+        return rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time);
       },
       done: (result) => {
         if (kind === 'level') w.pendingLevelUps--;
