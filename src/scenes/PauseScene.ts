@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { MenuPanel } from '../render/menu';
+import { MenuPanel, WAKE_KEY_GRACE_MS } from '../render/menu';
 
 /** How long a "click again to confirm" stays armed (ms). */
 const CONFIRM_MS = 3000;
@@ -11,6 +11,7 @@ const CONFIRM_MS = 3000;
 export class PauseScene extends Phaser.Scene {
   private menu: MenuPanel | null = null;
   private armed: { which: 'restart' | 'quit'; until: number } | null = null;
+  private wokeAt = -Infinity;
 
   constructor() {
     super('Pause');
@@ -20,10 +21,14 @@ export class PauseScene extends Phaser.Scene {
     this.armed = null;
     this.openMenu();
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+      if (this.time.now - this.wokeAt < WAKE_KEY_GRACE_MS) return;
       if ((e.code === 'Escape' || e.code === 'KeyP') && this.menu) this.resume();
     });
     // Coming back from the settings panel.
-    this.events.on(Phaser.Scenes.Events.WAKE, () => this.openMenu());
+    this.events.on(Phaser.Scenes.Events.WAKE, () => {
+      this.wokeAt = this.time.now;
+      this.openMenu();
+    });
   }
 
   private openMenu(): void {

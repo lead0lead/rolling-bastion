@@ -12,6 +12,12 @@ export interface MenuItem {
   right?: () => void;
 }
 
+/**
+ * After a scene wakes from under a closed panel, ignore keys this long (ms):
+ * the key that closed the panel may still be queued for the woken scene.
+ */
+export const WAKE_KEY_GRACE_MS = 150;
+
 const LOOK = {
   width: 420,
   rowH: 52,
@@ -33,6 +39,8 @@ export class MenuPanel {
   private readonly texts: Phaser.GameObjects.Text[] = [];
   private readonly objects: Phaser.GameObjects.GameObject[] = [];
   private selected = 0;
+  /** Scene time the panel opened; keys right after that are ignored (see WAKE_KEY_GRACE_MS). */
+  private readonly openedAt: number;
   private readonly top: number;
   private readonly left: number;
   private readonly onKey: (e: KeyboardEvent) => void;
@@ -45,6 +53,7 @@ export class MenuPanel {
     private readonly items: MenuItem[],
   ) {
     const { width, height } = scene.scale;
+    this.openedAt = scene.time.now;
     const h = LOOK.titleH + items.length * (LOOK.rowH + LOOK.gap) + LOOK.pad;
     this.left = width / 2 - LOOK.width / 2;
     this.top = height / 2 - h / 2;
@@ -123,6 +132,7 @@ export class MenuPanel {
   }
 
   private handleKey(e: KeyboardEvent): void {
+    if (this.scene.time.now - this.openedAt < WAKE_KEY_GRACE_MS) return;
     const n = this.items.length;
     const item = this.items[this.selected];
     switch (e.code) {

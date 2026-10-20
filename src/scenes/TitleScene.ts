@@ -6,6 +6,7 @@ import { TILES, type TileType } from '../config/tiles';
 import { barrelFor } from '../render/icons';
 import { COLORS, css, FONT } from '../render/palette';
 import { motion, particleCount } from '../render/effects';
+import { WAKE_KEY_GRACE_MS } from '../render/menu';
 import { Particles } from '../render/particles';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { outlineOf } from '../render/tiles';
@@ -185,7 +186,10 @@ export class TitleScene extends Phaser.Scene {
       this.scene.launch('Settings', { from: 'Title' });
       this.scene.sleep();
     };
+    let wokeAt = -Infinity;
+    this.events.on(Phaser.Scenes.Events.WAKE, () => (wokeAt = this.time.now));
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+      if (this.time.now - wokeAt < WAKE_KEY_GRACE_MS) return;
       if (e.code === 'Enter' || e.code === 'Space') start();
       else if (e.code === 'KeyS') openSettings();
     });
