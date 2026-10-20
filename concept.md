@@ -66,8 +66,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 0–4 merged into `main` (v0.5.0). User played Phase 4: "boss feels good" (2026-10-20). Branch `phase-5-look-juice` created. |
-| **Current phase** | 5 — Look & juice: design questions open, no code yet |
-| **Next step** | Phase 5 brainstorm, one question at a time (§12 "Phase 5 design questions"), then build on `phase-5-look-juice`. |
+| **Current phase** | 5 — Look & juice: design decided (§6, agar.io-like), building |
+| **Next step** | Build Phase 5 on `phase-5-look-juice` in steps: light palette + outlines, Fredoka font, enemy blobs with faces + wobble/squash, effects (pops, bursts, bounce, flashes), title screen, 600-enemy readability check; then hand over. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
 | **Live version** | none (local only); app version 0.5.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
@@ -544,10 +544,29 @@ Tone: playful-grim, toy-like. UI text short and functional. Draft strings:
 
 ## 6. Look
 
-**Style:** clean geometric — flat shapes, a dark background with a subtle grid
-pattern, bright tile colours, glow and screen-shake on impacts. Inspiration
-only: *Monsters are Coming* for the moving city fantasy; minimal geometric
-shooters for clarity.
+**Style (decided 2026-10-20, user: "simple and colorful and fun graphics,
+similar to agar.io"; replaces the earlier dark neon style):** light and
+playful. Inspiration only: *agar.io* for the look, *Monsters are Coming*
+for the moving-city fantasy.
+
+| Element | Look |
+|---|---|
+| Background | Light: off-white with a thin light-grey grid (the agar.io signature) |
+| Shapes | Flat, saturated fills with a thick, darker outline of the same hue (the agar.io cell look); round corners |
+| City tiles | Colour per family as below, brighter and candy-like; bold simple white icons |
+| Enemies | Round bright blobs in one warm family (reds, pinks, purples), never mixed with the city's colours; size shows toughness |
+| Motion | Soft and bouncy: enemies wobble slightly while moving, squash when hit and pop into confetti-like particles when they die; tiles bounce when placed |
+| Effects | Gentle screen shake, simple flat flashes and particle pops; no neon glow or bloom |
+| Gems, shots | Shiny round dots (like agar.io food), each in its own colour family |
+| Effect strength (decided 2026-10-20) | Medium: bouncy and poppy but calm enough to read 600 enemies — small confetti pops, short squashes, gentle shake only on tile loss and big blasts. All strengths in one config block. A "Reduce effects" switch (no shake, no wobble, fewer particles) comes with the Phase 6 settings menu |
+| Title screen (decided 2026-10-20) | Big bouncing "Rolling Bastion" in Fredoka; a small demo city rolls across the light grid, chased by a few faced blobs that pop; "Click or press Enter to start", a three-line controls hint, version label. Mute arrives with audio (Phase 6) |
+| Font (decided 2026-10-20) | *Fredoka* (SIL OFL, Google Fonts), bundled as a local file, listed in `ASSETS.md`; text waits for it to load |
+| Enemy faces (decided 2026-10-20) | Simple faces on every blob: two dot eyes with angled angry brows, baked into the texture. Per type: Runner narrowed eyes, Brute heavy brows, Spitter O-mouth, Sapper hard hat, Bomber fuse spark; Colossus a big angry face that changes per phase |
+
+The readability rules (§3) stay: city, enemies, shots and gems keep
+distinct colour families; offline tiles stay clearly greyed. Watch: weapon
+tiles (yellow/orange) next to red enemies — shape (square vs round) must
+carry the difference; check in screenshots.
 
 Concrete elements:
 
@@ -567,8 +586,9 @@ Concrete elements:
   slightly lighter outline so piece groups are visible.
 - Colour families: **city** in cool/neutral (Hull grey, Plating steel blue);
   **weapons** warm yellows/oranges; **support** greens/teals; **Core** white
-  with a pulse. **Enemies** are dark magenta/black shapes with a bright
-  outline. **Gems** cyan. **Enemy projectiles** red.
+  with a pulse. **Enemies** bright red/pink/purple blobs (was: dark
+  magenta/black with a bright outline, before 2026-10-20). **Gems** cyan.
+  **Enemy projectiles** red.
 - Effects: hit flash (white, 1 frame), death pop (particles), tile destruction
   burst + small shake, chain link lines, generator pulse.
 - All visuals drawn procedurally (Phaser Graphics or generated textures) — no
@@ -797,10 +817,15 @@ decision milestone, change the design before building more content.
 **Open decisions (user)**
 
 - **Phase 5 design questions** (ask one at a time):
-  1. Visual direction: polish the current flat style with effects, or add
-     glow/bloom (Phaser's built-in WebGL post effects, no new library).
-  2. Title screen content.
-  3. Effect intensity and a "reduce effects" option.
+  1. *Answered 2026-10-20:* visual direction — user asked for simple,
+     colourful, fun graphics like agar.io; Claude's translation approved
+     (A), recorded in §6. Replaces the glow/bloom question.
+  2. *Answered 2026-10-20:* enemies get simple faces (A), recorded in §6.
+  3. *Answered 2026-10-20:* bundled *Fredoka* font (A), recorded in §6.
+  4. *Answered 2026-10-20:* medium effects, "Reduce effects" in Phase 6
+     (A), recorded in §6.
+  5. *Answered 2026-10-20:* lively title screen with a demo city (A),
+     recorded in §6.
 
 - **Phase 4 design questions** (ask one at a time, in this order):
   1. *Answered 2026-10-20:* Colossus phases approved as proposed (A),
