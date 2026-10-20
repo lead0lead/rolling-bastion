@@ -1,16 +1,9 @@
 import { ENEMY_PHYSICS, GRID } from '../config/balance';
-import { BOSS, ENEMIES, type EnemyDef, type RangedDef } from '../config/enemies';
+import { ENEMIES, type EnemyDef, type RangedDef } from '../config/enemies';
 import type { PlacedTile } from './grid';
-import { damageTile, hitEnemy, MAX_ENEMY_RADIUS } from './combat';
-import {
-  bossEnraged,
-  gridTopLeft,
-  modsOf,
-  tileAtCell,
-  type Enemy,
-  type EnemyShot,
-  type World,
-} from './world';
+import { bossContactFactor, bossMove } from './boss';
+import { damageTile, fireEnemyShot, hitEnemy, MAX_ENEMY_RADIUS } from './combat';
+import { gridTopLeft, modsOf, tileAtCell, type Enemy, type World } from './world';
 
 /** What an enemy touched this tick (reused, no allocation). */
 interface Contact {
@@ -39,6 +32,7 @@ export function updateEnemies(w: World, dt: number): void {
     e.px = e.x;
     e.py = e.y;
     const def = ENEMIES[e.type];
+    if (e === w.boss && bossMove(w, e, dt)) continue;
     let mx = 0;
     let my = 0;
     const d2 =
@@ -78,7 +72,7 @@ export function updateEnemies(w: World, dt: number): void {
       continue;
     }
     const mods = modsOf(w, t);
-    const dps = def.contactDps * (e === w.boss && bossEnraged(w) ? BOSS.enrageDamage : 1);
+    const dps = def.contactDps * (e === w.boss ? bossContactFactor(w) : 1);
     damageTile(w, t, dps * mods.contactTaken * dt);
     if (w.over) return;
     const back = contact.thorns + dps * mods.reflect;
@@ -130,16 +124,9 @@ function rangedAttack(
   e.cooldown -= dt;
   if (e.cooldown > 0 || d > r.range || d === 0) return;
   e.cooldown = r.interval;
-  const s = w.enemyShotPool.pop() ?? ({} as EnemyShot);
-  s.x = s.px = e.x;
-  s.y = s.py = e.y;
-  s.vx = ((target.x - e.x) / d) * r.shotSpeed;
-  s.vy = ((target.y - e.y) / d) * r.shotSpeed;
-  s.damage = r.damage;
+  const angle = Math.atan2(target.y - e.y, target.x - e.x);
   // A little past the target, in case the city moves.
-  s.life = (r.range / r.shotSpeed) * 1.5;
-  s.dead = false;
-  w.enemyShots.push(s);
+  fireEnemyShot(w, e.x, e.y, angle, r.shotSpeed, r.damage, (r.range / r.shotSpeed) * 1.5);
 }
 
 /** Enemy shots fly straight and hit the first tile they enter. */

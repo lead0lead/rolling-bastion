@@ -458,6 +458,10 @@ boss arrives (§4.3).
 - Phase 3 pool: all tile types, ~14 piece definitions, weighted so support
   tiles appear about 1 in 3 offers. Pentominoes only after 4:00.
 - Offers never show three cards of the same tile type.
+- Phase 4 additions (approved 2026-10-20): I4 Gatling `hggh`, L4 Cannon
+  (`c.`/`c.`/`hh`), Z4 Shield (`dh.`/`.hg`), J4 Repair (`.r`/`.h`/`hh`),
+  and from 4:00 P5 (`eg`/`gg`/`h.`), V5 Plating (`p..`/`p..`/`ppp`),
+  Y5 Saw (`ssss`/`.h..`). Support share stays about 1 in 3.
 - As implemented (`PHASE3_POOL`, `rollRunOffers`): 21 pieces — 16 small
   ones (domino to tetromino) and 5 pentominoes from 4:00 (I5 Gatling
   battery, T5 Cannon battery, U5 Mortar line, X5 Gatlings around a
@@ -498,6 +502,18 @@ Claude's calls where the table is silent:
   summons a ring of 5 Swarmers every 6 s. Boss HP bar under the timer;
   enraged at 14:00 (×2 contact damage, red bar and tint). Killing it wins:
   "The city rolls on." The 3 phases are Phase 4.
+
+**Colossus phases (Phase 4, approved 2026-10-20 as starting values):**
+
+| Phase | HP | Behaviour |
+|---|---|---|
+| 1 | 100–65% | Walks at the city, summons a ring of 5 Swarmers every 6 s |
+| 2 | 65–30% | Summons every 9 s; every 4 s a fan of 7 red shots at the city (8 dmg each, Shields reduce) |
+| 3 | <30% | No summons. Charges: 1 s red telegraph line, dash ~450 px at 400 px/s with ×3 contact damage, 3 s pause, repeat. Dodged by steering |
+
+Phase change: "PHASE 2/3" banner and a shockwave pushing nearby enemies
+away from the city. 6000 HP, enrage at 14:00 (×2 damage) and win on kill
+unchanged. Look: hexagon cracked in phase 2, glowing red in phase 3.
 
 ---
 
@@ -760,11 +776,12 @@ decision milestone, change the design before building more content.
 **Open decisions (user)**
 
 - **Phase 4 design questions** (ask one at a time, in this order):
-  1. Colossus phases (§4.3 names them, thresholds and attack details open):
-     Claude proposes a full list of starting values to approve or change.
-  2. Balance pass: a headless sim comparing fixed archetype builds, or
-     manual tuning with debug tools only.
-  3. More piece shapes: which new shapes/pieces join the pool.
+  1. *Answered 2026-10-20:* Colossus phases approved as proposed (A),
+     recorded in §4.3.
+  2. *Answered 2026-10-20:* balance pass with a headless sim of fixed
+     archetype builds (A): `npm run sim`, tooling only; number changes stay
+     the user's call.
+  3. *Answered 2026-10-20:* add seven pieces (A), recorded in §4.2.
 
 - **Phase 3b design questions** (ask one at a time, in this order, before
   building 3b):

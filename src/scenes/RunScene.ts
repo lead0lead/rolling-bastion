@@ -10,11 +10,13 @@ import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
   debugAddTime,
   debugFillGrid,
+  debugHurtBoss,
   debugKillAll,
   debugLayoutJson,
   debugLevelUp,
   debugSpawn,
 } from '../sim/debugActions';
+import { chargePath } from '../sim/boss';
 import { expandGrid, facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
 import { step, type MoveInput } from '../sim/step';
@@ -27,10 +29,14 @@ const TILE_LOSS_SHAKE = { ms: 120, intensity: 0.004 } as const;
 /** How long an enemy flashes white after a hit (s). */
 const HIT_FLASH = 0.05;
 const DEBUG_SPAWN_COUNT = 50;
+/** Share of the boss's max HP the H debug key takes. */
+const DEBUG_BOSS_HURT = 0.35;
 /** Barrel turn smoothing rate (1/s); barrels ease toward the weapon's aim. */
 const BARREL_TURN_RATE = 18;
 /** Tint for barrels of offline weapons. */
 const OFFLINE_TINT = 0x8a93a6;
+/** Colour of the boss charge telegraph. */
+const CHARGE_COLOR = 0xff3030;
 /** Tint of the enraged boss. */
 const ENRAGE_TINT = 0xff6060;
 /** Shell blasts: fade time (s) and colour. */
@@ -249,6 +255,9 @@ export class RunScene extends Phaser.Scene {
       case 'KeyI':
         w.godMode = !w.godMode;
         break;
+      case 'KeyH':
+        debugHurtBoss(w, DEBUG_BOSS_HURT);
+        break;
       case 'KeyK':
         debugKillAll(w);
         break;
@@ -348,7 +357,7 @@ export class RunScene extends Phaser.Scene {
       const img = this.enemySprites.add(
         lerp(e.px, e.x),
         lerp(e.py, e.y),
-        TEX.enemy(e.type, e.elite),
+        e === w.boss ? TEX.boss(w.bossState.phase) : TEX.enemy(e.type, e.elite),
       );
       if (w.time - e.hitTime < HIT_FLASH) img.setTintFill(0xffffff);
       else if (e === w.boss && bossEnraged(w)) img.setTint(ENRAGE_TINT);
@@ -382,6 +391,20 @@ export class RunScene extends Phaser.Scene {
   private drawBlasts(w: World): void {
     const g = this.blastGfx;
     g.clear();
+    // The Colossus's charge telegraph: a red lane that fills up until it dashes.
+    const path = chargePath(w);
+    if (path) {
+      const w2 = (w.boss?.radius ?? 0) * 2;
+      g.lineStyle(w2, CHARGE_COLOR, 0.12 + 0.18 * path.progress);
+      g.lineBetween(path.x0, path.y0, path.x1, path.y1);
+      g.lineStyle(3, CHARGE_COLOR, 0.9);
+      g.lineBetween(
+        path.x0,
+        path.y0,
+        path.x0 + (path.x1 - path.x0) * path.progress,
+        path.y0 + (path.y1 - path.y0) * path.progress,
+      );
+    }
     let n = 0;
     for (const b of this.blasts) {
       const age = (w.time - b.at) / BLAST_FADE;

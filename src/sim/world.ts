@@ -91,7 +91,8 @@ export type WorldEvent =
   | { kind: 'enemyKilled'; x: number; y: number; type: EnemyType }
   | { kind: 'blast'; x: number; y: number; radius: number }
   | { kind: 'levelUp'; level: number }
-  | { kind: 'gridExpanded'; size: number };
+  | { kind: 'gridExpanded'; size: number }
+  | { kind: 'bossPhase'; phase: number };
 
 /** City-derived data, recomputed only when the city changes (concept.md §9). */
 export interface CityCache {
@@ -149,8 +150,7 @@ export interface World {
   /** The live boss, if any; checked outside the spatial hash (it is too big for it). */
   boss: Enemy | null;
   bossSpawned: boolean;
-  /** Seconds until the boss summons its next Swarmer pack. */
-  bossAddTimer: number;
+  bossState: BossState;
   /** The boss was defeated: the run is won. */
   won: boolean;
   rerolls: number;
@@ -196,7 +196,7 @@ export function createWorld(seed: number): World {
     expandedAt: -Infinity,
     boss: null,
     bossSpawned: false,
-    bossAddTimer: 0,
+    bossState: newBossState(),
     won: false,
     rerolls: LEVEL_UP.rerollsPerRun,
     kills: 0,
@@ -212,6 +212,34 @@ export function createWorld(seed: number): World {
 export function cityChanged(w: World): void {
   updateOnline(w.city);
   w.cache = buildCache(w.city);
+}
+
+/** The Colossus's phase and attack timers (concept.md §4.3). */
+export interface BossState {
+  phase: 1 | 2 | 3;
+  /** Game time of the last phase change (for the banner). */
+  phaseAt: number;
+  addTimer: number;
+  volleyTimer: number;
+  /** Phase 3 charge cycle: walking (resting), showing the telegraph, or dashing. */
+  charge: 'walk' | 'telegraph' | 'dash';
+  chargeTimer: number;
+  /** Charge direction (unit vector). */
+  dirX: number;
+  dirY: number;
+}
+
+export function newBossState(): BossState {
+  return {
+    phase: 1,
+    phaseAt: -Infinity,
+    addTimer: BOSS.addInterval[0],
+    volleyTimer: BOSS.volley.interval,
+    charge: 'walk',
+    chargeTimer: 0,
+    dirX: 1,
+    dirY: 0,
+  };
 }
 
 /** The boss enrages if still alive at BOSS.enrageAt (concept.md §2.6). */

@@ -4,7 +4,8 @@ import { hitEnemy, removeDead, updateProjectiles } from '../src/sim/combat';
 import { updateEnemies } from '../src/sim/enemies';
 import { coreTile } from '../src/sim/grid';
 import { spawnEnemy, updateSpawner } from '../src/sim/spawner';
-import { createWorld, tileCentre, type World } from '../src/sim/world';
+import { bossContactFactor, bossMove, chargePath, updateBoss } from '../src/sim/boss';
+import { cityCentre, createWorld, tileCentre, type World } from '../src/sim/world';
 
 const DT = 1 / 60;
 
@@ -25,10 +26,59 @@ describe('boss', () => {
     expect(w.enemies).toHaveLength(1);
   });
 
-  it('summons Swarmer packs', () => {
+  it('summons Swarmer rings in phase 1', () => {
     const w = bossWorld();
-    for (let i = 0; i < Math.ceil(BOSS.addInterval / DT) + 1; i++) updateSpawner(w, DT);
+    for (let i = 0; i < Math.ceil(BOSS.addInterval[0] / DT) + 1; i++) updateBoss(w, DT);
     expect(w.enemies.filter((e) => e.type === 'swarmer')).toHaveLength(BOSS.addCount);
+  });
+
+  it('changes phase by HP with a banner event and a shockwave', () => {
+    const w = bossWorld();
+    const boss = w.boss;
+    if (!boss) throw new Error('no boss');
+    const c = cityCentre(w);
+    const near = spawnEnemy(w, 'swarmer', c.x + 100, c.y);
+    boss.hp = boss.maxHp * (BOSS.phaseAt[0] - 0.01);
+    updateBoss(w, DT);
+    expect(w.bossState.phase).toBe(2);
+    expect(w.events).toContainEqual({ kind: 'bossPhase', phase: 2 });
+    expect(near.kvx).toBeGreaterThan(0);
+    boss.hp = boss.maxHp * (BOSS.phaseAt[1] - 0.01);
+    updateBoss(w, DT);
+    expect(w.bossState.phase).toBe(3);
+  });
+
+  it('fires shot fans at the city from phase 2', () => {
+    const w = bossWorld();
+    const boss = w.boss;
+    if (!boss) throw new Error('no boss');
+    boss.hp = boss.maxHp * 0.5;
+    for (let i = 0; i < Math.ceil(BOSS.volley.interval / DT) + 1; i++) updateBoss(w, DT);
+    expect(w.enemyShots).toHaveLength(BOSS.volley.count);
+  });
+
+  it('phase 3 charges: telegraph, straight dash with extra damage, then walks again', () => {
+    const w = bossWorld();
+    const boss = w.boss;
+    if (!boss) throw new Error('no boss');
+    boss.hp = boss.maxHp * 0.1;
+    updateBoss(w, DT);
+    const ticks = (s: number) => Math.ceil(s / DT) + 1;
+    for (let i = 0; i < ticks(BOSS.charge.rest); i++) updateBoss(w, DT);
+    expect(w.bossState.charge).toBe('telegraph');
+    expect(chargePath(w)).not.toBeNull();
+    const x0 = boss.x;
+    const y0 = boss.y;
+    expect(bossMove(w, boss, DT)).toBe(true);
+    expect([boss.x, boss.y]).toEqual([x0, y0]);
+    for (let i = 0; i < ticks(BOSS.charge.telegraph); i++) updateBoss(w, DT);
+    expect(w.bossState.charge).toBe('dash');
+    expect(bossContactFactor(w)).toBe(BOSS.charge.damage);
+    bossMove(w, boss, 0.1);
+    expect(Math.hypot(boss.x - x0, boss.y - y0)).toBeCloseTo(BOSS.charge.speed * 0.1);
+    for (let i = 0; i < ticks(BOSS.charge.distance / BOSS.charge.speed); i++) updateBoss(w, DT);
+    expect(w.bossState.charge).toBe('walk');
+    expect(bossMove(w, boss, DT)).toBe(false);
   });
 
   it('ignores knockback and is hit by shots at its edge', () => {

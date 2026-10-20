@@ -127,7 +127,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     bomb: { damage: 40, radiusCells: 1 },
   },
   colossus: {
-    name: 'Colossus (placeholder)',
+    name: 'Colossus',
     maxHp: 6000,
     speed: 35,
     contactDps: 60,
@@ -143,8 +143,8 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
 export const ENEMY_TYPES = Object.keys(ENEMIES) as EnemyType[];
 
 /**
- * Boss timing (concept.md §2.6, §4.1). Phase 3 placeholder: a big Brute that
- * summons Swarmer packs; the real Colossus phases come in Phase 4.
+ * The Colossus (concept.md §4.3): timing and its three phases. Starting
+ * values approved 2026-10-20.
  */
 export const BOSS = {
   type: 'colossus' as EnemyType,
@@ -154,9 +154,36 @@ export const BOSS = {
   enrageAt: 840,
   /** Enraged contact damage multiplier (+100%). */
   enrageDamage: 2,
-  /** Seconds between summoned Swarmer packs, and their size. */
-  addInterval: 6,
+  /** HP fractions below which phase 2 and phase 3 start. */
+  phaseAt: [0.65, 0.3],
+  /** Swarmers summoned in a ring around the boss: seconds between rings per phase (0 = none), ring size. */
+  addInterval: [6, 9, 0],
   addCount: 5,
+  /** Phase 2+: fans of shots at the city. */
+  volley: {
+    interval: 4,
+    count: 7,
+    /** Total fan width (degrees). */
+    spreadDeg: 60,
+    damage: 8,
+    speed: 220,
+    /** Shots fly this far before fading (px). */
+    range: 600,
+  },
+  /** Phase 3: telegraphed straight-line charges. */
+  charge: {
+    telegraph: 1,
+    distance: 450,
+    speed: 400,
+    /** Contact damage multiplier while dashing. */
+    damage: 3,
+    /** Walks normally for this long between charges (s). */
+    rest: 3,
+  },
+  /** Phase change shockwave: enemies within this radius of the city centre are pushed away. */
+  shockwave: { radius: 320, push: 420 },
+  /** How long the phase banner shows (s). */
+  bannerSec: 2,
 } as const;
 
 /** Elites (concept.md §4.1): spawns above the enemy cap become one tougher enemy instead. */

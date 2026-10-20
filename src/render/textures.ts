@@ -12,6 +12,8 @@ export const TEX = {
   shotBig: 'shot-big',
   shell: 'shell',
   enemy: (type: string, elite = false) => `enemy-${type}${elite ? '-elite' : ''}`,
+  /** Colossus look per phase (1 = the plain enemy texture). */
+  boss: (phase: number) => (phase <= 1 ? 'enemy-colossus' : `enemy-colossus-p${phase}`),
   enemyShot: 'enemy-shot',
   tile: (type: TileType, offline: boolean) => `tile-${type}${offline ? '-off' : ''}`,
   barrel: (type: BarrelType) => `barrel-${type}`,
@@ -42,6 +44,14 @@ export function createTextures(scene: Phaser.Scene): void {
       g.generateTexture(TEX.enemy(type, elite), size, size);
       g.clear();
     }
+  }
+
+  for (const phase of [2, 3]) {
+    const r = ENEMIES.colossus.radius;
+    const size = Math.ceil(r * 2 + 10);
+    drawEnemy(g, 'colossus', size / 2, r, false, phase);
+    g.generateTexture(TEX.boss(phase), size, size);
+    g.clear();
   }
 
   g.fillStyle(0xff4d5e, 1);
@@ -116,6 +126,7 @@ function drawEnemy(
   c: number,
   r: number,
   elite: boolean,
+  bossPhase = 1,
 ): void {
   const def = ENEMIES[type];
   g.fillStyle(def.color, 1);
@@ -153,11 +164,31 @@ function drawEnemy(
       g.lineBetween(c, c - r * 0.5, c, c + r * 0.5);
       break;
     case 'colossus':
+      if (bossPhase >= 3) {
+        // Red glow behind the body.
+        g.fillStyle(0xff2020, 0.35);
+        g.fillCircle(c, c, r + 4);
+        g.fillStyle(def.color, 1);
+      }
       ngon(6, Math.PI / 6);
       g.lineStyle(3, def.outline, 0.7);
       g.strokeCircle(c, c, r * 0.55);
-      g.fillStyle(def.outline, 1);
-      g.fillCircle(c, c, r * 0.2);
+      g.fillStyle(bossPhase >= 3 ? 0xff5050 : def.outline, 1);
+      g.fillCircle(c, c, r * (bossPhase >= 3 ? 0.3 : 0.2));
+      if (bossPhase >= 2) {
+        // Cracks.
+        g.lineStyle(2, def.outline, 0.9);
+        g.beginPath();
+        g.moveTo(c - r * 0.75, c - r * 0.3);
+        g.lineTo(c - r * 0.35, c - r * 0.1);
+        g.lineTo(c - r * 0.45, c + r * 0.35);
+        g.moveTo(c + r * 0.2, c - r * 0.8);
+        g.lineTo(c + r * 0.4, c - r * 0.4);
+        g.lineTo(c + r * 0.75, c - r * 0.3);
+        g.moveTo(c + r * 0.3, c + r * 0.85);
+        g.lineTo(c + r * 0.2, c + r * 0.5);
+        g.strokePath();
+      }
       break;
     case 'bomber':
       g.fillCircle(c, c, r);

@@ -61,3 +61,9 @@ export function debugFillGrid(w: World, type: TileType): void {
   if (city.typeLevels[type] === 0) city.typeLevels[type] = 1;
   cityChanged(w);
 }
+
+/** Takes this share of the boss's max HP (to reach its later phases quickly). */
+export function debugHurtBoss(w: World, fraction: number): void {
+  const boss = w.boss;
+  if (boss) boss.hp = Math.max(1, boss.hp - boss.maxHp * fraction);
+}

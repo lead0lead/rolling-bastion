@@ -2,7 +2,7 @@ import { SPAWN } from '../config/balance';
 import { BOSS, ELITE, ENEMIES, type EnemyType } from '../config/enemies';
 import { SPAWN_GROUPS, SPIKES, WAVES, type SpawnGroupId, type WaveEntry } from '../config/waves';
 import { xpToNext } from './progression';
-import { cityCentre, type Enemy, type World } from './world';
+import { cityCentre, newBossState, type Enemy, type World } from './world';
 
 /** Spawn budget per second at game time `t`, interpolated from the wave table. */
 export function budgetRate(t: number): number {
@@ -29,7 +29,7 @@ export function spawnRingRadius(w: World): number {
 
 export function updateSpawner(w: World, dt: number): void {
   if (w.time >= BOSS.at) {
-    updateBossPhase(w, dt);
+    updateBossPhase(w);
     relocateFarEnemies(w);
     return;
   }
@@ -71,25 +71,13 @@ export function updateSpawner(w: World, dt: number): void {
   relocateFarEnemies(w);
 }
 
-/** From BOSS.at: regular spawns stop, the boss arrives and summons Swarmer packs. */
-function updateBossPhase(w: World, dt: number): void {
-  if (!w.bossSpawned) {
-    w.bossSpawned = true;
-    const p = ringPoint(w, w.rng.next() * Math.PI * 2);
-    spawnEnemy(w, BOSS.type, p.x, p.y);
-    w.bossAddTimer = BOSS.addInterval;
-    return;
-  }
-  const boss = w.boss;
-  if (!boss) return;
-  w.bossAddTimer -= dt;
-  if (w.bossAddTimer > 0) return;
-  w.bossAddTimer = BOSS.addInterval;
-  for (let i = 0; i < BOSS.addCount; i++) {
-    const a = (i / BOSS.addCount) * Math.PI * 2;
-    const r = boss.radius + SPAWN.clusterScatter;
-    spawnEnemy(w, 'swarmer', boss.x + Math.cos(a) * r, boss.y + Math.sin(a) * r);
-  }
+/** From BOSS.at regular spawns stop and the boss arrives (its attacks: boss.ts). */
+function updateBossPhase(w: World): void {
+  if (w.bossSpawned) return;
+  w.bossSpawned = true;
+  w.bossState = newBossState();
+  const p = ringPoint(w, w.rng.next() * Math.PI * 2);
+  spawnEnemy(w, BOSS.type, p.x, p.y);
 }
 
 function pickGroup(w: World): { id: SpawnGroupId; count: number } {

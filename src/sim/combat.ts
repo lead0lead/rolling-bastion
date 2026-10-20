@@ -4,7 +4,15 @@ import type { WeaponDef } from '../config/tiles';
 import { destroyTile, facingAngle, type PlacedTile } from './grid';
 import { dropGem } from './progression';
 import type { WeaponStats } from './synergies';
-import { cityChanged, modsOf, tileCentre, type Enemy, type Projectile, type World } from './world';
+import {
+  cityChanged,
+  modsOf,
+  tileCentre,
+  type Enemy,
+  type EnemyShot,
+  type Projectile,
+  type World,
+} from './world';
 
 /** Largest enemy radius (an elite of the biggest type), for spatial hash queries. The boss is checked separately. */
 export const MAX_ENEMY_RADIUS =
@@ -311,4 +319,25 @@ export function removeDead(w: World): void {
     else w.projectilePool.push(p);
   }
   w.projectiles.length = n;
+}
+
+/** Fires an enemy shot (Spitters, the Colossus) that hits the first tile it enters. */
+export function fireEnemyShot(
+  w: World,
+  x: number,
+  y: number,
+  angle: number,
+  speed: number,
+  damage: number,
+  life: number,
+): void {
+  const s = w.enemyShotPool.pop() ?? ({} as EnemyShot);
+  s.x = s.px = x;
+  s.y = s.py = y;
+  s.vx = Math.cos(angle) * speed;
+  s.vy = Math.sin(angle) * speed;
+  s.damage = damage;
+  s.life = life;
+  s.dead = false;
+  w.enemyShots.push(s);
 }

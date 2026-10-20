@@ -1,4 +1,5 @@
 import { GRID, MOVE } from '../config/balance';
+import { updateBoss } from './boss';
 import { healTiles, removeDead, updateProjectiles, updateWeapons } from './combat';
 import { updateEnemies } from './enemies';
 import { collectGems } from './progression';
@@ -19,6 +20,7 @@ export function step(w: World, input: MoveInput, dt: number): void {
   moveCity(w, input, dt);
   updateTimeline(w);
   updateSpawner(w, dt);
+  updateBoss(w, dt);
   updateEnemies(w, dt);
   if (w.over) return;
   updateWeapons(w, dt);

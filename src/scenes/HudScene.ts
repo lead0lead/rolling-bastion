@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GRID } from '../config/balance';
-import { ENEMIES } from '../config/enemies';
+import { BOSS, ENEMIES } from '../config/enemies';
 import { COLORS } from '../render/tiles';
 import { budgetRate } from '../sim/spawner';
 import { coreTile } from '../sim/grid';
@@ -21,6 +21,7 @@ export class HudScene extends Phaser.Scene {
   private coreText!: Phaser.GameObjects.Text;
   private debug!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
+  private bannerMode = 'GRID EXPANDED';
   private bossText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -96,11 +97,23 @@ export class HudScene extends Phaser.Scene {
       this.bossText.setText(`${ENEMIES[boss.type].name}${enraged ? '  —  ENRAGED' : ''}`);
     }
 
-    const bannerAge = w.time - w.expandedAt;
-    // Shown once the free build pause has closed.
-    this.banner
-      .setVisible(bannerAge < GRID.bannerSec && w.pendingExpansions === 0)
-      .setAlpha(Math.min(1, (GRID.bannerSec - bannerAge) / 0.5));
+    // Grid expansion banner (once the free build pause has closed), or the boss phase banner.
+    const gridAge = w.time - w.expandedAt;
+    const phaseAge = w.time - w.bossState.phaseAt;
+    const phaseBanner = phaseAge < BOSS.bannerSec;
+    const mode = phaseBanner ? `PHASE ${w.bossState.phase}` : 'GRID EXPANDED';
+    if (mode !== this.bannerMode) {
+      // Text style changes re-render the texture, so only change them when needed.
+      this.bannerMode = mode;
+      this.banner.setText(mode).setColor(phaseBanner ? '#ff6b8a' : '#9fe8ff');
+    }
+    if (phaseBanner) {
+      this.banner.setVisible(true).setAlpha(Math.min(1, (BOSS.bannerSec - phaseAge) / 0.5));
+    } else {
+      this.banner
+        .setVisible(gridAge < GRID.bannerSec && w.pendingExpansions === 0)
+        .setAlpha(Math.min(1, (GRID.bannerSec - gridAge) / 0.5));
+    }
 
     this.debug.setVisible(ui.debugOverlay);
     if (ui.debugOverlay) {
@@ -111,7 +124,7 @@ export class HudScene extends Phaser.Scene {
           `spawn budget ${budgetRate(w.time).toFixed(2)}/s  time ${w.time.toFixed(1)} s`,
           `E spawns: ${ui.debugEnemy}  ([ / ] to change)`,
           `god mode ${w.godMode ? 'ON' : 'off'} (I)`,
-          'G level · T +60 s · K kill all · P layout',
+          'G level · T +60 s · K kill all · H hurt boss 35% · P layout',
           'F2 grow grid · F3 fill grid with Gatlings',
         ].join('\n'),
       );
