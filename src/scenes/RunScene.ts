@@ -1,14 +1,16 @@
 import Phaser from 'phaser';
 import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
-import { ENEMY_TYPES } from '../config/enemies';
+import { ENEMIES, ENEMY_TYPES } from '../config/enemies';
 import { FX } from '../config/fx';
 import { PHASE3_POOL } from '../config/pieces';
+import { TILES } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { drawSynergyLines } from '../render/lines';
 import { COLORS } from '../render/palette';
+import { Particles } from '../render/particles';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
-import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
+import { damageAlpha, outlineOf, showsCracks, SpritePool } from '../render/tiles';
 import {
   debugAddTime,
   debugFillGrid,
@@ -33,8 +35,6 @@ import {
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
 
-/** Screen shake when a tile is destroyed (duration ms, intensity). */
-const TILE_LOSS_SHAKE = { ms: 120, intensity: 0.004 } as const;
 const DEBUG_SPAWN_COUNT = 50;
 /** Share of the boss's max HP the H debug key takes. */
 const DEBUG_BOSS_HURT = 0.35;
@@ -88,6 +88,9 @@ export class RunScene extends Phaser.Scene {
   private shotSprites!: SpritePool;
   private gemSprites!: SpritePool;
   private blastGfx!: Phaser.GameObjects.Graphics;
+  private pulseGfx!: Phaser.GameObjects.Graphics;
+  private pulseClock = 0;
+  private particles!: Particles;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
   /** Render-only wobble phase per (pooled) enemy object. */
   private wobblePhases = new WeakMap<Enemy, number>();
@@ -123,6 +126,8 @@ export class RunScene extends Phaser.Scene {
     this.enemySprites = new SpritePool(this, 3);
     this.shotSprites = new SpritePool(this, 4);
     this.blastGfx = this.add.graphics().setDepth(3.5);
+    this.pulseGfx = this.add.graphics().setDepth(1.9);
+    this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
 
     this.cam = { x: this.world.x, y: this.world.y, zoom: this.targetZoom() };
@@ -332,6 +337,10 @@ export class RunScene extends Phaser.Scene {
     const cell = GRID.cellPx;
     const left = ox - (w.city.gridSize * cell) / 2;
     const top = oy - (w.city.gridSize * cell) / 2;
+    const coreScale =
+      1 + FX.corePulse.amount * Math.sin(this.time.now * 0.001 * FX.corePulse.speed);
+    const pulse = (t: { type: string; online: boolean }) =>
+      t.type === 'core' && t.online ? coreScale : 1;
     this.tileSprites.begin();
     this.crackSprites.begin();
     this.barrelSprites.begin();
@@ -342,7 +351,7 @@ export class RunScene extends Phaser.Scene {
       const alpha = damageAlpha(hpFrac, this.time.now);
       this.tileSprites
         .add(x, y, TEX.tile(t.type, !t.online))
-        .setDisplaySize(cell, cell)
+        .setDisplaySize(cell * pulse(t), cell * pulse(t))
         .setAlpha(alpha);
       if (showsCracks(hpFrac)) {
         this.crackSprites.add(x, y, TEX.cracks).setDisplaySize(cell, cell).setAlpha(alpha);
@@ -410,14 +419,65 @@ export class RunScene extends Phaser.Scene {
     this.drawBlasts(w);
 
     this.gemSprites.begin();
-    for (const gem of w.gems) this.gemSprites.add(gem.x, gem.y, TEX.gem);
+    const sparkle = this.time.now * 0.001 * FX.gemSparkle.speed;
+    for (const gem of w.gems) {
+      // Each gem twinkles on its own phase, taken from its position.
+      const s = 1 + FX.gemSparkle.amount * Math.sin(sparkle + (gem.x + gem.y) * 0.05);
+      this.gemSprites.add(gem.x, gem.y, TEX.gem).setScale(s);
+    }
     this.gemSprites.end();
 
     for (const ev of w.events) {
-      if (ev.kind === 'tileDestroyed') camera.shake(TILE_LOSS_SHAKE.ms, TILE_LOSS_SHAKE.intensity);
-      if (ev.kind === 'blast') this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
+      if (ev.kind === 'tileDestroyed') {
+        camera.shake(FX.shakeTileLoss.ms, FX.shakeTileLoss.intensity);
+        const b = FX.tileBurst;
+        const color = TILES[ev.type].color;
+        this.particles.burst(
+          ev.x,
+          ev.y,
+          b.count,
+          [color, outlineOf(color)],
+          b.speed,
+          b.size,
+          b.life,
+          true,
+        );
+      } else if (ev.kind === 'enemyKilled') {
+        const p = FX.enemyPop;
+        const def = ENEMIES[ev.type];
+        const colors = [def.color, 0xffffff, COLORS.bridge, outlineOf(def.color)];
+        this.particles.burst(ev.x, ev.y, p.count, colors, p.speed, def.radius * p.size, p.life);
+      } else if (ev.kind === 'blast') {
+        this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
+      } else if (ev.kind === 'bossPhase') {
+        camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
+      }
     }
     w.events.length = 0;
+    this.particles.update(frameDt);
+    this.particles.draw();
+    this.drawPulses(w, ox, oy, frameDt);
+  }
+
+  /** Soft rings spreading from online Generators (concept.md §6 "generator pulse"). */
+  private drawPulses(w: World, ox: number, oy: number, frameDt: number): void {
+    const g = this.pulseGfx;
+    g.clear();
+    this.pulseClock += frameDt;
+    const p = FX.generatorPulse;
+    const f = (this.pulseClock % p.period) / p.period;
+    const cell = GRID.cellPx;
+    const left = ox - (w.city.gridSize * cell) / 2;
+    const top = oy - (w.city.gridSize * cell) / 2;
+    g.lineStyle(3, TILES.generator.color, p.alpha * (1 - f));
+    for (const t of w.city.tiles) {
+      if (t.type !== 'generator' || !t.online) continue;
+      g.strokeCircle(
+        left + (t.gx + 0.5) * cell,
+        top + (t.gy + 0.5) * cell,
+        cell * (0.5 + (p.radius - 0.5) * f),
+      );
+    }
   }
 
   /** Fading rings where shells landed (game time, so they freeze with the pause). */

@@ -20,6 +20,8 @@ export const TEX = {
   tile: (type: TileType, offline: boolean) => `tile-${type}${offline ? '-off' : ''}`,
   barrel: (type: BarrelType) => `barrel-${type}`,
   cracks: 'tile-cracks',
+  particleDot: 'particle-dot',
+  particleSquare: 'particle-square',
 } as const;
 
 /** Tile textures are drawn at this size and scaled to the cell size. */
@@ -67,6 +69,16 @@ export function createTextures(scene: Phaser.Scene): void {
     g.generateTexture(key, size, size);
     g.clear();
   }
+
+  // White particle shapes, tinted per particle.
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(8, 8, 8);
+  g.generateTexture(TEX.particleDot, 16, 16);
+  g.clear();
+  g.fillStyle(0xffffff, 1);
+  g.fillRoundedRect(0, 0, 12, 12, 3);
+  g.generateTexture(TEX.particleSquare, 12, 12);
+  g.clear();
 
   g.destroy();
   createTileTextures(scene);

@@ -16,4 +16,22 @@ export const FX = {
   bossSquashFactor: 0.2,
   /** White hit flash (s, game time). */
   hitFlash: 0.04,
+  /** Particles: cap on live particles, and their slow-down rate (1/s). */
+  maxParticles: 700,
+  particleDrag: 4,
+  /** Enemy death pop: confetti count, speed (px/s), size (× enemy radius), life (s). */
+  enemyPop: { count: 7, speed: 170, size: 0.7, life: 0.45 },
+  /** Tile destruction burst: tumbling squares (size in px). */
+  tileBurst: { count: 12, speed: 210, size: 7, life: 0.6 },
+  /** Core pulse: scale amount and speed (rad/s). */
+  corePulse: { amount: 0.05, speed: 3.2 },
+  /** Generator pulse rings: period (s), max radius (cells), start alpha. */
+  generatorPulse: { period: 1.2, radius: 1.4, alpha: 0.45 },
+  /** Gem sparkle: scale amount and speed (rad/s). */
+  gemSparkle: { amount: 0.18, speed: 6 },
+  /** Bounce of a piece just placed in the build screen: overshoot and duration (s). */
+  placeBounce: { amount: 0.2, time: 0.25 },
+  /** Screen shake (duration ms, intensity): tile lost, boss phase change. */
+  shakeTileLoss: { ms: 120, intensity: 0.003 },
+  shakeBossPhase: { ms: 320, intensity: 0.007 },
 } as const;

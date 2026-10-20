@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { OFFERS, UPGRADES } from '../config/balance';
+import { FX } from '../config/fx';
 import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
@@ -144,6 +145,8 @@ export class BuildScene extends Phaser.Scene {
   private press: { x: number; y: number; picked: boolean } | null = null;
   private flash: { text: string; until: number } | null = null;
   private pauseStartedAt = 0;
+  /** The group placed last and when (ms), for its bounce. */
+  private placed: { groupId: number; at: number } | null = null;
 
   constructor() {
     super('Build');
@@ -392,7 +395,9 @@ export class BuildScene extends Phaser.Scene {
     }
     if (inRect(this.gridRect(), x, y)) {
       const cell = this.cellAt(x, y);
+      const groupId = s.held?.groupId;
       if (!dropAt(s, cell.x, cell.y)) this.showFlash('Does not fit there');
+      else if (groupId !== undefined) this.placed = { groupId, at: this.time.now };
       return;
     }
     cancelHeld(s);
@@ -519,25 +524,35 @@ export class BuildScene extends Phaser.Scene {
     cs: number,
     t: Pick<PlacedTile, 'type' | 'facing' | 'online'> & { hp?: number; maxHp?: number },
     alpha = 1,
+    scale = 1,
   ): void {
     const hpFrac = t.hp !== undefined && t.maxHp ? t.hp / t.maxHp : 1;
     const a = alpha * damageAlpha(hpFrac, this.time.now);
     const cx = x + cs / 2;
     const cy = y + cs / 2;
-    this.tileImgs.add(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(cs, cs).setAlpha(a);
+    const ds = cs * scale;
+    this.tileImgs.add(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(ds, ds).setAlpha(a);
     if (showsCracks(hpFrac)) {
-      this.crackImgs.add(cx, cy, TEX.cracks).setDisplaySize(cs, cs).setAlpha(a);
+      this.crackImgs.add(cx, cy, TEX.cracks).setDisplaySize(ds, ds).setAlpha(a);
     }
     const barrel = barrelFor(t.type);
     if (barrel) {
       const img = this.barrelImgs
         .add(cx, cy, TEX.barrel(barrel))
-        .setDisplaySize(cs, cs)
+        .setDisplaySize(ds, ds)
         .setRotation(facingAngle(t.facing))
         .setAlpha(a);
       if (t.online) img.clearTint();
       else img.setTint(OFFLINE_TINT);
     }
+  }
+
+  /** Scale of a just-placed group: a quick overshoot that settles (concept.md §6). */
+  private bounceScale(groupId: number): number {
+    if (!this.placed || this.placed.groupId !== groupId) return 1;
+    const f = (this.time.now - this.placed.at) / 1000 / FX.placeBounce.time;
+    if (f >= 1) return 1;
+    return 1 + FX.placeBounce.amount * Math.sin(f * Math.PI) * (1 - f);
   }
 
   /** Faint wedge showing an arc weapon's facing and arc width (concept.md §2.10). */
@@ -582,7 +597,7 @@ export class BuildScene extends Phaser.Scene {
     for (const t of city.tiles) {
       const px = r.x + t.gx * cs;
       const py = r.y + t.gy * cs;
-      this.drawTileImage(px, py, cs, t);
+      this.drawTileImage(px, py, cs, t, 1, this.bounceScale(t.groupId));
       if (this.showArcs || t.groupId === hoveredGroup)
         this.drawArc(px + cs / 2, py + cs / 2, cs, t);
       if (!t.online) {
