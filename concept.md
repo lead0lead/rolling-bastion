@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–3 merged into `main` (v0.4.0). Phase 4 built on `phase-4-boss-balance` (v0.5.0), pushed, not merged. Handed to the user to try. |
-| **Current phase** | 4 — Boss & balance: done, waiting for the user's playtest |
-| **Next step** | User tries the Colossus fight (boss HP 50000, phases, charges) and the new pieces; feedback, then merge and Phase 5 (look & juice) on the user's go-ahead. |
+| **Status** | Phases 0–4 merged into `main` (v0.5.0). User played Phase 4: "boss feels good" (2026-10-20). Branch `phase-5-look-juice` created. |
+| **Current phase** | 5 — Look & juice: design questions open, no code yet |
+| **Next step** | Phase 5 brainstorm, one question at a time (§12 "Phase 5 design questions"), then build on `phase-5-look-juice`. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
 | **Live version** | none (local only); app version 0.5.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (Phase 4 built, handed over) |
+| **Last updated** | 2026-10-20 (Phase 4 merged, Phase 5 starting) |
 
 ---
 
@@ -796,6 +796,12 @@ decision milestone, change the design before building more content.
 
 **Open decisions (user)**
 
+- **Phase 5 design questions** (ask one at a time):
+  1. Visual direction: polish the current flat style with effects, or add
+     glow/bloom (Phaser's built-in WebGL post effects, no new library).
+  2. Title screen content.
+  3. Effect intensity and a "reduce effects" option.
+
 - **Phase 4 design questions** (ask one at a time, in this order):
   1. *Answered 2026-10-20:* Colossus phases approved as proposed (A),
      recorded in §4.3.
@@ -895,7 +901,7 @@ decision milestone, change the design before building more content.
   outliers (likely GC).
 - Arc tuning (widths, +range) is untested by the user: starting values.
 - Phase 3b numbers were approved by the user after playing (2026-10-20).
-  Boss HP 50000 is untested by the user in play; the sim says strong
+  Boss HP 50000: user played it, "boss feels good" (2026-10-20). The sim says strong
   Gatling/Mortar builds still kill it in 10–15 s while a Cannon-only build
   can lose to it. A naive headless bot
   (place the first offer anywhere connected) loses every tile by ~3:30, so
@@ -943,6 +949,13 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Phase 4 merged
+- Decisions: user played Phase 4: "boss feels good, merge and continue".
+  Boss HP 50000 kept.
+- Done: merged `phase-4-boss-balance` into `main` (fast-forward), pushed;
+  created `phase-5-look-juice`.
+- Next: Phase 5 design questions in §12, one at a time.
 
 ### 2026-10-20 — Phase 4: boss & balance
 - Done (branch `phase-4-boss-balance`, v0.5.0): Colossus with three
