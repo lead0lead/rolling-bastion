@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
+import { playSfx } from '../audio/sfx';
 import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
 import { ENEMIES, ENEMY_TYPES } from '../config/enemies';
+import type { SoundKey } from '../config/audio';
 import { FX } from '../config/fx';
 import { PHASE3_POOL } from '../config/pieces';
-import { TILES } from '../config/tiles';
+import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { drawSynergyLines } from '../render/lines';
@@ -42,6 +44,13 @@ const DEBUG_BOSS_HURT = 0.35;
 const BARREL_TURN_RATE = 18;
 /** Tint for barrels of offline weapons. */
 const OFFLINE_TINT = COLORS.offline;
+/** Which sound a weapon type's volley makes. */
+const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
+  core: 'shot-gatling',
+  gatling: 'shot-gatling',
+  cannon: 'shot-cannon',
+  mortar: 'shot-mortar',
+};
 /** Colour of the boss charge telegraph. */
 const CHARGE_COLOR = COLORS.charge;
 /** Tint of the enraged boss. */
@@ -94,6 +103,14 @@ export class RunScene extends Phaser.Scene {
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
   /** Render-only wobble phase per (pooled) enemy object. */
   private wobblePhases = new WeakMap<Enemy, number>();
+  /** Last tally values seen, to play a sound when they grow. */
+  private seen = {
+    shots: {} as Partial<Record<TileType, number>>,
+    gems: 0,
+    enemyShots: 0,
+    boss: false,
+    charge: 'walk' as string,
+  };
   private cam = { x: 0, y: 0, zoom: 1 };
   private debugEnemyIndex = 0;
 
@@ -129,6 +146,7 @@ export class RunScene extends Phaser.Scene {
     this.pulseGfx = this.add.graphics().setDepth(1.9);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
+    this.seen = { shots: {}, gems: 0, enemyShots: 0, boss: false, charge: 'walk' };
 
     this.cam = { x: this.world.x, y: this.world.y, zoom: this.targetZoom() };
     this.cameras.main.setZoom(this.cam.zoom).centerOn(this.cam.x, this.cam.y);
@@ -192,6 +210,7 @@ export class RunScene extends Phaser.Scene {
   private openBuild(kind: 'level' | 'expand'): void {
     if (this.buildOpen) return;
     this.buildOpen = true;
+    if (kind === 'level') playSfx(this, 'level-up');
     const w = this.world;
     const data: BuildSceneData = {
       city: w.city,
@@ -442,21 +461,47 @@ export class RunScene extends Phaser.Scene {
           b.life,
           true,
         );
+        playSfx(this, 'tile-lost');
       } else if (ev.kind === 'enemyKilled') {
         const p = FX.enemyPop;
         const def = ENEMIES[ev.type];
         const colors = [def.color, 0xffffff, COLORS.bridge, outlineOf(def.color)];
         this.particles.burst(ev.x, ev.y, p.count, colors, p.speed, def.radius * p.size, p.life);
+        playSfx(this, 'enemy-pop');
       } else if (ev.kind === 'blast') {
         this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
+        playSfx(this, ev.bomb ? 'bomb' : 'blast');
       } else if (ev.kind === 'bossPhase') {
         camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
+        playSfx(this, 'boss-phase');
+      } else if (ev.kind === 'gridExpanded') {
+        playSfx(this, 'grid-expand');
       }
     }
     w.events.length = 0;
+    this.playTallySounds(w);
     this.particles.update(frameDt);
     this.particles.draw();
     this.drawPulses(w, ox, oy, frameDt);
+  }
+
+  /** Sounds for things the sim counts instead of reporting as events (concept.md §7). */
+  private playTallySounds(w: World): void {
+    const seen = this.seen;
+    for (const [type, n] of Object.entries(w.tally.shots) as [TileType, number][]) {
+      if (n > (seen.shots[type] ?? 0)) playSfx(this, SHOT_SOUND[type] ?? 'shot-gatling');
+      seen.shots[type] = n;
+    }
+    if (w.tally.gems > seen.gems) playSfx(this, 'gem');
+    if (w.tally.enemyShots > seen.enemyShots) playSfx(this, 'enemy-shot');
+    seen.gems = w.tally.gems;
+    seen.enemyShots = w.tally.enemyShots;
+    // The boss arriving, and each charge telegraph starting.
+    if (w.boss && !seen.boss) playSfx(this, 'boss-phase');
+    seen.boss = !!w.boss;
+    const charge = w.bossState.charge;
+    if (charge === 'telegraph' && seen.charge !== 'telegraph') playSfx(this, 'boss-charge');
+    seen.charge = charge;
   }
 
   /** Soft rings spreading from online Generators (concept.md §6 "generator pulse"). */

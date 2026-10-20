@@ -173,6 +173,7 @@ function detonate(w: World, e: Enemy, def: EnemyDef, t: PlacedTile): void {
     x: left + (t.gx + 0.5) * GRID.cellPx,
     y: top + (t.gy + 0.5) * GRID.cellPx,
     radius: (bomb.radiusCells + 0.5) * GRID.cellPx,
+    bomb: true,
   });
   e.dead = true;
   e.noDrop = true;

@@ -132,7 +132,10 @@ export function collectGems(w: World, dt = 0): void {
     w.gems[n++] = gem;
   }
   w.gems.length = n;
-  if (gained > 0) addXp(w, gained);
+  if (gained > 0) {
+    w.tally.gems++;
+    addXp(w, gained);
+  }
 }
 
 /** XP refunded per placed piece scrapped during a build pause. */

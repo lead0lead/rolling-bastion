@@ -123,6 +123,7 @@ export function updateWeapons(w: World, dt: number): void {
         fireShot(w, t, weapon, damage, c.x, c.y, st.aim + spread);
       }
     }
+    w.tally.shots[t.type] = (w.tally.shots[t.type] ?? 0) + 1;
     st.cooldown = Math.max(st.cooldown + interval, 0);
   }
 }
@@ -251,7 +252,7 @@ export function explode(
   if (boss && !boss.dead && (boss.x - x) ** 2 + (boss.y - y) ** 2 <= (radius + boss.radius) ** 2) {
     hitEnemy(w, boss, damage, 0, 0, 0, source);
   }
-  w.events.push({ kind: 'blast', x, y, radius });
+  w.events.push({ kind: 'blast', x, y, radius, bomb: false });
 }
 
 /** Damages an enemy; `source` is the tile type credited in `w.damageBy` (only damage up to its HP counts). */
@@ -350,4 +351,5 @@ export function fireEnemyShot(
   s.life = life;
   s.dead = false;
   w.enemyShots.push(s);
+  w.tally.enemyShots++;
 }

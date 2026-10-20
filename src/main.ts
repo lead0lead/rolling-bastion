@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, css, FONT } from './render/palette';
+import { settings, updateSettings } from './settings';
 import { BootScene } from './scenes/BootScene';
 import { BuildScene } from './scenes/BuildScene';
 import { HudScene } from './scenes/HudScene';
@@ -19,6 +20,11 @@ async function loadFonts(): Promise<void> {
 }
 
 await loadFonts();
+
+// M toggles mute anywhere (concept.md §8).
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM' && !e.repeat) updateSettings({ muted: !settings().muted });
+});
 
 new Phaser.Game({
   type: Phaser.AUTO,

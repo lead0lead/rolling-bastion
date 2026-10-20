@@ -89,7 +89,7 @@ export interface Gem {
 export type WorldEvent =
   | { kind: 'tileDestroyed'; x: number; y: number; type: TileType }
   | { kind: 'enemyKilled'; x: number; y: number; type: EnemyType }
-  | { kind: 'blast'; x: number; y: number; radius: number }
+  | { kind: 'blast'; x: number; y: number; radius: number; bomb: boolean }
   | { kind: 'levelUp'; level: number }
   | { kind: 'gridExpanded'; size: number }
   | { kind: 'bossPhase'; phase: number };
@@ -155,6 +155,12 @@ export interface World {
   won: boolean;
   /** Damage dealt to enemies per tile type (for balance stats). */
   damageBy: Partial<Record<TileType, number>>;
+  /**
+   * Running counts the renderer compares between frames to play sounds,
+   * without allocating an event per shot: weapon volleys per tile type,
+   * gem pickups (ticks with any), enemy shots fired.
+   */
+  tally: { shots: Partial<Record<TileType, number>>; gems: number; enemyShots: number };
   rerolls: number;
   kills: number;
   /** Half-diagonal of the visible area in world px; set by the renderer. */
@@ -201,6 +207,7 @@ export function createWorld(seed: number): World {
     bossState: newBossState(),
     won: false,
     damageBy: {},
+    tally: { shots: {}, gems: 0, enemyShots: 0 },
     rerolls: LEVEL_UP.rerollsPerRun,
     kills: 0,
     viewRadius: 1000,

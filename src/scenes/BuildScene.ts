@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playSfx } from '../audio/sfx';
 import { OFFERS, UPGRADES } from '../config/balance';
 import { FX } from '../config/fx';
 import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
@@ -340,7 +341,7 @@ export class BuildScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
       if (p.rightButtonDown()) {
-        rotate(this.session);
+        this.rotateHeld();
         return;
       }
       if (this.session.held) {
@@ -361,13 +362,14 @@ export class BuildScene extends Phaser.Scene {
       }
       const up = this.upgradeAt(p.x, p.y);
       if (up >= 0) {
-        toggleUpgrade(this.session, up);
+        if (toggleUpgrade(this.session, up)) playSfx(this, 'ui-toggle');
         return;
       }
       const card = this.cardAt(p.x, p.y);
       const cell = this.cellAt(p.x, p.y);
       const picked =
         card >= 0 ? pickOffer(this.session, card) : pickUpAt(this.session, cell.x, cell.y);
+      if (picked) playSfx(this, 'ui-pick');
       this.press = { x: p.x, y: p.y, picked };
     });
 
@@ -387,7 +389,9 @@ export class BuildScene extends Phaser.Scene {
   private releaseHeld(x: number, y: number): void {
     const s = this.session;
     if (inRect(SCRAP, x, y)) {
-      if (!scrapHeld(s)) {
+      if (scrapHeld(s)) {
+        playSfx(this, 'ui-scrap');
+      } else {
         this.showFlash('The Core cannot be scrapped');
         cancelHeld(s);
       }
@@ -396,8 +400,12 @@ export class BuildScene extends Phaser.Scene {
     if (inRect(this.gridRect(), x, y)) {
       const cell = this.cellAt(x, y);
       const groupId = s.held?.groupId;
-      if (!dropAt(s, cell.x, cell.y)) this.showFlash('Does not fit there');
-      else if (groupId !== undefined) this.placed = { groupId, at: this.time.now };
+      if (!dropAt(s, cell.x, cell.y)) {
+        this.showFlash('Does not fit there');
+      } else {
+        playSfx(this, 'ui-place');
+        if (groupId !== undefined) this.placed = { groupId, at: this.time.now };
+      }
       return;
     }
     cancelHeld(s);
@@ -412,11 +420,11 @@ export class BuildScene extends Phaser.Scene {
       case 'Digit3': {
         const index = Number(e.code.slice(-1)) - 1;
         if (e.shiftKey) {
-          if (this.hasRunOptions()) toggleUpgrade(s, index);
+          if (this.hasRunOptions() && toggleUpgrade(s, index)) playSfx(this, 'ui-toggle');
           break;
         }
         if (s.heldOrigin?.kind === 'offer') cancelHeld(s);
-        pickOffer(s, index);
+        if (pickOffer(s, index)) playSfx(this, 'ui-pick');
         break;
       }
       case 'Digit4':
@@ -426,23 +434,25 @@ export class BuildScene extends Phaser.Scene {
         if (this.hasRunOptions()) this.tryReroll();
         break;
       case 'KeyR':
-        rotate(s);
+        this.rotateHeld();
         break;
       case 'Escape':
         cancelHeld(s);
         break;
       case 'KeyX':
-        if (s.held) {
-          if (!scrapHeld(s)) this.showFlash('The Core cannot be scrapped');
-        } else if (!scrapAt(s, cell.x, cell.y) && tileAt(this.city, cell.x, cell.y)) {
+        if (s.held ? scrapHeld(s) : scrapAt(s, cell.x, cell.y)) {
+          playSfx(this, 'ui-scrap');
+        } else if (s.held || tileAt(this.city, cell.x, cell.y)) {
           this.showFlash('The Core cannot be scrapped');
         }
         break;
       case 'KeyB':
         this.showBridges = !this.showBridges;
+        playSfx(this, 'ui-toggle');
         break;
       case 'KeyV':
         this.showArcs = !this.showArcs;
+        playSfx(this, 'ui-toggle');
         break;
       case 'Enter':
       case 'NumpadEnter':
@@ -466,8 +476,11 @@ export class BuildScene extends Phaser.Scene {
   }
 
   private tryRepair(): void {
-    if (this.canRepair()) toggleRepair(this.session);
-    else this.showFlash('The Core is at full HP');
+    if (this.canRepair()) {
+      if (toggleRepair(this.session)) playSfx(this, 'ui-toggle');
+    } else {
+      this.showFlash('The Core is at full HP');
+    }
   }
 
   private tryReroll(): void {
@@ -480,11 +493,22 @@ export class BuildScene extends Phaser.Scene {
     this.rerollsLeft--;
     reroll(this.session, offers);
     this.showOffers();
+    playSfx(this, 'ui-toggle');
+  }
+
+  private rotateHeld(): void {
+    if (!this.session.held) return;
+    rotate(this.session);
+    playSfx(this, 'ui-rotate');
   }
 
   private tryConfirm(): void {
     const s = this.session;
-    if (!confirmStatus(s).ok) return;
+    if (!confirmStatus(s).ok) {
+      playSfx(this, 'ui-error');
+      return;
+    }
+    playSfx(this, chosenUpgrade(s) ? 'upgrade' : 'ui-confirm');
     const durations = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
     durations.push((this.time.now - this.pauseStartedAt) / 1000);
     this.registry.set('pauseDurations', durations);
@@ -495,8 +519,10 @@ export class BuildScene extends Phaser.Scene {
     this.newPause(rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
   }
 
+  /** A short message in the status panel; every one of them reports a refused action. */
   private showFlash(text: string): void {
     this.flash = { text, until: this.time.now + 1200 };
+    playSfx(this, 'ui-error');
   }
 
   // ---------------------------------------------------------------- render
