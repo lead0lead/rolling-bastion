@@ -6,6 +6,23 @@ import { createRng } from '../src/sim/rng';
 import { upgradeType } from '../src/sim/upgrades';
 
 describe('Phase 3 pool', () => {
+  it('has unique ids and the Phase 4 pieces', () => {
+    const ids = PHASE3_POOL.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'i4-gatling',
+        'l4-cannon',
+        'z4-shield',
+        'j4-repair',
+        'p5-gatling',
+        'v5-plating',
+        'y5-saw',
+      ]),
+    );
+    expect(ids).toHaveLength(28);
+  });
+
   it('contains every tile type except the Core', () => {
     const types = new Set(PHASE3_POOL.flatMap((p) => p.cells.map((c) => c.tile)));
     const all = (Object.keys(TILES) as TileType[]).filter((t) => t !== 'core');
