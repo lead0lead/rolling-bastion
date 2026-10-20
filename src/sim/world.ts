@@ -2,7 +2,7 @@ import { GRID, LEVEL_UP } from '../config/balance';
 import type { EnemyType } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
 import type { SpawnGroupId } from '../config/waves';
-import { updateOnline } from './connectivity';
+import { findBridges, updateOnline } from './connectivity';
 import { createCity, type CityState, type PlacedTile } from './grid';
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatialHash';
@@ -17,6 +17,15 @@ export interface Enemy {
   py: number;
   hp: number;
   maxHp: number;
+  /** Collision radius (px); larger for elites. */
+  radius: number;
+  /** XP dropped on death. */
+  xp: number;
+  elite: boolean;
+  /** Seconds until a ranged enemy may shoot again. */
+  cooldown: number;
+  /** Died without being killed (a Bomber that blew up): no gem, no kill. */
+  noDrop: boolean;
   /** Knockback velocity (px/s), decays over time. */
   kvx: number;
   kvy: number;
@@ -56,6 +65,19 @@ export interface WeaponState {
   aimTimer: number;
 }
 
+/** A Spitter shot: flies straight and hits the first tile it reaches. */
+export interface EnemyShot {
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  life: number;
+  dead: boolean;
+}
+
 export interface Gem {
   x: number;
   y: number;
@@ -84,6 +106,9 @@ export interface CityCache {
   maxRy: number;
   /** Online tiles that have a weapon. */
   weapons: PlacedTile[];
+  /** Bridge tiles (Sapper targets) and their centres relative to the origin. */
+  bridges: Set<number>;
+  bridgeCentres: { rx: number; ry: number }[];
   /** Levels, buffs and bonuses per tile, plus city-wide effects. */
   syn: Synergies;
 }
@@ -102,9 +127,11 @@ export interface World {
   vy: number;
   enemies: Enemy[];
   projectiles: Projectile[];
+  enemyShots: EnemyShot[];
   gems: Gem[];
   enemyPool: Enemy[];
   projectilePool: Projectile[];
+  enemyShotPool: EnemyShot[];
   hash: SpatialHash;
   spawn: { budget: number; next: { id: SpawnGroupId; count: number } | null; spikeIndex: number };
   /** Seconds until the next Magnet L5 recall. */
@@ -145,9 +172,11 @@ export function createWorld(seed: number): World {
     vy: 0,
     enemies: [],
     projectiles: [],
+    enemyShots: [],
     gems: [],
     enemyPool: [],
     projectilePool: [],
+    enemyShotPool: [],
     hash: new SpatialHash(GRID.cellPx),
     spawn: { budget: 0, next: null, spikeIndex: 0 },
     weapons: new Map(),
@@ -206,6 +235,8 @@ function buildCache(city: CityState): CityCache {
   let maxRy = -Infinity;
   const syn = computeSynergies(city);
   applyMaxHp(city, syn);
+  const bridges = findBridges(city);
+  const bridgeCentres: CityCache['bridgeCentres'] = [];
   for (const t of city.tiles) {
     cells[t.gy * city.gridSize + t.gx] = t;
     const rx = (t.gx + 0.5) * cell - half;
@@ -217,9 +248,10 @@ function buildCache(city: CityState): CityCache {
     maxRy = Math.max(maxRy, ry);
     if (!t.online) continue;
     if (TILES[t.type].weapon) weapons.push(t);
+    if (bridges.has(t.id)) bridgeCentres.push({ rx, ry });
   }
   if (centres.length === 0) minRx = maxRx = minRy = maxRy = 0;
-  return { cells, centres, minRx, maxRx, minRy, maxRy, weapons, syn };
+  return { cells, centres, minRx, maxRx, minRy, maxRy, weapons, bridges, bridgeCentres, syn };
 }
 
 /** World x of the grid's left edge and y of its top edge. */

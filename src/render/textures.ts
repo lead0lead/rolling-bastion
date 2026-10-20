@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ENEMIES, ENEMY_TYPES } from '../config/enemies';
+import { ELITE, ENEMIES, ENEMY_TYPES, type EnemyType } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
 import { BARREL_TYPES, drawBarrel, drawIcon, type BarrelType } from './icons';
 import { COLORS, drawCracks, drawOfflineMark, drawTile } from './tiles';
@@ -11,7 +11,8 @@ export const TEX = {
   shotSmall: 'shot-small',
   shotBig: 'shot-big',
   shell: 'shell',
-  enemy: (type: string) => `enemy-${type}`,
+  enemy: (type: string, elite = false) => `enemy-${type}${elite ? '-elite' : ''}`,
+  enemyShot: 'enemy-shot',
   tile: (type: TileType, offline: boolean) => `tile-${type}${offline ? '-off' : ''}`,
   barrel: (type: BarrelType) => `barrel-${type}`,
   cracks: 'tile-cracks',
@@ -34,23 +35,21 @@ export function createTextures(scene: Phaser.Scene): void {
   g.clear();
 
   for (const type of ENEMY_TYPES) {
-    const def = ENEMIES[type];
-    const size = def.radius * 2 + 4;
-    const c = size / 2;
-    g.fillStyle(def.color, 1);
-    g.lineStyle(2, def.outline, 1);
-    if (type === 'runner') {
-      const r = def.radius + 1;
-      const pts = [c, c - r, c + r, c, c, c + r, c - r, c];
-      g.fillPoints(toPoints(pts), true);
-      g.strokePoints(toPoints(pts), true);
-    } else {
-      g.fillCircle(c, c, def.radius);
-      g.strokeCircle(c, c, def.radius);
+    for (const elite of [false, true]) {
+      const r = ENEMIES[type].radius * (elite ? ELITE.scale : 1);
+      const size = Math.ceil(r * 2 + 10);
+      drawEnemy(g, type, size / 2, r, elite);
+      g.generateTexture(TEX.enemy(type, elite), size, size);
+      g.clear();
     }
-    g.generateTexture(TEX.enemy(type), size, size);
-    g.clear();
   }
+
+  g.fillStyle(0xff4d5e, 1);
+  g.fillCircle(5, 5, 4);
+  g.lineStyle(1.5, 0xffc2c8, 1);
+  g.strokeCircle(5, 5, 4);
+  g.generateTexture(TEX.enemyShot, 10, 10);
+  g.clear();
 
   g.fillStyle(0x3ff0ff, 1);
   g.fillPoints(toPoints([5, 0, 10, 5, 5, 10, 0, 5]), true);
@@ -105,6 +104,68 @@ function createTileTextures(scene: Phaser.Scene): void {
   drawCracks(g, 0, 0, size, 0x0d0f14, 0.7);
   scene.textures.addDynamicTexture(TEX.cracks, size, size)?.draw(g);
   g.destroy();
+}
+
+/**
+ * Enemy shapes (concept.md §6: dark fill, bright outline), centred at (c, c)
+ * with radius r. Elites get a second, white ring.
+ */
+function drawEnemy(
+  g: Phaser.GameObjects.Graphics,
+  type: EnemyType,
+  c: number,
+  r: number,
+  elite: boolean,
+): void {
+  const def = ENEMIES[type];
+  g.fillStyle(def.color, 1);
+  g.lineStyle(2, def.outline, 1);
+  const poly = (xy: number[]) => {
+    g.fillPoints(toPoints(xy), true);
+    g.strokePoints(toPoints(xy), true);
+  };
+  const ngon = (sides: number, rot: number, rad = r) => {
+    const xy: number[] = [];
+    for (let i = 0; i < sides; i++) {
+      const a = rot + (i / sides) * Math.PI * 2;
+      xy.push(c + Math.cos(a) * rad, c + Math.sin(a) * rad);
+    }
+    poly(xy);
+  };
+  switch (type) {
+    case 'runner':
+      ngon(4, 0, r + 1);
+      break;
+    case 'brute':
+      ngon(6, Math.PI / 6);
+      g.lineStyle(2, def.outline, 0.6);
+      g.strokeCircle(c, c, r * 0.45);
+      break;
+    case 'spitter':
+      ngon(3, -Math.PI / 2, r + 1);
+      g.fillStyle(def.outline, 1);
+      g.fillCircle(c, c + r * 0.1, r * 0.25);
+      break;
+    case 'sapper':
+      ngon(4, Math.PI / 4, r + 1);
+      g.lineStyle(2, def.outline, 1);
+      g.lineBetween(c - r * 0.5, c, c + r * 0.5, c);
+      g.lineBetween(c, c - r * 0.5, c, c + r * 0.5);
+      break;
+    case 'bomber':
+      g.fillCircle(c, c, r);
+      g.strokeCircle(c, c, r);
+      g.fillStyle(def.outline, 1);
+      g.fillCircle(c, c, r * 0.4);
+      break;
+    default:
+      g.fillCircle(c, c, r);
+      g.strokeCircle(c, c, r);
+  }
+  if (elite) {
+    g.lineStyle(2, ELITE.outline, 1);
+    g.strokeCircle(c, c, r + 2);
+  }
 }
 
 function toPoints(xy: number[]): Phaser.Math.Vector2[] {

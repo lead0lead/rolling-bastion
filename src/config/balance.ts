@@ -50,7 +50,7 @@ export const SPAWN = {
   ringMargin: 60,
   /** Enemies further than ring + this are moved back onto the ring ahead of the city. */
   relocateBeyond: 400,
-  /** Soft cap of live enemies; extra spawns are skipped (elites come in Phase 3). */
+  /** Soft cap of live enemies; above it spawn groups arrive as elites (ELITE, enemies.ts). */
   maxEnemies: 600,
   /** Unused budget is capped so a full arena doesn't bank a huge burst. */
   maxBankedBudget: 20,

@@ -1,12 +1,14 @@
 import { COMBAT } from '../config/balance';
-import { ENEMIES } from '../config/enemies';
+import { ELITE, ENEMIES } from '../config/enemies';
 import type { WeaponDef } from '../config/tiles';
 import { destroyTile, facingAngle, type PlacedTile } from './grid';
 import { dropGem } from './progression';
 import type { WeaponStats } from './synergies';
 import { cityChanged, modsOf, tileCentre, type Enemy, type Projectile, type World } from './world';
 
-export const MAX_ENEMY_RADIUS = Math.max(...Object.values(ENEMIES).map((e) => e.radius));
+/** Largest enemy radius (an elite of the biggest type), for spatial hash queries. */
+export const MAX_ENEMY_RADIUS =
+  Math.max(...Object.values(ENEMIES).map((e) => e.radius)) * ELITE.scale;
 
 /** Firing arc as a unit facing vector and cos(half angle); null for 360°. */
 export interface Arc {
@@ -195,7 +197,7 @@ export function updateProjectiles(w: World, dt: number): void {
       if (hit) return;
       const e = w.enemies[i];
       if (!e || e.dead || p.hits.includes(e)) return;
-      const r = p.radius + ENEMIES[e.type].radius;
+      const r = p.radius + e.radius;
       const dx = e.x - p.x;
       const dy = e.y - p.y;
       if (dx * dx + dy * dy <= r * r) hit = e;
@@ -218,7 +220,7 @@ export function explode(w: World, x: number, y: number, radius: number, damage: 
   w.hash.query(x, y, radius + MAX_ENEMY_RADIUS, (i) => {
     const e = w.enemies[i];
     if (!e || e.dead) return;
-    const r = radius + ENEMIES[e.type].radius;
+    const r = radius + e.radius;
     if ((e.x - x) ** 2 + (e.y - y) ** 2 <= r * r) hitEnemy(w, e, damage, 0, 0, 0);
   });
   w.events.push({ kind: 'blast', x, y, radius });
@@ -275,10 +277,11 @@ export function removeDead(w: World): void {
       w.enemies[n++] = e;
       continue;
     }
-    w.kills++;
-    dropGem(w, e.x, e.y, ENEMIES[e.type].xp);
-    w.events.push({ kind: 'enemyKilled', x: e.x, y: e.y, type: e.type });
     w.enemyPool.push(e);
+    if (e.noDrop) continue;
+    w.kills++;
+    dropGem(w, e.x, e.y, e.xp);
+    w.events.push({ kind: 'enemyKilled', x: e.x, y: e.y, type: e.type });
   }
   w.enemies.length = n;
 

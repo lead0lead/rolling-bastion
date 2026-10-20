@@ -1,24 +1,27 @@
 import { ENEMY_PHYSICS, GRID } from '../config/balance';
-import { ENEMIES } from '../config/enemies';
+import { ENEMIES, type EnemyDef, type RangedDef } from '../config/enemies';
 import type { PlacedTile } from './grid';
 import { damageTile, hitEnemy, MAX_ENEMY_RADIUS } from './combat';
-import { gridTopLeft, modsOf, tileAtCell, type Enemy, type World } from './world';
+import { gridTopLeft, modsOf, tileAtCell, type Enemy, type EnemyShot, type World } from './world';
 
 /** What an enemy touched this tick (reused, no allocation). */
 interface Contact {
   /** The tile it attacks. */
   tile: PlacedTile | undefined;
+  /** A touched bridge tile, if any (Sappers attack it first). */
+  bridge: PlacedTile | undefined;
   /** Summed damage/s from touching Saws and spiked Plating. */
   thorns: number;
   /** Lowest speed factor among touched tiles. */
   slow: number;
 }
 
-const contact: Contact = { tile: undefined, thorns: 0, slow: 1 };
+const contact: Contact = { tile: undefined, bridge: undefined, thorns: 0, slow: 1 };
 
 /**
- * Enemy movement, separation, collision with the city's tiles and contact
- * damage (concept.md §2.6). Also rebuilds the enemy spatial hash.
+ * Enemy movement, ranged attacks, separation, collision with the city's
+ * tiles and contact damage (concept.md §2.6, §4.3). Also rebuilds the enemy
+ * spatial hash.
  */
 export function updateEnemies(w: World, dt: number): void {
   const decay = Math.exp(-ENEMY_PHYSICS.knockbackDecay * dt);
@@ -30,11 +33,17 @@ export function updateEnemies(w: World, dt: number): void {
     const def = ENEMIES[e.type];
     let mx = 0;
     let my = 0;
-    if (nearestTileCentre(w, e, target)) {
+    const d2 =
+      def.targetsBridges && w.cache.bridgeCentres.length > 0
+        ? nearest(w, e, w.cache.bridgeCentres, target)
+        : nearest(w, e, w.cache.centres, target);
+    if (d2 < Infinity) {
       const dx = target.x - e.x;
       const dy = target.y - e.y;
-      const d = Math.hypot(dx, dy);
-      if (d > 0) {
+      const d = Math.sqrt(d2);
+      if (def.ranged) rangedAttack(w, e, def.ranged, target, d, dt);
+      const holds = def.ranged && d <= def.ranged.keepDistance;
+      if (d > 0 && !holds) {
         mx = (dx / d) * def.speed * e.slow;
         my = (dy / d) * def.speed * e.slow;
       }
@@ -50,17 +59,25 @@ export function updateEnemies(w: World, dt: number): void {
   separate(w);
 
   for (const e of w.enemies) {
+    if (e.dead) continue;
     collideWithCity(w, e, contact);
-    const t = contact.tile;
+    const def = ENEMIES[e.type];
+    const t = (def.targetsBridges && contact.bridge) || contact.tile;
     if (!t) continue;
+    if (def.bomb) {
+      detonate(w, e, def, t);
+      if (w.over) return;
+      continue;
+    }
     const mods = modsOf(w, t);
-    const dps = ENEMIES[e.type].contactDps;
-    damageTile(w, t, dps * mods.contactTaken * dt);
+    damageTile(w, t, def.contactDps * mods.contactTaken * dt);
     if (w.over) return;
-    const back = contact.thorns + dps * mods.reflect;
+    const back = contact.thorns + def.contactDps * mods.reflect;
     if (back > 0) hitEnemy(w, e, back * dt, 0, 0, 0);
     e.slow = contact.slow;
   }
+
+  updateEnemyShots(w, dt);
 }
 
 function rebuildHash(w: World): void {
@@ -68,10 +85,18 @@ function rebuildHash(w: World): void {
   w.enemies.forEach((e, i) => w.hash.insert(i, e.x, e.y));
 }
 
-/** World centre of the tile nearest to the enemy, written into `out`. False if no tiles. */
-function nearestTileCentre(w: World, e: Enemy, out: { x: number; y: number }): boolean {
+/**
+ * World position of the nearest of `points` (relative to the city origin),
+ * written into `out`. Returns the squared distance (Infinity if none).
+ */
+function nearest(
+  w: World,
+  e: Enemy,
+  points: readonly { rx: number; ry: number }[],
+  out: { x: number; y: number },
+): number {
   let bestD2 = Infinity;
-  for (const c of w.cache.centres) {
+  for (const c of points) {
     const x = w.x + c.rx;
     const y = w.y + c.ry;
     const d2 = (x - e.x) ** 2 + (y - e.y) ** 2;
@@ -81,7 +106,82 @@ function nearestTileCentre(w: World, e: Enemy, out: { x: number; y: number }): b
       out.y = y;
     }
   }
-  return bestD2 < Infinity;
+  return bestD2;
+}
+
+/** Spitters shoot at the nearest tile centre when in range. */
+function rangedAttack(
+  w: World,
+  e: Enemy,
+  r: RangedDef,
+  target: { x: number; y: number },
+  d: number,
+  dt: number,
+): void {
+  e.cooldown -= dt;
+  if (e.cooldown > 0 || d > r.range || d === 0) return;
+  e.cooldown = r.interval;
+  const s = w.enemyShotPool.pop() ?? ({} as EnemyShot);
+  s.x = s.px = e.x;
+  s.y = s.py = e.y;
+  s.vx = ((target.x - e.x) / d) * r.shotSpeed;
+  s.vy = ((target.y - e.y) / d) * r.shotSpeed;
+  s.damage = r.damage;
+  // A little past the target, in case the city moves.
+  s.life = (r.range / r.shotSpeed) * 1.5;
+  s.dead = false;
+  w.enemyShots.push(s);
+}
+
+/** Enemy shots fly straight and hit the first tile they enter. */
+function updateEnemyShots(w: World, dt: number): void {
+  const cell = GRID.cellPx;
+  const { left, top } = gridTopLeft(w);
+  let n = 0;
+  for (const s of w.enemyShots) {
+    s.px = s.x;
+    s.py = s.y;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.life -= dt;
+    if (s.life <= 0) s.dead = true;
+    if (!s.dead && !w.over) {
+      const t = tileAtCell(w, Math.floor((s.x - left) / cell), Math.floor((s.y - top) / cell));
+      if (t) {
+        damageTile(w, t, s.damage);
+        s.dead = true;
+      }
+    }
+    if (s.dead) w.enemyShotPool.push(s);
+    else w.enemyShots[n++] = s;
+  }
+  w.enemyShots.length = n;
+}
+
+/** A Bomber blows up on contact: damages every tile in a square around `t`, then dies. */
+function detonate(w: World, e: Enemy, def: EnemyDef, t: PlacedTile): void {
+  const bomb = def.bomb;
+  if (!bomb) return;
+  const hit: PlacedTile[] = [];
+  for (let dy = -bomb.radiusCells; dy <= bomb.radiusCells; dy++) {
+    for (let dx = -bomb.radiusCells; dx <= bomb.radiusCells; dx++) {
+      const o = tileAtCell(w, t.gx + dx, t.gy + dy);
+      if (o) hit.push(o);
+    }
+  }
+  const { left, top } = gridTopLeft(w);
+  w.events.push({
+    kind: 'blast',
+    x: left + (t.gx + 0.5) * GRID.cellPx,
+    y: top + (t.gy + 0.5) * GRID.cellPx,
+    radius: (bomb.radiusCells + 0.5) * GRID.cellPx,
+  });
+  e.dead = true;
+  e.noDrop = true;
+  for (const o of hit) {
+    damageTile(w, o, bomb.damage);
+    if (w.over) return;
+  }
 }
 
 /** Pushes overlapping enemies apart. */
@@ -89,12 +189,12 @@ function separate(w: World): void {
   const enemies = w.enemies;
   const strength = ENEMY_PHYSICS.separation;
   enemies.forEach((a, i) => {
-    const ra = ENEMIES[a.type].radius;
+    const ra = a.radius;
     w.hash.query(a.x, a.y, ra + MAX_ENEMY_RADIUS, (j) => {
       if (j <= i) return;
       const b = enemies[j];
       if (!b) return;
-      const r = ra + ENEMIES[b.type].radius;
+      const r = ra + b.radius;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const d2 = dx * dx + dy * dy;
@@ -114,21 +214,23 @@ function separate(w: World): void {
 
 /**
  * Pushes the enemy out of any tile it overlaps (tiles are solid squares) and
- * records what it touches in `out`: the first tile (the one it attacks), plus
- * thorns and slow from all touched tiles.
+ * records what it touches in `out`: the first tile (the one it attacks), a
+ * touched bridge, plus thorns and slow from all touched tiles.
  */
 function collideWithCity(w: World, e: Enemy, out: Contact): void {
   const cell = GRID.cellPx;
-  const r = ENEMIES[e.type].radius;
+  const r = e.radius;
   const reach = r + ENEMY_PHYSICS.contactSlack;
   const { left, top } = gridTopLeft(w);
   const gx = Math.floor((e.x - left) / cell);
   const gy = Math.floor((e.y - top) / cell);
+  const span = Math.ceil(reach / cell);
   out.tile = undefined;
+  out.bridge = undefined;
   out.thorns = 0;
   out.slow = 1;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
+  for (let dy = -span; dy <= span; dy++) {
+    for (let dx = -span; dx <= span; dx++) {
       const t = tileAtCell(w, gx + dx, gy + dy);
       if (!t) continue;
       const minX = left + t.gx * cell;
@@ -142,6 +244,7 @@ function collideWithCity(w: World, e: Enemy, out: Contact): void {
       const d2 = ox * ox + oy * oy;
       if (d2 > reach * reach) continue;
       out.tile ??= t;
+      if (!out.bridge && w.cache.bridges.has(t.id)) out.bridge = t;
       const m = modsOf(w, t);
       out.thorns += m.thorns;
       out.slow = Math.min(out.slow, m.slow);

@@ -343,7 +343,11 @@ export class RunScene extends Phaser.Scene {
     // Enemies, projectiles, gems.
     this.enemySprites.begin();
     for (const e of w.enemies) {
-      const img = this.enemySprites.add(lerp(e.px, e.x), lerp(e.py, e.y), TEX.enemy(e.type));
+      const img = this.enemySprites.add(
+        lerp(e.px, e.x),
+        lerp(e.py, e.y),
+        TEX.enemy(e.type, e.elite),
+      );
       if (w.time - e.hitTime < HIT_FLASH) img.setTintFill(0xffffff);
       else img.clearTint();
     }
@@ -353,6 +357,9 @@ export class RunScene extends Phaser.Scene {
     for (const p of w.projectiles) {
       const key = p.blast > 0 ? TEX.shell : p.source === 'cannon' ? TEX.shotBig : TEX.shotSmall;
       this.shotSprites.add(lerp(p.px, p.x), lerp(p.py, p.y), key);
+    }
+    for (const s of w.enemyShots) {
+      this.shotSprites.add(lerp(s.px, s.x), lerp(s.py, s.y), TEX.enemyShot);
     }
     this.shotSprites.end();
     this.drawBlasts(w);

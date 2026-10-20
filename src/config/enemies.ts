@@ -1,4 +1,24 @@
-export type EnemyType = 'swarmer' | 'runner';
+export type EnemyType = 'swarmer' | 'runner' | 'brute' | 'spitter' | 'sapper' | 'bomber';
+
+/** Keeps its distance and shoots the nearest tile (Spitter). */
+export interface RangedDef {
+  damage: number;
+  /** Seconds between shots. */
+  interval: number;
+  /** Fires at tiles within this distance (px, to the tile centre). */
+  range: number;
+  /** Stops approaching once the nearest tile centre is this close (px). */
+  keepDistance: number;
+  shotSpeed: number;
+  shotRadius: number;
+}
+
+/** Explodes on contact, damaging every tile in a square around the touched one, then dies (Bomber). */
+export interface BombDef {
+  damage: number;
+  /** 1 = the touched tile and its 8 neighbours (3×3). */
+  radiusCells: number;
+}
 
 export interface EnemyDef {
   name: string;
@@ -16,8 +36,13 @@ export interface EnemyDef {
   /** Fill colour; enemies are dark with a bright outline (concept.md §6). */
   color: number;
   outline: number;
+  ranged?: RangedDef;
+  bomb?: BombDef;
+  /** Walks to the nearest bridge tile instead of the nearest tile (Sapper). */
+  targetsBridges?: boolean;
 }
 
+/** Enemies (concept.md §4.3). Starting values to tune. */
 export const ENEMIES: Record<EnemyType, EnemyDef> = {
   swarmer: {
     name: 'Swarmer',
@@ -41,6 +66,72 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     color: 0x2a0b33,
     outline: 0xd77bff,
   },
+  brute: {
+    name: 'Brute',
+    maxHp: 120,
+    speed: 45,
+    contactDps: 20,
+    xp: 10,
+    radius: 13,
+    cost: 8,
+    color: 0x33091c,
+    outline: 0xff4f7b,
+  },
+  spitter: {
+    name: 'Spitter',
+    maxHp: 25,
+    speed: 55,
+    contactDps: 0,
+    xp: 3,
+    radius: 8,
+    cost: 2.5,
+    color: 0x2e0d24,
+    outline: 0xff8a5c,
+    ranged: {
+      damage: 8,
+      interval: 2,
+      range: 240,
+      keepDistance: 190,
+      shotSpeed: 220,
+      shotRadius: 4,
+    },
+  },
+  sapper: {
+    name: 'Sapper',
+    maxHp: 30,
+    speed: 90,
+    contactDps: 15,
+    xp: 3,
+    radius: 7,
+    cost: 2.5,
+    color: 0x2b1a08,
+    outline: 0xffd166,
+    targetsBridges: true,
+  },
+  bomber: {
+    name: 'Bomber',
+    maxHp: 20,
+    speed: 80,
+    contactDps: 0,
+    xp: 3,
+    radius: 9,
+    cost: 2.5,
+    color: 0x3a0a0a,
+    outline: 0xff4d4d,
+    bomb: { damage: 40, radiusCells: 1 },
+  },
 };
 
 export const ENEMY_TYPES = Object.keys(ENEMIES) as EnemyType[];
+
+/** Elites (concept.md §4.1): spawns above the enemy cap become one tougher enemy instead. */
+export const ELITE = {
+  /** Size multiplier. */
+  scale: 1.4,
+  /** Extra ring around elites (white, so it never reads as a Sapper's yellow). */
+  outline: 0xffffff,
+  /** Elites may exceed the soft cap by this many before spawns are skipped. */
+  headroom: 60,
+  /** An elite has the HP and XP of this many normal enemies (at least the group size). */
+  minMultiplier: 4,
+} as const;

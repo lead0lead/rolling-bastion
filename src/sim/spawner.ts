@@ -1,6 +1,7 @@
 import { SPAWN } from '../config/balance';
-import { ENEMIES, type EnemyType } from '../config/enemies';
+import { ELITE, ENEMIES, type EnemyType } from '../config/enemies';
 import { SPAWN_GROUPS, SPIKES, WAVES, type SpawnGroupId, type WaveEntry } from '../config/waves';
+import { xpToNext } from './progression';
 import { cityCentre, type Enemy, type World } from './world';
 
 /** Spawn budget per second at game time `t`, interpolated from the wave table. */
@@ -30,7 +31,14 @@ export function updateSpawner(w: World, dt: number): void {
   while (w.spawn.spikeIndex < SPIKES.length) {
     const spike = SPIKES[w.spawn.spikeIndex];
     if (!spike || spike.at > w.time) break;
-    spawnRing(w, spike.enemy, spike.count);
+    if (spike.elite) {
+      let xp = 0;
+      for (let i = 0; i < spike.elite.levels; i++) xp += xpToNext(w.level + i);
+      const p = ringPoint(w, w.rng.next() * Math.PI * 2);
+      spawnEnemy(w, spike.enemy, p.x, p.y, { hpMultiplier: spike.elite.hpMultiplier, xp });
+    } else {
+      spawnRing(w, spike.enemy, spike.count);
+    }
     w.spawn.spikeIndex++;
   }
 
@@ -39,8 +47,18 @@ export function updateSpawner(w: World, dt: number): void {
   const next = w.spawn.next;
   const def = SPAWN_GROUPS[next.id];
   const cost = ENEMIES[def.enemy].cost * next.count;
-  if (w.spawn.budget >= cost && w.enemies.length < SPAWN.maxEnemies) {
-    spawnGroup(w, next.id, next.count);
+  if (w.spawn.budget >= cost) {
+    if (w.enemies.length < SPAWN.maxEnemies) {
+      spawnGroup(w, next.id, next.count);
+    } else if (w.enemies.length < SPAWN.maxEnemies + ELITE.headroom) {
+      // Above the soft cap the group arrives as one elite (concept.md §4.1).
+      const p = ringPoint(w, w.rng.next() * Math.PI * 2);
+      const mult = Math.max(ELITE.minMultiplier, next.count);
+      spawnEnemy(w, def.enemy, p.x, p.y, {
+        hpMultiplier: mult,
+        xp: ENEMIES[def.enemy].xp * mult,
+      });
+    }
     w.spawn.budget -= cost;
     w.spawn.next = null;
   }
@@ -97,14 +115,32 @@ export function spawnRing(w: World, type: EnemyType, count: number): void {
   }
 }
 
-export function spawnEnemy(w: World, type: EnemyType, x: number, y: number): Enemy {
+/** Makes a spawned enemy an elite: bigger, tougher, worth more XP. */
+export interface EliteOptions {
+  hpMultiplier: number;
+  xp: number;
+}
+
+export function spawnEnemy(
+  w: World,
+  type: EnemyType,
+  x: number,
+  y: number,
+  elite?: EliteOptions,
+): Enemy {
   const def = ENEMIES[type];
-  const maxHp = def.maxHp * (1 + (SPAWN.hpGrowthPerMinute * w.time) / 60);
+  const maxHp =
+    def.maxHp * (1 + (SPAWN.hpGrowthPerMinute * w.time) / 60) * (elite?.hpMultiplier ?? 1);
   const e = w.enemyPool.pop() ?? ({} as Enemy);
   e.type = type;
   e.x = e.px = x;
   e.y = e.py = y;
   e.hp = e.maxHp = maxHp;
+  e.radius = def.radius * (elite ? ELITE.scale : 1);
+  e.xp = elite?.xp ?? def.xp;
+  e.elite = !!elite;
+  e.cooldown = def.ranged ? w.rng.next() * def.ranged.interval : 0;
+  e.noDrop = false;
   e.kvx = e.kvy = 0;
   e.hitTime = -Infinity;
   e.slow = 1;
