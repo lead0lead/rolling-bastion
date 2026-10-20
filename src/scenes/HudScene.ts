@@ -29,7 +29,14 @@ export class HudScene extends Phaser.Scene {
   }
 
   create(): void {
-    const text = { fontFamily: FONT.family, fontStyle: FONT.weight, color: COLORS.text };
+    // White outline keeps HUD text readable over crowds of enemies.
+    const text = {
+      fontFamily: FONT.family,
+      fontStyle: FONT.weight,
+      color: COLORS.text,
+      stroke: '#ffffff',
+      strokeThickness: 4,
+    };
     this.g = this.add.graphics();
     this.timer = this.add
       .text(640, 16, '', { ...text, fontStyle: FONT.bold, fontSize: '26px' })
