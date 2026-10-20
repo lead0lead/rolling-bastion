@@ -253,12 +253,19 @@ interface Result {
   kills: number;
   tiles: number;
   damage: Partial<Record<TileType, number>>;
+  /** Seconds from the boss's first damage to the end of the run, and the highest boss phase seen. */
+  bossFight: number | null;
+  bossPhase: number;
 }
 
 function play(arch: Archetype, seed: number, xpShare: number): Result {
   const w = createWorld(seed);
+  let bossHitAt: number | null = null;
+  let bossPhase = 0;
   while (!w.over && w.time < TIME_LIMIT) {
     step(w, steer(w), SIM.dt);
+    if (w.boss || w.won) bossPhase = Math.max(bossPhase, w.bossState.phase);
+    if (bossHitAt === null && (w.won || (w.boss && w.boss.hp < w.boss.maxHp))) bossHitAt = w.time;
     collectAll(w, xpShare);
     w.events.length = 0;
     while (w.pendingExpansions > 0) {
@@ -279,6 +286,8 @@ function play(arch: Archetype, seed: number, xpShare: number): Result {
     kills: w.kills,
     tiles: w.city.tiles.length,
     damage: w.damageBy,
+    bossFight: bossHitAt === null ? null : w.time - bossHitAt,
+    bossPhase,
   };
 }
 
@@ -297,8 +306,12 @@ it('compares archetype builds', () => {
     const results = seeds.map((s) => play(arch, s, xpShare));
     lines.push(`${arch.name}`);
     for (const r of results) {
+      const fight =
+        r.bossFight === null
+          ? ''
+          : ` (boss fight ${r.bossFight.toFixed(1)} s, phase ${r.bossPhase})`;
       const outcome = r.won
-        ? `WON at ${clock(r.time)}`
+        ? `WON at ${clock(r.time)}${fight}`
         : r.bossHp !== null
           ? `died at ${clock(r.time)} vs boss (${Math.round(r.bossHp * 100)}% HP left)`
           : r.time >= TIME_LIMIT

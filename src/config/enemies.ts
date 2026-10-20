@@ -128,7 +128,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   colossus: {
     name: 'Colossus',
-    maxHp: 6000,
+    maxHp: 12000,
     speed: 35,
     contactDps: 60,
     xp: 0,

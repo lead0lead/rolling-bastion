@@ -479,7 +479,7 @@ boss arrives (§4.3).
 | **Spitter** | 25 | 55 | 8 per shot, 1 shot/2 s, range 240 | 3 | Keeps distance, shoots nearest tile | Shields, Mortars |
 | **Sapper** | 30 | 90 | 15/s contact | 3 | Targets the nearest **bridge tile**, ignores others unless blocked | Redundant connections |
 | **Bomber** | 20 | 80 | 40 to every tile in a 3×3 area on contact, then dies | 3 | Rushes the city | Not stacking value in one blob |
-| **Boss: Colossus** | 6000 | 35 | 60/s contact | — | 3 phases: walks + summons Swarmers; adds Spitter volleys; charges in straight lines at <30% HP | Whole build |
+| **Boss: Colossus** | 12000 (was 6000; raised 2026-10-20) | 35 | 60/s contact | — | 3 phases: walks + summons Swarmers; adds Spitter volleys; charges in straight lines at <30% HP | Whole build |
 
 Enemy HP scales +6% per minute (starting value).
 
@@ -512,7 +512,7 @@ Claude's calls where the table is silent:
 | 3 | <30% | No summons. Charges: 1 s red telegraph line, dash ~450 px at 400 px/s with ×3 contact damage, 3 s pause, repeat. Dodged by steering |
 
 Phase change: "PHASE 2/3" banner and a shockwave pushing nearby enemies
-away from the city. 6000 HP, enrage at 14:00 (×2 damage) and win on kill
+away from the city. 12000 HP (user, 2026-10-20; was 6000), enrage at 14:00 (×2 damage) and win on kill
 unchanged. Look: hexagon cracked in phase 2, glowing red in phase 3.
 
 ---
@@ -782,9 +782,10 @@ decision milestone, change the design before building more content.
      archetype builds (A): `npm run sim`, tooling only; number changes stay
      the user's call.
   3. *Answered 2026-10-20:* add seven pieces (A), recorded in §4.2.
-  4. *Open:* the Colossus dies 13–35 s after it arrives in every winning
-     sim run, so its phases 2–3 are barely seen (sim results below). Change
-     boss HP, or keep it?
+  4. *Answered 2026-10-20:* boss HP 6000 → 12000 (A). Measured after the
+     change (`npm run sim` now prints the boss fight length): the fight
+     still lasts only 3–15 s from first hit, at full and at half XP; every
+     phase is reached but each lasts seconds. Follow-up question 5.
 
 - **Balance sim results 2026-10-20** (`npm run sim`, seeds 1–2, bot with
   automatic XP collection; compare builds with each other only):
