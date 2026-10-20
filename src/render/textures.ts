@@ -152,6 +152,13 @@ function drawEnemy(
       g.lineBetween(c - r * 0.5, c, c + r * 0.5, c);
       g.lineBetween(c, c - r * 0.5, c, c + r * 0.5);
       break;
+    case 'colossus':
+      ngon(6, Math.PI / 6);
+      g.lineStyle(3, def.outline, 0.7);
+      g.strokeCircle(c, c, r * 0.55);
+      g.fillStyle(def.outline, 1);
+      g.fillCircle(c, c, r * 0.2);
+      break;
     case 'bomber':
       g.fillCircle(c, c, r);
       g.strokeCircle(c, c, r);

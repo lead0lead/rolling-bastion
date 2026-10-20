@@ -18,7 +18,7 @@ import {
 import { expandGrid, facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollOffers, scrapRefund } from '../sim/progression';
 import { step, type MoveInput } from '../sim/step';
-import { cityChanged, createWorld, type CityCache, type World } from '../sim/world';
+import { bossEnraged, cityChanged, createWorld, type CityCache, type World } from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
 
@@ -31,6 +31,8 @@ const DEBUG_SPAWN_COUNT = 50;
 const BARREL_TURN_RATE = 18;
 /** Tint for barrels of offline weapons. */
 const OFFLINE_TINT = 0x8a93a6;
+/** Tint of the enraged boss. */
+const ENRAGE_TINT = 0xff6060;
 /** Shell blasts: fade time (s) and colour. */
 const BLAST_FADE = 0.3;
 const BLAST_COLOR = 0xffa040;
@@ -201,7 +203,7 @@ export class RunScene extends Phaser.Scene {
 
   private endRun(): void {
     const w = this.world;
-    const summary: SummaryData = { time: w.time, kills: w.kills, level: w.level };
+    const summary: SummaryData = { time: w.time, kills: w.kills, level: w.level, won: w.won };
     this.scene.stop('Hud');
     this.scene.start('Summary', summary);
   }
@@ -349,6 +351,7 @@ export class RunScene extends Phaser.Scene {
         TEX.enemy(e.type, e.elite),
       );
       if (w.time - e.hitTime < HIT_FLASH) img.setTintFill(0xffffff);
+      else if (e === w.boss && bossEnraged(w)) img.setTint(ENRAGE_TINT);
       else img.clearTint();
     }
     this.enemySprites.end();

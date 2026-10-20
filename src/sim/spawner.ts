@@ -1,5 +1,5 @@
 import { SPAWN } from '../config/balance';
-import { ELITE, ENEMIES, type EnemyType } from '../config/enemies';
+import { BOSS, ELITE, ENEMIES, type EnemyType } from '../config/enemies';
 import { SPAWN_GROUPS, SPIKES, WAVES, type SpawnGroupId, type WaveEntry } from '../config/waves';
 import { xpToNext } from './progression';
 import { cityCentre, type Enemy, type World } from './world';
@@ -28,6 +28,11 @@ export function spawnRingRadius(w: World): number {
 }
 
 export function updateSpawner(w: World, dt: number): void {
+  if (w.time >= BOSS.at) {
+    updateBossPhase(w, dt);
+    relocateFarEnemies(w);
+    return;
+  }
   while (w.spawn.spikeIndex < SPIKES.length) {
     const spike = SPIKES[w.spawn.spikeIndex];
     if (!spike || spike.at > w.time) break;
@@ -64,6 +69,27 @@ export function updateSpawner(w: World, dt: number): void {
   }
 
   relocateFarEnemies(w);
+}
+
+/** From BOSS.at: regular spawns stop, the boss arrives and summons Swarmer packs. */
+function updateBossPhase(w: World, dt: number): void {
+  if (!w.bossSpawned) {
+    w.bossSpawned = true;
+    const p = ringPoint(w, w.rng.next() * Math.PI * 2);
+    spawnEnemy(w, BOSS.type, p.x, p.y);
+    w.bossAddTimer = BOSS.addInterval;
+    return;
+  }
+  const boss = w.boss;
+  if (!boss) return;
+  w.bossAddTimer -= dt;
+  if (w.bossAddTimer > 0) return;
+  w.bossAddTimer = BOSS.addInterval;
+  for (let i = 0; i < BOSS.addCount; i++) {
+    const a = (i / BOSS.addCount) * Math.PI * 2;
+    const r = boss.radius + SPAWN.clusterScatter;
+    spawnEnemy(w, 'swarmer', boss.x + Math.cos(a) * r, boss.y + Math.sin(a) * r);
+  }
 }
 
 function pickGroup(w: World): { id: SpawnGroupId; count: number } {
@@ -129,8 +155,8 @@ export function spawnEnemy(
   elite?: EliteOptions,
 ): Enemy {
   const def = ENEMIES[type];
-  const maxHp =
-    def.maxHp * (1 + (SPAWN.hpGrowthPerMinute * w.time) / 60) * (elite?.hpMultiplier ?? 1);
+  const growth = def.boss ? 1 : 1 + (SPAWN.hpGrowthPerMinute * w.time) / 60;
+  const maxHp = def.maxHp * growth * (elite?.hpMultiplier ?? 1);
   const e = w.enemyPool.pop() ?? ({} as Enemy);
   e.type = type;
   e.x = e.px = x;
@@ -141,6 +167,7 @@ export function spawnEnemy(
   e.elite = !!elite;
   e.cooldown = def.ranged ? w.rng.next() * def.ranged.interval : 0;
   e.noDrop = false;
+  if (def.boss) w.boss = e;
   e.kvx = e.kvy = 0;
   e.hitTime = -Infinity;
   e.slow = 1;

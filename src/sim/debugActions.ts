@@ -1,4 +1,4 @@
-import type { EnemyType } from '../config/enemies';
+import { ENEMIES, type EnemyType } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
 import { addXp, xpToNext } from './progression';
 import { spawnRing } from './spawner';
@@ -14,14 +14,20 @@ export function debugAddTime(w: World, seconds: number): void {
   w.time += seconds;
 }
 
+/** Spawns `count` enemies of a type on the ring; a boss type spawns once (if none is alive). */
 export function debugSpawn(w: World, type: EnemyType, count: number): void {
+  if (ENEMIES[type].boss) {
+    if (!w.boss) spawnRing(w, type, 1);
+    return;
+  }
   spawnRing(w, type, count);
 }
 
-/** Removes all enemies without drops. */
+/** Removes all enemies except the boss, without drops. */
 export function debugKillAll(w: World): void {
-  w.enemyPool.push(...w.enemies);
+  w.enemyPool.push(...w.enemies.filter((e) => e !== w.boss));
   w.enemies.length = 0;
+  if (w.boss) w.enemies.push(w.boss);
 }
 
 export function debugLayoutJson(w: World): string {

@@ -5,9 +5,11 @@ export interface SummaryData {
   time: number;
   kills: number;
   level: number;
+  /** The boss was defeated. */
+  won: boolean;
 }
 
-/** Lose screen (concept.md §8). Win screen and layout snapshot come later. */
+/** Win / lose screen (concept.md §8). The layout snapshot comes later. */
 export class SummaryScene extends Phaser.Scene {
   constructor() {
     super('Summary');
@@ -20,7 +22,13 @@ export class SummaryScene extends Phaser.Scene {
       .toString()
       .padStart(2, '0');
     this.add.rectangle(0, 0, this.scale.width, this.scale.height, COLORS.background).setOrigin(0);
-    this.add.text(640, 240, 'The Core has fallen.', { ...text, fontSize: '36px' }).setOrigin(0.5);
+    this.add
+      .text(640, 240, data.won ? 'The city rolls on.' : 'The Core has fallen.', {
+        ...text,
+        fontSize: '36px',
+        color: data.won ? '#9fe8ff' : COLORS.text,
+      })
+      .setOrigin(0.5);
     this.add
       .text(
         640,

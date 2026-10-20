@@ -1,5 +1,5 @@
 import { GRID, LEVEL_UP } from '../config/balance';
-import type { EnemyType } from '../config/enemies';
+import { BOSS, type EnemyType } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
 import type { SpawnGroupId } from '../config/waves';
 import { findBridges, updateOnline } from './connectivity';
@@ -146,6 +146,13 @@ export interface World {
   pendingExpansions: number;
   /** Game time of the last grid expansion (for the banner). */
   expandedAt: number;
+  /** The live boss, if any; checked outside the spatial hash (it is too big for it). */
+  boss: Enemy | null;
+  bossSpawned: boolean;
+  /** Seconds until the boss summons its next Swarmer pack. */
+  bossAddTimer: number;
+  /** The boss was defeated: the run is won. */
+  won: boolean;
   rerolls: number;
   kills: number;
   /** Half-diagonal of the visible area in world px; set by the renderer. */
@@ -187,6 +194,10 @@ export function createWorld(seed: number): World {
     expansions: 0,
     pendingExpansions: 0,
     expandedAt: -Infinity,
+    boss: null,
+    bossSpawned: false,
+    bossAddTimer: 0,
+    won: false,
     rerolls: LEVEL_UP.rerollsPerRun,
     kills: 0,
     viewRadius: 1000,
@@ -201,6 +212,11 @@ export function createWorld(seed: number): World {
 export function cityChanged(w: World): void {
   updateOnline(w.city);
   w.cache = buildCache(w.city);
+}
+
+/** The boss enrages if still alive at BOSS.enrageAt (concept.md §2.6). */
+export function bossEnraged(w: World): boolean {
+  return w.boss !== null && w.time >= BOSS.enrageAt;
 }
 
 /** Tile modifiers; falls back to neutral values for a tile not in the cache. */

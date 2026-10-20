@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
 import { GRID } from '../config/balance';
+import { ENEMIES } from '../config/enemies';
 import { COLORS } from '../render/tiles';
 import { budgetRate } from '../sim/spawner';
 import { coreTile } from '../sim/grid';
 import { xpToNext } from '../sim/progression';
+import { bossEnraged } from '../sim/world';
 import type { RunUiState } from './RunScene';
 
 const XP_BAR = { h: 8, color: 0x3ff0ff };
 const CORE_BAR = { w: 360, h: 14, y: 690, color: 0xf4f6fb, low: 0xff4d5e };
+const BOSS_BAR = { w: 560, h: 12, y: 74, color: 0xff2f6d, enraged: 0xff6060 };
 
 /** Run HUD (concept.md §8), drawn unzoomed over the run. */
 export class HudScene extends Phaser.Scene {
@@ -18,6 +21,7 @@ export class HudScene extends Phaser.Scene {
   private coreText!: Phaser.GameObjects.Text;
   private debug!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
+  private bossText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Hud');
@@ -33,6 +37,9 @@ export class HudScene extends Phaser.Scene {
       .setOrigin(1, 0);
     this.coreText = this.add
       .text(640, CORE_BAR.y - 18, '', { ...text, fontSize: '13px' })
+      .setOrigin(0.5, 1);
+    this.bossText = this.add
+      .text(640, BOSS_BAR.y - 4, '', { ...text, fontSize: '13px' })
       .setOrigin(0.5, 1);
     this.banner = this.add
       .text(640, 120, 'GRID EXPANDED', { ...text, fontSize: '32px', color: '#9fe8ff' })
@@ -76,6 +83,18 @@ export class HudScene extends Phaser.Scene {
     g.fillStyle(frac < 0.3 ? CORE_BAR.low : CORE_BAR.color, 1);
     g.fillRect(x, CORE_BAR.y - CORE_BAR.h, CORE_BAR.w * frac, CORE_BAR.h);
     this.coreText.setText(`Core ${Math.ceil(core?.hp ?? 0)} / ${Math.round(core?.maxHp ?? 0)}`);
+
+    const boss = w.boss;
+    this.bossText.setVisible(!!boss);
+    if (boss) {
+      const enraged = bossEnraged(w);
+      const bx = 640 - BOSS_BAR.w / 2;
+      g.fillStyle(0x1b2230, 1);
+      g.fillRect(bx, BOSS_BAR.y, BOSS_BAR.w, BOSS_BAR.h);
+      g.fillStyle(enraged ? BOSS_BAR.enraged : BOSS_BAR.color, 1);
+      g.fillRect(bx, BOSS_BAR.y, BOSS_BAR.w * Math.max(0, boss.hp / boss.maxHp), BOSS_BAR.h);
+      this.bossText.setText(`${ENEMIES[boss.type].name}${enraged ? '  —  ENRAGED' : ''}`);
+    }
 
     const bannerAge = w.time - w.expandedAt;
     this.banner

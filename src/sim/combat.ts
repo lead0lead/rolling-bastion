@@ -6,9 +6,13 @@ import { dropGem } from './progression';
 import type { WeaponStats } from './synergies';
 import { cityChanged, modsOf, tileCentre, type Enemy, type Projectile, type World } from './world';
 
-/** Largest enemy radius (an elite of the biggest type), for spatial hash queries. */
+/** Largest enemy radius (an elite of the biggest type), for spatial hash queries. The boss is checked separately. */
 export const MAX_ENEMY_RADIUS =
-  Math.max(...Object.values(ENEMIES).map((e) => e.radius)) * ELITE.scale;
+  Math.max(
+    ...Object.values(ENEMIES)
+      .filter((e) => !e.boss)
+      .map((e) => e.radius),
+  ) * ELITE.scale;
 
 /** Firing arc as a unit facing vector and cos(half angle); null for 360°. */
 export interface Arc {
@@ -202,6 +206,11 @@ export function updateProjectiles(w: World, dt: number): void {
       const dy = e.y - p.y;
       if (dx * dx + dy * dy <= r * r) hit = e;
     });
+    const boss = w.boss;
+    if (!hit && boss && !boss.dead && !p.hits.includes(boss)) {
+      const r = p.radius + boss.radius;
+      if ((boss.x - p.x) ** 2 + (boss.y - p.y) ** 2 <= r * r) hit = boss;
+    }
     if (hit) {
       const speed = Math.hypot(p.vx, p.vy) || 1;
       hitEnemy(w, hit, p.damage, p.knockback, p.vx / speed, p.vy / speed);
@@ -219,10 +228,14 @@ export function updateProjectiles(w: World, dt: number): void {
 export function explode(w: World, x: number, y: number, radius: number, damage: number): void {
   w.hash.query(x, y, radius + MAX_ENEMY_RADIUS, (i) => {
     const e = w.enemies[i];
-    if (!e || e.dead) return;
+    if (!e || e.dead || e === w.boss) return;
     const r = radius + e.radius;
     if ((e.x - x) ** 2 + (e.y - y) ** 2 <= r * r) hitEnemy(w, e, damage, 0, 0, 0);
   });
+  const boss = w.boss;
+  if (boss && !boss.dead && (boss.x - x) ** 2 + (boss.y - y) ** 2 <= (radius + boss.radius) ** 2) {
+    hitEnemy(w, boss, damage, 0, 0, 0);
+  }
   w.events.push({ kind: 'blast', x, y, radius });
 }
 
@@ -236,8 +249,10 @@ export function hitEnemy(
 ): void {
   e.hp -= damage;
   e.hitTime = w.time;
-  e.kvx += dirX * knockback;
-  e.kvy += dirY * knockback;
+  if (!ENEMIES[e.type].boss) {
+    e.kvx += dirX * knockback;
+    e.kvy += dirY * knockback;
+  }
   if (e.hp <= 0) e.dead = true;
 }
 
@@ -278,6 +293,11 @@ export function removeDead(w: World): void {
       continue;
     }
     w.enemyPool.push(e);
+    if (e === w.boss) {
+      w.boss = null;
+      w.won = true;
+      w.over = true;
+    }
     if (e.noDrop) continue;
     w.kills++;
     dropGem(w, e.x, e.y, e.xp);

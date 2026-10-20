@@ -1,4 +1,5 @@
-export type EnemyType = 'swarmer' | 'runner' | 'brute' | 'spitter' | 'sapper' | 'bomber';
+export type EnemyType =
+  'swarmer' | 'runner' | 'brute' | 'spitter' | 'sapper' | 'bomber' | 'colossus';
 
 /** Keeps its distance and shoots the nearest tile (Spitter). */
 export interface RangedDef {
@@ -40,6 +41,11 @@ export interface EnemyDef {
   bomb?: BombDef;
   /** Walks to the nearest bridge tile instead of the nearest tile (Sapper). */
   targetsBridges?: boolean;
+  /**
+   * The boss: one at a time, no HP growth over time, no knockback, and too big
+   * for the spatial hash queries (handled separately).
+   */
+  boss?: boolean;
 }
 
 /** Enemies (concept.md §4.3). Starting values to tune. */
@@ -120,9 +126,38 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     outline: 0xff4d4d,
     bomb: { damage: 40, radiusCells: 1 },
   },
+  colossus: {
+    name: 'Colossus (placeholder)',
+    maxHp: 6000,
+    speed: 35,
+    contactDps: 60,
+    xp: 0,
+    radius: 36,
+    cost: 0,
+    color: 0x24061a,
+    outline: 0xff2f6d,
+    boss: true,
+  },
 };
 
 export const ENEMY_TYPES = Object.keys(ENEMIES) as EnemyType[];
+
+/**
+ * Boss timing (concept.md §2.6, §4.1). Phase 3 placeholder: a big Brute that
+ * summons Swarmer packs; the real Colossus phases come in Phase 4.
+ */
+export const BOSS = {
+  type: 'colossus' as EnemyType,
+  /** Spawns at this game time (s); regular spawns stop. */
+  at: 720,
+  /** Still alive at this time (s): enrages. */
+  enrageAt: 840,
+  /** Enraged contact damage multiplier (+100%). */
+  enrageDamage: 2,
+  /** Seconds between summoned Swarmer packs, and their size. */
+  addInterval: 6,
+  addCount: 5,
+} as const;
 
 /** Elites (concept.md §4.1): spawns above the enemy cap become one tougher enemy instead. */
 export const ELITE = {

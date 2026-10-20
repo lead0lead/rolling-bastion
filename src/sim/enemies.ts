@@ -1,8 +1,16 @@
 import { ENEMY_PHYSICS, GRID } from '../config/balance';
-import { ENEMIES, type EnemyDef, type RangedDef } from '../config/enemies';
+import { BOSS, ENEMIES, type EnemyDef, type RangedDef } from '../config/enemies';
 import type { PlacedTile } from './grid';
 import { damageTile, hitEnemy, MAX_ENEMY_RADIUS } from './combat';
-import { gridTopLeft, modsOf, tileAtCell, type Enemy, type EnemyShot, type World } from './world';
+import {
+  bossEnraged,
+  gridTopLeft,
+  modsOf,
+  tileAtCell,
+  type Enemy,
+  type EnemyShot,
+  type World,
+} from './world';
 
 /** What an enemy touched this tick (reused, no allocation). */
 interface Contact {
@@ -70,9 +78,10 @@ export function updateEnemies(w: World, dt: number): void {
       continue;
     }
     const mods = modsOf(w, t);
-    damageTile(w, t, def.contactDps * mods.contactTaken * dt);
+    const dps = def.contactDps * (e === w.boss && bossEnraged(w) ? BOSS.enrageDamage : 1);
+    damageTile(w, t, dps * mods.contactTaken * dt);
     if (w.over) return;
-    const back = contact.thorns + def.contactDps * mods.reflect;
+    const back = contact.thorns + dps * mods.reflect;
     if (back > 0) hitEnemy(w, e, back * dt, 0, 0, 0);
     e.slow = contact.slow;
   }
@@ -184,16 +193,18 @@ function detonate(w: World, e: Enemy, def: EnemyDef, t: PlacedTile): void {
   }
 }
 
-/** Pushes overlapping enemies apart. */
+/** Pushes overlapping enemies apart. The boss shoves others out of its way without moving. */
 function separate(w: World): void {
   const enemies = w.enemies;
   const strength = ENEMY_PHYSICS.separation;
+  const boss = w.boss;
   enemies.forEach((a, i) => {
+    if (a === boss) return;
     const ra = a.radius;
     w.hash.query(a.x, a.y, ra + MAX_ENEMY_RADIUS, (j) => {
       if (j <= i) return;
       const b = enemies[j];
-      if (!b) return;
+      if (!b || b === boss) return;
       const r = ra + b.radius;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -209,6 +220,19 @@ function separate(w: World): void {
       b.x += nx * push;
       b.y += ny * push;
     });
+  });
+  if (!boss) return;
+  w.hash.query(boss.x, boss.y, boss.radius + MAX_ENEMY_RADIUS, (j) => {
+    const e = enemies[j];
+    if (!e || e === boss) return;
+    const r = boss.radius + e.radius;
+    const dx = e.x - boss.x;
+    const dy = e.y - boss.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= r * r) return;
+    const d = Math.sqrt(d2);
+    e.x = boss.x + (d > 0 ? dx / d : 1) * r;
+    e.y = boss.y + (d > 0 ? dy / d : 0) * r;
   });
 }
 
