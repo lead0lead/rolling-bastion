@@ -66,8 +66,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 0–5 merged into `main` (v0.6.0). User on Phase 5: "its awesome" (2026-10-20). Branch `phase-6-audio-menus` created. |
-| **Current phase** | 6 — Audio, menus, polish: design questions open, no code yet |
-| **Next step** | Phase 6 brainstorm, one question at a time (§12 "Phase 6 design questions"), then build on `phase-6-audio-menus`. |
+| **Current phase** | 6 — Audio, menus, polish: design decided (§7, §8), building |
+| **Next step** | Build Phase 6 on `phase-6-audio-menus`: settings store, Kenney CC0 sound effects, pause menu + settings panel, end screen with city snapshot and damage bars, Reduce effects + Show FPS; then hand over. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
 | **Live version** | none (local only); app version 0.6.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
@@ -623,6 +623,10 @@ Concrete elements:
 
 ## 7. Audio
 
+**Decided 2026-10-20 (user):** sound effects come from CC0 sample packs
+(Kenney: Interface Sounds, Impact Sounds, Digital Audio), files in the
+repo, each listed in `ASSETS.md`. No music for now (user, 2026-10-20).
+
 Placeholder only in the prototype: a handful of CC0 sound effects (shot,
 hit, tile destroyed, level-up, gem pickup), from sources like Kenney or
 freesound (CC0 filter), each listed in `ASSETS.md`. One global mute toggle
@@ -641,7 +645,21 @@ summary (time survived, kills, level, final city layout snapshot) →
 restart. As implemented: title (no Mute yet, Phase 6) → run → summary →
 restart into a new run; no layout snapshot yet (Phase 6).
 
-**Saving:** none. Only the mute setting is stored in `localStorage` under
+**Pause menu and settings (decided 2026-10-20):** Esc or P during a run
+pauses and opens a light panel: Resume, Settings, Restart run (confirm),
+Quit to title (confirm). In the build screen Esc keeps putting the held
+piece back (that screen is already paused). Settings (from the pause menu
+and the title screen): Volume 0–100% in 10% steps, Mute (also M anytime),
+Reduce effects (no shake, no wobble, a third of the particles, no pulses),
+Show FPS (small counter, also outside debug builds).
+
+**End screen (decided 2026-10-20):** headline (win/lose), time survived,
+level, kills; the final city drawn with tile textures as it ended,
+including damage (on a loss the Core's cell as an empty outline); damage
+by weapon type as small coloured bars with percentages; buttons Play again
+(Enter) and Title (Esc). No personal bests (keeps "no saving").
+
+**Saving:** none. Only the settings are stored in `localStorage` under
 `rolling-bastion:settings` (wrapped in try/catch).
 
 **Debug tooling** (dev builds, or `?debug=1` in the URL):
@@ -845,10 +863,12 @@ decision milestone, change the design before building more content.
 **Open decisions (user)**
 
 - **Phase 6 design questions** (ask one at a time):
-  1. Sound source: procedural Web Audio sounds, or CC0 sample packs.
-  2. Music or not.
-  3. Pause menu and settings contents.
-  4. Summary screen with layout snapshot: what it shows.
+  1. *Answered 2026-10-20:* CC0 sample packs (A), recorded in §7.
+  2. *Answered 2026-10-20:* no music for now (A), recorded in §7.
+  3. *Answered 2026-10-20:* pause menu and settings as proposed (A),
+     recorded in §8.
+  4. *Answered 2026-10-20:* end screen as proposed, no personal bests
+     (A), recorded in §8.
 
 - **Phase 5 design questions** (ask one at a time):
   1. *Answered 2026-10-20:* visual direction — user asked for simple,
