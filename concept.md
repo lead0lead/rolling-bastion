@@ -66,8 +66,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 0–3 merged into `main` (v0.4.0). Decision milestone passed 2026-10-20: the user played full runs, "it's fun", numbers kept. Branch `phase-4-boss-balance` created. |
-| **Current phase** | 4 — Boss & balance: design questions open, no code yet |
-| **Next step** | Phase 4 brainstorm, one question at a time (§12 "Phase 4 design questions"), then build on `phase-4-boss-balance`. |
+| **Current phase** | 4 — Boss & balance: Colossus phases, 7 new pieces and `npm run sim` built on `phase-4-boss-balance` |
+| **Next step** | User decides on the sim findings (§12 Phase 4 Q4: boss HP), then finish Phase 4 docs, version 0.5.0 and hand over. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
 | **Live version** | none (local only); app version 0.4.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
@@ -782,6 +782,20 @@ decision milestone, change the design before building more content.
      archetype builds (A): `npm run sim`, tooling only; number changes stay
      the user's call.
   3. *Answered 2026-10-20:* add seven pieces (A), recorded in §4.2.
+  4. *Open:* the Colossus dies 13–35 s after it arrives in every winning
+     sim run, so its phases 2–3 are barely seen (sim results below). Change
+     boss HP, or keep it?
+
+- **Balance sim results 2026-10-20** (`npm run sim`, seeds 1–2, bot with
+  automatic XP collection; compare builds with each other only):
+  - Full XP (bot reaches level 47, grid full): Gatling batteries, Cannon
+    lines, Mortar core and the mixed cluster all win at 12:13–12:34.
+    Saw wall dies at ~7:25 (level 17–20).
+  - Half XP (level ~33, 63–74 tiles): Gatling, Mortar and mixed still win
+    (12:14–12:35); Cannon-only dies at 7:03–8:30; Saw wall at ~8:40.
+  - Reading: no single dominant build among the ranged ones; a pure Saw
+    wall is not viable (Saws only work as part of a build); pure Cannon
+    needs XP to keep up; the boss is short-lived against full builds.
 
 - **Phase 3b design questions** (ask one at a time, in this order, before
   building 3b):
