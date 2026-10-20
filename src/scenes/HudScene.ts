@@ -97,8 +97,9 @@ export class HudScene extends Phaser.Scene {
     }
 
     const bannerAge = w.time - w.expandedAt;
+    // Shown once the free build pause has closed.
     this.banner
-      .setVisible(bannerAge < GRID.bannerSec)
+      .setVisible(bannerAge < GRID.bannerSec && w.pendingExpansions === 0)
       .setAlpha(Math.min(1, (GRID.bannerSec - bannerAge) / 0.5));
 
     this.debug.setVisible(ui.debugOverlay);
