@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { MOVE, XP } from '../src/config/balance';
+import { LINES, MOVE, XP } from '../src/config/balance';
 import { ENEMIES } from '../src/config/enemies';
 import { TILES, type TileType } from '../src/config/tiles';
 import { damageTile, healTiles, updateProjectiles, updateWeapons } from '../src/sim/combat';
 import { updateEnemies } from '../src/sim/enemies';
-import { tileAt } from '../src/sim/grid';
+import { tileAt, turnFacing } from '../src/sim/grid';
 import { collectGems } from '../src/sim/progression';
 import { spawnEnemy } from '../src/sim/spawner';
 import { cityChanged, createWorld, modsOf, tileCentre, type World } from '../src/sim/world';
@@ -171,5 +171,63 @@ describe('perks', () => {
     const rows = ['Chhhhh', 'hhhhhh', 'hhhhhh', 'hhhhhn', '......', '......'];
     const w = worldOf(rows, { engine: 5 });
     expect(w.cache.syn.speedFactor).toBeCloseTo(1 + MOVE.engineBonus * 1.8);
+  });
+});
+
+describe('weapon chains', () => {
+  it('3+ identical weapons with the same facing in a line chain, bonus grows with length', () => {
+    const w = worldOf(['gggg.', 'C....', '.....', '.....', '.....']);
+    expect(w.cache.syn.chains).toEqual([
+      { type: 'gatling', x0: 0, y0: 0, x1: 3, y1: 0, length: 4 },
+    ]);
+    expect(modsOf(w, tile(w, 2, 0)).damage).toBeCloseTo(1 + 2 * LINES.chainBonusStep);
+    const three = worldOf(['ggg.', 'C...', '....', '....']);
+    expect(modsOf(three, tile(three, 0, 0)).damage).toBeCloseTo(1 + LINES.chainBonusStep);
+  });
+
+  it('two in a line, mixed types or a gap do not chain', () => {
+    expect(worldOf(['gg.g', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+    expect(worldOf(['ggc.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+  });
+
+  it('arc weapons need the same facing; Mortars chain whatever their facing', () => {
+    const w = worldOf(['ggg.', 'mmm.', 'C...', '....']);
+    tile(w, 1, 0).facing = turnFacing(0, 1);
+    tile(w, 1, 1).facing = turnFacing(0, 2);
+    cityChanged(w);
+    expect(w.cache.syn.chains.map((c) => c.type)).toEqual(['mortar']);
+  });
+
+  it('a tile in two chains keeps the higher bonus', () => {
+    const w = worldOf(['gggg.', 'g....', 'g....', 'C....', '.....']);
+    expect(modsOf(w, tile(w, 0, 0)).damage).toBeCloseTo(1 + 2 * LINES.chainBonusStep);
+    expect(w.cache.syn.chains).toHaveLength(2);
+  });
+
+  it('offline weapons break a chain', () => {
+    const w = worldOf(['C..', '...', 'ggg']);
+    expect(w.cache.syn.chains).toEqual([]);
+  });
+});
+
+describe('filled rows and columns', () => {
+  it('a full row of online tiles gives damage and max HP; row and column stack', () => {
+    const w = worldOf(['Chh', 'h..', 'h..']);
+    const corner = tile(w, 0, 0);
+    expect(w.cache.syn.filledRows).toEqual([0]);
+    expect(w.cache.syn.filledCols).toEqual([0]);
+    expect(modsOf(w, corner).fills).toBe(2);
+    expect(corner.maxHp).toBeCloseTo(TILES.core.maxHp * (1 + 2 * LINES.fillBonus));
+    const end = tile(w, 2, 0);
+    expect(end.maxHp).toBeCloseTo(TILES.hull.maxHp * (1 + LINES.fillBonus));
+  });
+
+  it('losing a tile breaks the line and clamps HP to the lower max', () => {
+    const w = worldOf(['Chh', '...', '...']);
+    const end = tile(w, 2, 0);
+    damageTile(w, tile(w, 1, 0), 1000);
+    expect(w.cache.syn.filledRows).toEqual([]);
+    expect(end.maxHp).toBe(TILES.hull.maxHp);
+    expect(end.hp).toBe(TILES.hull.maxHp);
   });
 });

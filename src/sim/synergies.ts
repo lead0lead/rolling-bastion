@@ -1,4 +1,4 @@
-import { MOVE } from '../config/balance';
+import { LINES, MOVE } from '../config/balance';
 import { TILES, type TileType, type WeaponDef } from '../config/tiles';
 import type { CityState, PlacedTile } from './grid';
 import { levelDamage, levelEffect, levelHpBonus, perk } from './upgrades';
@@ -24,6 +24,20 @@ export interface TileMods {
   slow: number;
   /** Fraction of contact damage returned to the attacker. */
   reflect: number;
+  /** Damage bonus from the best weapon chain the tile is in (0 = none). */
+  chainBonus: number;
+  /** Number of filled rows/columns the tile is in (0–2). */
+  fills: number;
+}
+
+/** A weapon chain: identical online weapons in a straight line, from (x0, y0) to (x1, y1). */
+export interface Chain {
+  type: TileType;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  length: number;
 }
 
 /** A weapon type's stats with its perks applied. */
@@ -36,6 +50,10 @@ export interface WeaponStats extends WeaponDef {
 
 export interface Synergies {
   mods: Map<number, TileMods>;
+  chains: Chain[];
+  /** Indexes of rows / columns completely filled with online tiles. */
+  filledRows: number[];
+  filledCols: number[];
   weapons: Partial<Record<TileType, WeaponStats>>;
   /** Movement speed as a fraction of base. */
   speedFactor: number;
@@ -139,12 +157,32 @@ export function computeSynergies(city: CityState): Synergies {
   const platingThorns = perk(city, 'plating', 'thorns')?.dps ?? 0;
   const sawSlow = perk(city, 'saw', 'slowTouching')?.speedFactor ?? 1;
 
+  const { chains, chainBonus } = findChains(city, at);
+  const filledRows: number[] = [];
+  const filledCols: number[] = [];
+  for (let i = 0; i < n; i++) {
+    let row = true;
+    let col = true;
+    for (let j = 0; j < n; j++) {
+      if (!at(j, i)?.online) row = false;
+      if (!at(i, j)?.online) col = false;
+    }
+    if (row) filledRows.push(i);
+    if (col) filledCols.push(i);
+  }
+
   const mods = new Map<number, TileMods>();
   for (const t of city.tiles) {
     const a = acc.get(t.id) as Acc;
     const def = TILES[t.type];
+    const fills = Math.min(
+      LINES.maxFills,
+      (filledRows.includes(t.gy) ? 1 : 0) + (filledCols.includes(t.gx) ? 1 : 0),
+    );
+    const fill = fills * LINES.fillBonus;
+    const chain = chainBonus.get(t.id) ?? 0;
     const fireRate = 1 + Math.min(a.fire, fireCap);
-    const damage = levelDamage(city, t.type) * (1 + a.genDamage);
+    const damage = levelDamage(city, t.type) * (1 + a.genDamage + chain + fill);
     let thorns = 0;
     let slow = 1;
     if (t.online && def.contactDps) {
@@ -159,10 +197,12 @@ export function computeSynergies(city: CityState): Synergies {
       contactTaken: perk(city, t.type, 'contactArmour')?.damageFactor ?? 1,
       heal: a.heal,
       regen: t.type === 'hull' ? regen : 0,
-      maxHp: def.maxHp * (1 + levelHpBonus(city, t.type) + a.hpBonus),
+      maxHp: def.maxHp * (1 + levelHpBonus(city, t.type) + a.hpBonus + fill),
       thorns,
       slow,
       reflect: a.reflect,
+      chainBonus: chain,
+      fills,
     });
   }
 
@@ -187,6 +227,9 @@ export function computeSynergies(city: CityState): Synergies {
 
   return {
     mods,
+    chains,
+    filledRows,
+    filledCols,
     weapons,
     speedFactor,
     pickupFactor: 1 + pickup,
@@ -194,6 +237,64 @@ export function computeSynergies(city: CityState): Synergies {
     gemPull: magnets > 0 ? perk(city, 'magnet', 'gemPull') : undefined,
     lowHpHealBoost: perk(city, 'repair', 'lowHpHealBoost'),
   };
+}
+
+/** True if a weapon type chains regardless of facing (no firing arc: Mortar, Saw). */
+function ignoresFacing(type: TileType): boolean {
+  const w = TILES[type].weapon;
+  return !w || w.arcDeg >= 360;
+}
+
+/**
+ * Weapon chains (concept.md §2.7): 3+ identical online weapon tiles in an
+ * unbroken straight line, with the same facing unless the weapon has no arc.
+ * A tile in a horizontal and a vertical chain keeps the higher bonus.
+ */
+function findChains(
+  city: CityState,
+  at: (x: number, y: number) => PlacedTile | undefined,
+): { chains: Chain[]; chainBonus: Map<number, number> } {
+  const n = city.gridSize;
+  const chains: Chain[] = [];
+  const chainBonus = new Map<number, number>();
+  const links = (a: PlacedTile | undefined, b: PlacedTile | undefined) =>
+    !!a && !!b && b.online && a.type === b.type && (a.facing === b.facing || ignoresFacing(a.type));
+  const chainable = (t: PlacedTile | undefined) =>
+    !!t && t.online && TILES[t.type].family === 'weapon';
+
+  for (const horizontal of [true, false]) {
+    for (let line = 0; line < n; line++) {
+      const cell = (i: number) => (horizontal ? at(i, line) : at(line, i));
+      let start = 0;
+      while (start < n) {
+        const first = cell(start);
+        if (!chainable(first)) {
+          start++;
+          continue;
+        }
+        let end = start;
+        while (end + 1 < n && links(cell(end), cell(end + 1))) end++;
+        const length = end - start + 1;
+        if (length >= LINES.chainMin && first) {
+          const bonus = Math.min(
+            LINES.chainMaxBonus,
+            LINES.chainBonusStep * (length - LINES.chainMin + 1),
+          );
+          for (let i = start; i <= end; i++) {
+            const t = cell(i) as PlacedTile;
+            chainBonus.set(t.id, Math.max(chainBonus.get(t.id) ?? 0, bonus));
+          }
+          chains.push(
+            horizontal
+              ? { type: first.type, x0: start, y0: line, x1: end, y1: line, length }
+              : { type: first.type, x0: line, y0: start, x1: line, y1: end, length },
+          );
+        }
+        start = end + 1;
+      }
+    }
+  }
+  return { chains, chainBonus };
 }
 
 /** A weapon type's stats with its active perks applied. */

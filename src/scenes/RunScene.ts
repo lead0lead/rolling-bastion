@@ -4,6 +4,7 @@ import { ENEMY_TYPES } from '../config/enemies';
 import { PHASE2_POOL } from '../config/pieces';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
+import { drawSynergyLines } from '../render/lines';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
@@ -17,7 +18,7 @@ import {
 import { expandGrid, facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollOffers, scrapRefund } from '../sim/progression';
 import { step, type MoveInput } from '../sim/step';
-import { cityChanged, createWorld, type World } from '../sim/world';
+import { cityChanged, createWorld, type CityCache, type World } from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
 
@@ -63,6 +64,9 @@ export class RunScene extends Phaser.Scene {
   private tileSprites!: SpritePool;
   private crackSprites!: SpritePool;
   private barrelSprites!: SpritePool;
+  /** Chain links and filled lines, in grid-local coordinates; redrawn when the city changes. */
+  private linesGfx!: Phaser.GameObjects.Graphics;
+  private linesFor: CityCache | null = null;
   /** Current drawn barrel angle per weapon tile id. */
   private barrelAngles = new Map<number, number>();
   private enemySprites!: SpritePool;
@@ -96,6 +100,8 @@ export class RunScene extends Phaser.Scene {
     this.tileSprites = new SpritePool(this, 2);
     this.crackSprites = new SpritePool(this, 2.5);
     this.barrelSprites = new SpritePool(this, 2.6);
+    this.linesGfx = this.add.graphics().setDepth(2.55);
+    this.linesFor = null;
     this.barrelAngles.clear();
     this.enemySprites = new SpritePool(this, 3);
     this.shotSprites = new SpritePool(this, 4);
@@ -325,6 +331,12 @@ export class RunScene extends Phaser.Scene {
     this.barrelSprites.end();
     this.tileSprites.end();
     this.crackSprites.end();
+    if (this.linesFor !== w.cache) {
+      this.linesFor = w.cache;
+      this.linesGfx.clear();
+      drawSynergyLines(this.linesGfx, w.cache.syn, w.city.gridSize, cell, 0, 0);
+    }
+    this.linesGfx.setPosition(left, top);
 
     // Enemies, projectiles, gems.
     this.enemySprites.begin();

@@ -110,3 +110,17 @@ export const UPGRADES = {
   hpPerLevel: 0.2,
   maxLevel: 5,
 } as const;
+
+/** Weapon chains and filled rows/columns (concept.md §2.7). */
+export const LINES = {
+  /** Identical weapons in a straight line needed for a chain. */
+  chainMin: 3,
+  /** Chain damage bonus: this much at chainMin, plus this much per extra tile… */
+  chainBonusStep: 0.5,
+  /** …up to this bonus (5+ tiles). */
+  chainMaxBonus: 1.5,
+  /** Damage and max HP bonus per filled row or column a tile is in. */
+  fillBonus: 0.15,
+  /** A tile counts at most this many filled lines (its row and its column). */
+  maxFills: 2,
+} as const;

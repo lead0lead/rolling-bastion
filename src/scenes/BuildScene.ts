@@ -4,6 +4,7 @@ import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
+import { drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
 import { COLORS, damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
@@ -36,6 +37,7 @@ import {
 import type { BuildResult } from '../sim/progression';
 import { rollOffers } from '../sim/progression';
 import { createRng, type Rng } from '../sim/rng';
+import { computeSynergies, type Synergies } from '../sim/synergies';
 
 /** Data for a build pause inside a run. Without it the scene runs as a sandbox. */
 export interface BuildSceneData {
@@ -100,6 +102,9 @@ export class BuildScene extends Phaser.Scene {
   private fg!: Phaser.GameObjects.Graphics;
   /** Arc wedges, between the grid and the tile sprites so tiles stay readable. */
   private arcs!: Phaser.GameObjects.Graphics;
+  /** Chain links and filled lines, between tile bodies and barrels. */
+  private lines!: Phaser.GameObjects.Graphics;
+  private syn!: Synergies;
   private tileImgs!: SpritePool;
   private crackImgs!: SpritePool;
   private barrelImgs!: SpritePool;
@@ -141,6 +146,7 @@ export class BuildScene extends Phaser.Scene {
     this.barrelImgs = new SpritePool(this, 1.2);
     this.fg = this.add.graphics().setDepth(3);
     this.arcs = this.add.graphics().setDepth(0.5);
+    this.lines = this.add.graphics().setDepth(1.15);
     const text = { fontFamily: 'monospace', color: COLORS.text };
 
     this.add
@@ -430,6 +436,8 @@ export class BuildScene extends Phaser.Scene {
     this.g.clear();
     this.fg.clear();
     this.arcs.clear();
+    this.lines.clear();
+    this.syn = computeSynergies(this.city);
     for (const pool of [this.tileImgs, this.crackImgs, this.barrelImgs]) pool.begin();
     this.drawGrid();
     this.drawCards();
@@ -522,6 +530,7 @@ export class BuildScene extends Phaser.Scene {
         fg.strokeCircle(px + cs / 2, py + cs / 2, cs * 0.34);
       }
     }
+    drawSynergyLines(this.lines, this.syn, city.gridSize, cs, r.x, r.y);
     this.drawGroupOutlines(city.tiles, r.x, r.y, cs, COLORS.groupOutline, 0.45);
     if (hoveredGroup >= 0) {
       const group = city.tiles.filter((t) => t.groupId === hoveredGroup);
@@ -693,6 +702,7 @@ export class BuildScene extends Phaser.Scene {
     const lines = [
       `Grid ${city.gridSize}×${city.gridSize}  ·  ${city.tiles.length} tiles`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
+      `Chains: ${this.syn.chains.length}  ·  Filled lines: ${this.syn.filledRows.length + this.syn.filledCols.length}`,
       this.run && this.run.refundPerScrap > 0
         ? `Scrap refund: ${this.run.refundPerScrap} XP per piece` +
           (this.session.scrapped ? ` (${this.session.scrapped} scrapped)` : '')

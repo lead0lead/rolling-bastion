@@ -181,6 +181,8 @@ const NEUTRAL_MODS: TileMods = {
   thorns: 0,
   slow: 1,
   reflect: 0,
+  chainBonus: 0,
+  fills: 0,
 };
 
 function buildCache(city: CityState): CityCache {
