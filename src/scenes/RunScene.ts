@@ -10,6 +10,7 @@ import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { drawSynergyLines } from '../render/lines';
 import { COLORS } from '../render/palette';
+import { motion, particleCount } from '../render/effects';
 import { Particles } from '../render/particles';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { damageAlpha, outlineOf, showsCracks, SpritePool } from '../render/tiles';
@@ -164,7 +165,13 @@ export class RunScene extends Phaser.Scene {
       s: K.S,
       d: K.D,
     }) as MoveKeys;
-    kb.on('keydown', (e: KeyboardEvent) => this.onDebugKey(e));
+    kb.on('keydown', (e: KeyboardEvent) => {
+      if ((e.code === 'Escape' || e.code === 'KeyP') && !this.buildOpen && !this.world.over) {
+        this.openPause();
+        return;
+      }
+      this.onDebugKey(e);
+    });
 
     this.scene.launch('Hud');
   }
@@ -240,6 +247,15 @@ export class RunScene extends Phaser.Scene {
     this.scene.bringToTop('Build');
   }
 
+  /** Pause menu (concept.md §8); the run freezes until it closes. */
+  private openPause(): void {
+    playSfx(this, 'ui-click');
+    this.input.keyboard?.resetKeys();
+    this.scene.pause();
+    this.scene.launch('Pause');
+    this.scene.bringToTop('Pause');
+  }
+
   private endRun(): void {
     const w = this.world;
     const summary: SummaryData = { time: w.time, kills: w.kills, level: w.level, won: w.won };
@@ -294,7 +310,7 @@ export class RunScene extends Phaser.Scene {
       case 'KeyK':
         debugKillAll(w);
         break;
-      case 'KeyP':
+      case 'KeyL':
         console.log(debugLayoutJson(w));
         break;
     }
@@ -357,7 +373,7 @@ export class RunScene extends Phaser.Scene {
     const left = ox - (w.city.gridSize * cell) / 2;
     const top = oy - (w.city.gridSize * cell) / 2;
     const coreScale =
-      1 + FX.corePulse.amount * Math.sin(this.time.now * 0.001 * FX.corePulse.speed);
+      1 + motion() * FX.corePulse.amount * Math.sin(this.time.now * 0.001 * FX.corePulse.speed);
     const pulse = (t: { type: string; online: boolean }) =>
       t.type === 'core' && t.online ? coreScale : 1;
     this.tileSprites.begin();
@@ -420,8 +436,8 @@ export class RunScene extends Phaser.Scene {
           : 0;
       const base = 1 / FX.enemyTexScale;
       img.setScale(
-        base * (1 + FX.wobbleAmount * wob + squash),
-        base * (1 - FX.wobbleAmount * wob - squash),
+        base * (1 + motion() * FX.wobbleAmount * wob + squash),
+        base * (1 - motion() * FX.wobbleAmount * wob - squash),
       );
     }
     this.enemySprites.end();
@@ -441,20 +457,20 @@ export class RunScene extends Phaser.Scene {
     const sparkle = this.time.now * 0.001 * FX.gemSparkle.speed;
     for (const gem of w.gems) {
       // Each gem twinkles on its own phase, taken from its position.
-      const s = 1 + FX.gemSparkle.amount * Math.sin(sparkle + (gem.x + gem.y) * 0.05);
+      const s = 1 + motion() * FX.gemSparkle.amount * Math.sin(sparkle + (gem.x + gem.y) * 0.05);
       this.gemSprites.add(gem.x, gem.y, TEX.gem).setScale(s);
     }
     this.gemSprites.end();
 
     for (const ev of w.events) {
       if (ev.kind === 'tileDestroyed') {
-        camera.shake(FX.shakeTileLoss.ms, FX.shakeTileLoss.intensity);
+        if (motion()) camera.shake(FX.shakeTileLoss.ms, FX.shakeTileLoss.intensity);
         const b = FX.tileBurst;
         const color = TILES[ev.type].color;
         this.particles.burst(
           ev.x,
           ev.y,
-          b.count,
+          particleCount(b.count),
           [color, outlineOf(color)],
           b.speed,
           b.size,
@@ -466,13 +482,21 @@ export class RunScene extends Phaser.Scene {
         const p = FX.enemyPop;
         const def = ENEMIES[ev.type];
         const colors = [def.color, 0xffffff, COLORS.bridge, outlineOf(def.color)];
-        this.particles.burst(ev.x, ev.y, p.count, colors, p.speed, def.radius * p.size, p.life);
+        this.particles.burst(
+          ev.x,
+          ev.y,
+          particleCount(p.count),
+          colors,
+          p.speed,
+          def.radius * p.size,
+          p.life,
+        );
         playSfx(this, 'enemy-pop');
       } else if (ev.kind === 'blast') {
         this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
         playSfx(this, ev.bomb ? 'bomb' : 'blast');
       } else if (ev.kind === 'bossPhase') {
-        camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
+        if (motion()) camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
         playSfx(this, 'boss-phase');
       } else if (ev.kind === 'gridExpanded') {
         playSfx(this, 'grid-expand');
@@ -508,6 +532,7 @@ export class RunScene extends Phaser.Scene {
   private drawPulses(w: World, ox: number, oy: number, frameDt: number): void {
     const g = this.pulseGfx;
     g.clear();
+    if (!motion()) return;
     this.pulseClock += frameDt;
     const p = FX.generatorPulse;
     const f = (this.pulseClock % p.period) / p.period;

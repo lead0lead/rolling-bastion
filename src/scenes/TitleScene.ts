@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
+import { playSfx } from '../audio/sfx';
 import { ENEMIES, type EnemyType } from '../config/enemies';
 import { FX } from '../config/fx';
 import { TILES, type TileType } from '../config/tiles';
 import { barrelFor } from '../render/icons';
 import { COLORS, css, FONT } from '../render/palette';
+import { motion, particleCount } from '../render/effects';
 import { Particles } from '../render/particles';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { outlineOf } from '../render/tiles';
@@ -21,7 +23,7 @@ const DEMO = {
   cell: 36,
   /** City centre and its slow drift (px, rad/s). */
   x: 640,
-  y: 500,
+  y: 555,
   driftX: 150,
   driftY: 18,
   driftSpeed: 0.35,
@@ -166,10 +168,34 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(1, 1)
       .setDepth(10);
 
-    const start = () => this.scene.start('Run');
-    this.input.keyboard?.once('keydown-ENTER', start);
-    this.input.keyboard?.once('keydown-SPACE', start);
-    this.input.once('pointerdown', start);
+    const settingsLink = this.add
+      .text(width / 2, 418, 'Settings (S)', { ...text, fontStyle: FONT.bold, fontSize: '22px' })
+      .setOrigin(0.5)
+      .setDepth(10)
+      .setInteractive({ useHandCursor: true });
+    settingsLink.on('pointerover', () => settingsLink.setColor(COLORS.textInfo));
+    settingsLink.on('pointerout', () => settingsLink.setColor(COLORS.text));
+
+    const start = () => {
+      playSfx(this, 'ui-confirm');
+      this.scene.start('Run');
+    };
+    const openSettings = () => {
+      playSfx(this, 'ui-click');
+      this.scene.launch('Settings', { from: 'Title' });
+      this.scene.sleep();
+    };
+    this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+      if (e.code === 'Enter' || e.code === 'Space') start();
+      else if (e.code === 'KeyS') openSettings();
+    });
+    this.input.on(
+      'pointerdown',
+      (_p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+        if (over.includes(settingsLink)) openSettings();
+        else start();
+      },
+    );
   }
 
   override update(_time: number, delta: number): void {
@@ -211,7 +237,15 @@ export class TitleScene extends Phaser.Scene {
         const def = ENEMIES[b.type];
         const p = FX.enemyPop;
         const colors = [def.color, 0xffffff, COLORS.bridge, outlineOf(def.color)];
-        this.particles.burst(b.x, b.y, p.count + 4, colors, p.speed, def.radius * 1.4, p.life);
+        this.particles.burst(
+          b.x,
+          b.y,
+          particleCount(p.count + 4),
+          colors,
+          p.speed,
+          def.radius * 1.4,
+          p.life,
+        );
         b.wait = DEMO.respawn;
         continue;
       }
@@ -219,7 +253,7 @@ export class TitleScene extends Phaser.Scene {
         best = d;
         target = b;
       }
-      const wob = Math.sin(t * FX.wobbleSpeed + b.phase) * FX.wobbleAmount;
+      const wob = motion() * Math.sin(t * FX.wobbleSpeed + b.phase) * FX.wobbleAmount;
       const s = DEMO.blobScale / FX.enemyTexScale;
       b.img
         .setVisible(true)
@@ -227,7 +261,7 @@ export class TitleScene extends Phaser.Scene {
         .setScale(s * (1 + wob), s * (1 - wob));
     }
 
-    const coreScale = 1 + FX.corePulse.amount * Math.sin(t * FX.corePulse.speed);
+    const coreScale = 1 + motion() * FX.corePulse.amount * Math.sin(t * FX.corePulse.speed);
     for (const c of this.city) {
       const x = cx + c.dx;
       const y = cy + c.dy;

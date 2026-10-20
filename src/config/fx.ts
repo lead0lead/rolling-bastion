@@ -34,4 +34,6 @@ export const FX = {
   /** Screen shake (duration ms, intensity): tile lost, boss phase change. */
   shakeTileLoss: { ms: 120, intensity: 0.003 },
   shakeBossPhase: { ms: 320, intensity: 0.007 },
+  /** "Reduce effects" setting: this share of particles; no shake, wobble or pulses. */
+  reducedParticleShare: 1 / 3,
 } as const;

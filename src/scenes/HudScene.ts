@@ -5,12 +5,14 @@ import { COLORS, FONT } from '../render/palette';
 import { budgetRate } from '../sim/spawner';
 import { coreTile } from '../sim/grid';
 import { xpToNext } from '../sim/progression';
+import { settings } from '../settings';
 import { bossEnraged } from '../sim/world';
 import type { RunUiState } from './RunScene';
 
 const XP_BAR = { h: 8 };
 const CORE_BAR = { w: 360, h: 14, y: 690 };
 const BOSS_BAR = { w: 560, h: 12, y: 74 };
+const FPS_REFRESH_MS = 250;
 
 /** Run HUD (concept.md §8), drawn unzoomed over the run. */
 export class HudScene extends Phaser.Scene {
@@ -22,6 +24,8 @@ export class HudScene extends Phaser.Scene {
   private debug!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
   private bannerMode = 'GRID EXPANDED';
+  private fps!: Phaser.GameObjects.Text;
+  private fpsAt = 0;
   private bossText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -51,6 +55,9 @@ export class HudScene extends Phaser.Scene {
     this.bossText = this.add
       .text(640, BOSS_BAR.y - 4, '', { ...text, fontSize: '13px' })
       .setOrigin(0.5, 1);
+    this.fps = this.add
+      .text(12, 44, '', { ...text, fontSize: '14px', color: COLORS.textDim })
+      .setVisible(false);
     this.banner = this.add
       .text(640, 120, 'GRID EXPANDED', {
         ...text,
@@ -129,6 +136,14 @@ export class HudScene extends Phaser.Scene {
         .setAlpha(Math.min(1, (GRID.bannerSec - gridAge) / 0.5));
     }
 
+    // Settings → Show FPS (concept.md §8); refreshed a few times a second.
+    const showFps = settings().showFps && !ui.debugOverlay;
+    this.fps.setVisible(showFps);
+    if (showFps && this.time.now - this.fpsAt > FPS_REFRESH_MS) {
+      this.fpsAt = this.time.now;
+      this.fps.setText(`${this.game.loop.actualFps.toFixed(0)} fps`);
+    }
+
     this.debug.setVisible(ui.debugOverlay);
     if (ui.debugOverlay) {
       this.debug.setText(
@@ -138,7 +153,7 @@ export class HudScene extends Phaser.Scene {
           `spawn budget ${budgetRate(w.time).toFixed(2)}/s  time ${w.time.toFixed(1)} s`,
           `E spawns: ${ui.debugEnemy}  ([ / ] to change)`,
           `god mode ${w.godMode ? 'ON' : 'off'} (I)`,
-          'G level · T +60 s · K kill all · H hurt boss 35% · P layout',
+          'G level · T +60 s · K kill all · H hurt boss 35% · L layout',
           'F2 grow grid · F3 fill grid with Gatlings',
         ].join('\n'),
       );

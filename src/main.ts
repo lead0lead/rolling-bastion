@@ -4,7 +4,9 @@ import { settings, updateSettings } from './settings';
 import { BootScene } from './scenes/BootScene';
 import { BuildScene } from './scenes/BuildScene';
 import { HudScene } from './scenes/HudScene';
+import { PauseScene } from './scenes/PauseScene';
 import { RunScene } from './scenes/RunScene';
+import { SettingsScene } from './scenes/SettingsScene';
 import { SummaryScene } from './scenes/SummaryScene';
 import { TitleScene } from './scenes/TitleScene';
 
@@ -36,5 +38,14 @@ new Phaser.Game({
     width: 1280,
     height: 720,
   },
-  scene: [BootScene, TitleScene, RunScene, HudScene, BuildScene, SummaryScene],
+  scene: [
+    BootScene,
+    TitleScene,
+    RunScene,
+    HudScene,
+    BuildScene,
+    PauseScene,
+    SettingsScene,
+    SummaryScene,
+  ],
 });
