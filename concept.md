@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–3a merged into `main`. Phase 3b built on `phase-3b-layout-depth` (v0.4.0), pushed, not merged. Handed to the user for full runs and the tuning pass. |
-| **Current phase** | 3b — done, waiting for the user's playtest = **decision milestone** |
-| **Next step** | User plays several full runs (§11 Phase 3 "Done when"), reports feel and numbers; one tuning pass together; user confirms or changes Claude's calls (§12). Then the user decides whether to continue to Phase 4. Do not start Phase 4 without that go-ahead. |
-| **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
+| **Status** | Phases 0–3 merged into `main` (v0.4.0). Decision milestone passed 2026-10-20: the user played full runs, "it's fun", numbers kept. Branch `phase-4-boss-balance` created. |
+| **Current phase** | 4 — Boss & balance: design questions open, no code yet |
+| **Next step** | Phase 4 brainstorm, one question at a time (§12 "Phase 4 design questions"), then build on `phase-4-boss-balance`. |
+| **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
 | **Live version** | none (local only); app version 0.4.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (Phase 3b built, handed over) |
+| **Last updated** | 2026-10-20 (milestone passed, Phase 4 starting) |
 
 ---
 
@@ -759,6 +759,13 @@ decision milestone, change the design before building more content.
 
 **Open decisions (user)**
 
+- **Phase 4 design questions** (ask one at a time, in this order):
+  1. Colossus phases (§4.3 names them, thresholds and attack details open):
+     Claude proposes a full list of starting values to approve or change.
+  2. Balance pass: a headless sim comparing fixed archetype builds, or
+     manual tuning with debug tools only.
+  3. More piece shapes: which new shapes/pieces join the pool.
+
 - **Phase 3b design questions** (ask one at a time, in this order, before
   building 3b):
   1. *Answered 2026-10-20:* weapon chains require the same facing (A),
@@ -772,8 +779,9 @@ decision milestone, change the design before building more content.
 - Piece mirroring allowed or not.
 - Meta-progression after the decision milestone (unlocks, permanent stats).
 - All story and UI text in §5 is draft.
-- **Phase 3b calls made without asking** (confirm or change during the
-  tuning pass; details in §2.7, §2.8, §4.1–4.3):
+- **Phase 3b calls made without asking** — the user played full runs and
+  said all numbers work well (2026-10-20); kept as they are, no tuning
+  pass needed. Kept here for reference (details in §2.7, §2.8, §4.1–4.3):
   - Upgrade type of a card = its most common non-Hull tile; shown only when
     the city owns that type.
   - Bonuses add up inside one multiplier (chain + filled lines + Generator
@@ -826,8 +834,8 @@ decision milestone, change the design before building more content.
   per tick with 600 enemies and 300 projectiles, p99 ~3 ms; rare 15–40 ms
   outliers (likely GC).
 - Arc tuning (widths, +range) is untested by the user: starting values.
-- **All Phase 3b numbers are untested starting values** (tile effects,
-  perks, chains/rows, enemies, wave table, boss). A naive headless bot
+- Phase 3b numbers were approved by the user after playing (2026-10-20);
+  the boss is still the placeholder. A naive headless bot
   (place the first offer anywhere connected) loses every tile by ~3:30, so
   it says nothing about balance; it only showed that a 15-minute run runs
   without errors (avg 0.8 ms/tick, worst 4 ms).
@@ -873,6 +881,14 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Decision milestone passed
+- Decisions: user played Phase 3b: "its fun and all the numbers work well,
+  so continue". Phase 3b calls and numbers kept; no tuning pass.
+  Go-ahead for Phase 4.
+- Done: merged `phase-3b-layout-depth` into `main` (fast-forward), pushed;
+  created `phase-4-boss-balance`.
+- Next: Phase 4 design questions in §12, one at a time.
 
 ### 2026-10-20 — Phase 3b: layout depth (decision milestone build)
 - Done (branch `phase-3b-layout-depth`, v0.4.0), one commit per step:
