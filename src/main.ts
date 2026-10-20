@@ -5,6 +5,7 @@ import { BuildScene } from './scenes/BuildScene';
 import { HudScene } from './scenes/HudScene';
 import { RunScene } from './scenes/RunScene';
 import { SummaryScene } from './scenes/SummaryScene';
+import { TitleScene } from './scenes/TitleScene';
 
 // Phaser draws text to canvases, so the bundled font must be loaded first (concept.md §6).
 async function loadFonts(): Promise<void> {
@@ -29,5 +30,5 @@ new Phaser.Game({
     width: 1280,
     height: 720,
   },
-  scene: [BootScene, RunScene, HudScene, BuildScene, SummaryScene],
+  scene: [BootScene, TitleScene, RunScene, HudScene, BuildScene, SummaryScene],
 });
