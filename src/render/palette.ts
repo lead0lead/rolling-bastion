@@ -44,8 +44,7 @@ export const COLORS = {
   enemyShot: 0xe5383b,
   gem: 0x00b4ff,
   blast: 0xff9f1c,
-  /** Elite ring (gold) and the boss charge telegraph. */
-  elite: 0xffb703,
+  /** The boss charge telegraph. */
   charge: 0xf0405a,
   text: '#2b2f3a',
   textDim: '#6b7385',

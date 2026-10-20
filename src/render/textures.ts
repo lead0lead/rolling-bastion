@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ELITE, ENEMIES, ENEMY_TYPES, type EnemyType } from '../config/enemies';
+import { FX } from '../config/fx';
 import { TILES, type TileType } from '../config/tiles';
 import { BARREL_TYPES, drawBarrel, drawIcon, type BarrelType } from './icons';
 import { COLORS } from './palette';
@@ -37,22 +38,20 @@ export function createTextures(scene: Phaser.Scene): void {
   g.generateTexture(TEX.bgGrid, BG_GRID_SIZE, BG_GRID_SIZE);
   g.clear();
 
-  for (const type of ENEMY_TYPES) {
-    for (const elite of [false, true]) {
-      const r = ENEMIES[type].radius * (elite ? ELITE.scale : 1);
-      const size = Math.ceil(r * 2 + 10);
-      drawEnemy(g, type, size / 2, r, elite);
-      g.generateTexture(TEX.enemy(type, elite), size, size);
-      g.clear();
-    }
-  }
-
-  for (const phase of [2, 3]) {
-    const r = ENEMIES.colossus.radius;
-    const size = Math.ceil(r * 2 + 10);
-    drawEnemy(g, 'colossus', size / 2, r, false, phase);
-    g.generateTexture(TEX.boss(phase), size, size);
+  // Enemies are drawn at FX.enemyTexScale × their world size (sprites scale back down).
+  const k = FX.enemyTexScale;
+  const enemyTex = (key: string, type: EnemyType, r: number, elite: boolean, phase = 1) => {
+    const size = Math.ceil(r * k * 2.7);
+    drawEnemy(g, type, size / 2, r * k, elite, phase);
+    g.generateTexture(key, size, size);
     g.clear();
+  };
+  for (const type of ENEMY_TYPES) {
+    enemyTex(TEX.enemy(type), type, ENEMIES[type].radius, false);
+    enemyTex(TEX.enemy(type, true), type, ENEMIES[type].radius * ELITE.scale, true);
+  }
+  for (const phase of [2, 3]) {
+    enemyTex(TEX.boss(phase), 'colossus', ENEMIES.colossus.radius, false, phase);
   }
 
   // Shiny round dots (concept.md §6: like agar.io food), each in its own colour family.
@@ -102,8 +101,9 @@ function createTileTextures(scene: Phaser.Scene): void {
 }
 
 /**
- * Enemy shapes (concept.md §6: dark fill, bright outline), centred at (c, c)
- * with radius r. Elites get a second, white ring.
+ * Enemy blobs (concept.md §6): a bright circle with a thick darker outline
+ * and a simple angry face, centred at (c, c) with radius r. Each type's face
+ * differs a little; elites get a gold ring; the Colossus's face changes per phase.
  */
 function drawEnemy(
   g: Phaser.GameObjects.Graphics,
@@ -114,80 +114,83 @@ function drawEnemy(
   bossPhase = 1,
 ): void {
   const def = ENEMIES[type];
+  const ink = COLORS.ink;
+  if (type === 'colossus' && bossPhase >= 3) {
+    // Red glow behind the body.
+    g.fillStyle(COLORS.charge, 0.3);
+    g.fillCircle(c, c, r * 1.12);
+  }
   g.fillStyle(def.color, 1);
-  g.lineStyle(2, def.outline, 1);
-  const poly = (xy: number[]) => {
-    g.fillPoints(toPoints(xy), true);
-    g.strokePoints(toPoints(xy), true);
-  };
-  const ngon = (sides: number, rot: number, rad = r) => {
-    const xy: number[] = [];
-    for (let i = 0; i < sides; i++) {
-      const a = rot + (i / sides) * Math.PI * 2;
-      xy.push(c + Math.cos(a) * rad, c + Math.sin(a) * rad);
-    }
-    poly(xy);
-  };
+  g.fillCircle(c, c, r);
+  g.lineStyle(r * 0.16, outlineOf(def.color), 1);
+  g.strokeCircle(c, c, r);
+  if (elite) {
+    g.lineStyle(r * 0.12, ELITE.ring, 1);
+    g.strokeCircle(c, c, r * 1.12);
+  }
+
+  // Eyes: white, dark pupils looking slightly inward; angled brows.
+  const eyeY = c - r * 0.08;
+  const eyeX = r * 0.34;
+  const eyeR = r * (type === 'colossus' ? 0.2 : 0.24);
+  const narrow = type === 'runner';
+  for (const side of [-1, 1]) {
+    const ex = c + side * eyeX;
+    g.fillStyle(0xffffff, 1);
+    if (narrow) g.fillEllipse(ex, eyeY, eyeR * 2.1, eyeR * 1.1);
+    else g.fillCircle(ex, eyeY, eyeR);
+    const pupil = type === 'colossus' && bossPhase >= 3 ? COLORS.charge : ink;
+    g.fillStyle(pupil, 1);
+    g.fillCircle(ex - side * eyeR * 0.25, eyeY + eyeR * 0.15, eyeR * (narrow ? 0.45 : 0.55));
+    // Brow: outer end high, inner end low (angry).
+    const browW = type === 'brute' || type === 'colossus' ? r * 0.16 : r * 0.1;
+    g.lineStyle(browW, ink, 1);
+    g.lineBetween(c + side * r * 0.62, eyeY - eyeR * 1.7, c + side * r * 0.12, eyeY - eyeR * 1.05);
+  }
+
   switch (type) {
-    case 'runner':
-      ngon(4, 0, r + 1);
-      break;
-    case 'brute':
-      ngon(6, Math.PI / 6);
-      g.lineStyle(2, def.outline, 0.6);
-      g.strokeCircle(c, c, r * 0.45);
-      break;
     case 'spitter':
-      ngon(3, -Math.PI / 2, r + 1);
-      g.fillStyle(def.outline, 1);
-      g.fillCircle(c, c + r * 0.1, r * 0.25);
+      // O-mouth.
+      g.fillStyle(ink, 1);
+      g.fillCircle(c, c + r * 0.45, r * 0.16);
       break;
     case 'sapper':
-      ngon(4, Math.PI / 4, r + 1);
-      g.lineStyle(2, def.outline, 1);
-      g.lineBetween(c - r * 0.5, c, c + r * 0.5, c);
-      g.lineBetween(c, c - r * 0.5, c, c + r * 0.5);
+      // Hard hat in the bridge colour.
+      g.fillStyle(COLORS.bridge, 1);
+      g.slice(c, c - r * 0.42, r * 0.62, Math.PI, 0, false);
+      g.fillPath();
+      g.fillRect(c - r * 0.8, c - r * 0.46, r * 1.6, r * 0.14);
       break;
-    case 'colossus':
-      if (bossPhase >= 3) {
-        // Red glow behind the body.
-        g.fillStyle(0xff2020, 0.35);
-        g.fillCircle(c, c, r + 4);
-        g.fillStyle(def.color, 1);
-      }
-      ngon(6, Math.PI / 6);
-      g.lineStyle(3, def.outline, 0.7);
-      g.strokeCircle(c, c, r * 0.55);
-      g.fillStyle(bossPhase >= 3 ? 0xff5050 : def.outline, 1);
-      g.fillCircle(c, c, r * (bossPhase >= 3 ? 0.3 : 0.2));
+    case 'bomber': {
+      // Fuse with a spark.
+      g.lineStyle(r * 0.14, ink, 1);
+      g.lineBetween(c + r * 0.35, c - r * 0.9, c + r * 0.55, c - r * 1.2);
+      g.fillStyle(COLORS.bridge, 1);
+      g.fillCircle(c + r * 0.58, c - r * 1.25, r * 0.2);
+      break;
+    }
+    case 'colossus': {
+      // Jagged mouth.
+      g.fillStyle(ink, 1);
+      const xs = [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45];
+      const pts: number[] = [];
+      xs.forEach((x, i) => pts.push(c + x * r, c + r * (i % 2 === 0 ? 0.42 : 0.3)));
+      pts.push(c + 0.45 * r, c + r * 0.6, c - 0.45 * r, c + r * 0.6);
+      g.fillPoints(toPoints(pts), true);
       if (bossPhase >= 2) {
         // Cracks.
-        g.lineStyle(2, def.outline, 0.9);
+        g.lineStyle(r * 0.06, outlineOf(def.color, 45), 1);
         g.beginPath();
-        g.moveTo(c - r * 0.75, c - r * 0.3);
-        g.lineTo(c - r * 0.35, c - r * 0.1);
-        g.lineTo(c - r * 0.45, c + r * 0.35);
-        g.moveTo(c + r * 0.2, c - r * 0.8);
-        g.lineTo(c + r * 0.4, c - r * 0.4);
-        g.lineTo(c + r * 0.75, c - r * 0.3);
-        g.moveTo(c + r * 0.3, c + r * 0.85);
-        g.lineTo(c + r * 0.2, c + r * 0.5);
+        g.moveTo(c - r * 0.85, c - r * 0.2);
+        g.lineTo(c - r * 0.6, c + r * 0.05);
+        g.lineTo(c - r * 0.7, c + r * 0.35);
+        g.moveTo(c + r * 0.35, c - r * 0.85);
+        g.lineTo(c + r * 0.5, c - r * 0.55);
+        g.lineTo(c + r * 0.8, c - r * 0.45);
         g.strokePath();
       }
       break;
-    case 'bomber':
-      g.fillCircle(c, c, r);
-      g.strokeCircle(c, c, r);
-      g.fillStyle(def.outline, 1);
-      g.fillCircle(c, c, r * 0.4);
-      break;
-    default:
-      g.fillCircle(c, c, r);
-      g.strokeCircle(c, c, r);
-  }
-  if (elite) {
-    g.lineStyle(2, ELITE.outline, 1);
-    g.strokeCircle(c, c, r + 2);
+    }
   }
 }
 

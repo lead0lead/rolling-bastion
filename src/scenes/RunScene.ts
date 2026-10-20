@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
 import { ENEMY_TYPES } from '../config/enemies';
+import { FX } from '../config/fx';
 import { PHASE3_POOL } from '../config/pieces';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
@@ -21,14 +22,19 @@ import { chargePath } from '../sim/boss';
 import { expandGrid, facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
 import { step, type MoveInput } from '../sim/step';
-import { bossEnraged, cityChanged, createWorld, type CityCache, type World } from '../sim/world';
+import {
+  bossEnraged,
+  cityChanged,
+  createWorld,
+  type CityCache,
+  type Enemy,
+  type World,
+} from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
 
 /** Screen shake when a tile is destroyed (duration ms, intensity). */
 const TILE_LOSS_SHAKE = { ms: 120, intensity: 0.004 } as const;
-/** How long an enemy flashes white after a hit (s). */
-const HIT_FLASH = 0.05;
 const DEBUG_SPAWN_COUNT = 50;
 /** Share of the boss's max HP the H debug key takes. */
 const DEBUG_BOSS_HURT = 0.35;
@@ -83,6 +89,8 @@ export class RunScene extends Phaser.Scene {
   private gemSprites!: SpritePool;
   private blastGfx!: Phaser.GameObjects.Graphics;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
+  /** Render-only wobble phase per (pooled) enemy object. */
+  private wobblePhases = new WeakMap<Enemy, number>();
   private cam = { x: 0, y: 0, zoom: 1 };
   private debugEnemyIndex = 0;
 
@@ -270,6 +278,16 @@ export class RunScene extends Phaser.Scene {
 
   // ----------------------------------------------------------------- render
 
+  /** A random but stable wobble phase per enemy, so blobs don't pulse in sync. */
+  private wobblePhase(e: Enemy): number {
+    let phase = this.wobblePhases.get(e);
+    if (phase === undefined) {
+      phase = Math.random() * Math.PI * 2;
+      this.wobblePhases.set(e, phase);
+    }
+    return phase;
+  }
+
   /** Eases a barrel's drawn angle toward `target` along the shorter way round. */
   private turnBarrel(id: number, target: number, frameDt: number): number {
     const current = this.barrelAngles.get(id) ?? target;
@@ -360,9 +378,23 @@ export class RunScene extends Phaser.Scene {
         lerp(e.py, e.y),
         e === w.boss ? TEX.boss(w.bossState.phase) : TEX.enemy(e.type, e.elite),
       );
-      if (w.time - e.hitTime < HIT_FLASH) img.setTintFill(0xffffff);
+      const sinceHit = w.time - e.hitTime;
+      if (sinceHit < FX.hitFlash) img.setTintFill(0xffffff);
       else if (e === w.boss && bossEnraged(w)) img.setTint(ENRAGE_TINT);
       else img.clearTint();
+      // Idle wobble plus a squash that springs back after a hit (concept.md §6).
+      const wob = Math.sin(this.time.now * 0.001 * FX.wobbleSpeed + this.wobblePhase(e));
+      const squash =
+        sinceHit < FX.squashTime
+          ? FX.squashAmount *
+            (1 - sinceHit / FX.squashTime) *
+            (e === w.boss ? FX.bossSquashFactor : 1)
+          : 0;
+      const base = 1 / FX.enemyTexScale;
+      img.setScale(
+        base * (1 + FX.wobbleAmount * wob + squash),
+        base * (1 - FX.wobbleAmount * wob - squash),
+      );
     }
     this.enemySprites.end();
 
