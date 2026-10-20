@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–3a merged into `main`. Phase 3b not started; branch `phase-3b-layout-depth` created (only this document update on it). Paused mid-brainstorm. |
-| **Current phase** | 3b — design questions open, no code yet |
-| **Next step** | Phase 3b brainstorm, one question at a time (§12 "Phase 3b design questions"): Q1 chains vs facing was asked but not answered — ask it again first. Then build 3b on `phase-3b-layout-depth`. |
+| **Status** | Phases 0–3a merged into `main`. Phase 3b design questions answered (2026-10-20); building 3b on `phase-3b-layout-depth`. |
+| **Current phase** | 3b — building |
+| **Next step** | Build 3b in steps (see session log 2026-10-19 "End of session"): tiles + adjacency buffs, chains + rows, upgrades + perks, timed expansion, enemies + wave table, boss placeholder + win screen, Phase 3 pool. Then hand over for the tuning pass. |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
 | **Live version** | none (local only); app version 0.3.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-19 (end of session, before Phase 3b) |
+| **Last updated** | 2026-10-20 (Phase 3b design answered) |
 
 ---
 
@@ -239,8 +239,10 @@ Three layout rules give placement its depth:
 2. **Adjacency buffs** — support tiles affect only their 4 orthogonal
    neighbours. Same-type buffs stack additively, capped (see tile table).
 3. **Lines and rows** (the Tetris nod):
-   - **Weapon chains:** 3+ identical online weapon tiles in an unbroken
-     straight orthogonal line form a chain: every tile in it gets +50% damage
+   - **Weapon chains:** 3+ identical online weapon tiles **with the same
+     facing** in an unbroken straight orthogonal line form a chain (decided
+     2026-10-20: a "battery" of guns, so rotation is part of the chain
+     puzzle): every tile in it gets +50% damage
      (3), +100% (4), +150% (5+). Drawn as a glowing link line. A tile can be
      in a horizontal and a vertical chain; use the higher bonus, don't add.
    - **Filled rows/columns:** a row or column of the *current* grid that is
@@ -269,8 +271,25 @@ Three layout rules give placement its depth:
   <type>" button. Taking it gives that whole tile type +1 level (max 5) and
   the piece is not placed. Space and power are separate choices.
   - Per level: +25% damage (weapons) or +20% effect (support).
-  - Level 3 and 5 add one named perk per type (e.g. Gatling L3: +1 projectile;
-    Cannon L5: shots pierce 3). Perks are listed per tile in the config.
+  - Hull and Plating: +20% max HP per level.
+  - Level 3 and 5 add one named perk per type. Perks are listed per tile in
+    the config. Starting values (approved 2026-10-20):
+
+    | Tile | L3 perk | L5 perk |
+    |---|---|---|
+    | Gatling | +1 projectile per shot | Arc 180° → 270° |
+    | Cannon | Arc 90° → 135° | Shots pierce 3 enemies |
+    | Mortar | Blast radius 48 → 72 | 3 scattered shells per shot |
+    | Saw | Slows touching enemies 50% | Saw tiles take −50% contact damage |
+    | Generator | Neighbours also +15% damage | Cap +75% → +125% |
+    | Shield Emitter | Also covers diagonal neighbours | Shielded tiles return 25% of contact damage |
+    | Repair Bay | Also heals diagonal neighbours | Double heal rate on tiles below 50% HP |
+    | Magnet | Gems drift in from 2× pickup radius | Every 60 s, pulls all gems on screen |
+    | Engine | Size speed penalty halved | No size speed penalty |
+    | Hull | +10% max HP to neighbours | Regenerates 1 HP/s |
+    | Plating | −20% contact damage taken | 10 dmg/s to touching enemies |
+
+    The Core cannot be upgraded this way (it is never offered).
 
 ### 2.9 Tile catalogue (prototype)
 
@@ -298,7 +317,9 @@ part of the layout puzzle (this replaces the "auto-aim makes layout shallow"
 fallback from §12).
 
 - **Which tiles:** Cannon 90° arc, Gatling 180° arc. Core pistol stays
-  360°. Later tiles (Mortar, Saw) get decided when they are built.
+  360°. Mortar is 360° lobbed artillery (decided 2026-10-20: it is the
+  weapon that can sit deep inside). Saw has no arc (contact damage).
+  360° weapons ignore facing, also for chains (§2.7).
 - **Facing is set by rotating the piece.** Each arc tile carries a facing
   (up/right/down/left) in its piece definition; rotating the piece with R
   rotates the facing. No separate per-tile control. The city never rotates
@@ -667,17 +688,11 @@ decision milestone, change the design before building more content.
 
 - **Phase 3b design questions** (ask one at a time, in this order, before
   building 3b):
-  1. *Asked 2026-10-19, not yet answered:* should weapon chains (§2.7)
-     require the same facing? A — yes, same type in a line **and** same
-     facing (Claude's recommendation: a "battery" of guns, rotation joins the
-     chain puzzle; a straight Gatling piece chains with itself). B — no,
-     facing doesn't matter.
-  2. Mortar arc (§2.10 left it open): 360° lobbed artillery (likely
-     recommendation, it is meant to sit deep inside) or an arc.
-  3. L3/L5 perks per tile type (§2.8 only gives two examples: Gatling L3 +1
-     projectile, Cannon L5 pierce 3): Claude proposes a full list as
-     starting values for the user to approve or change.
-
+  1. *Answered 2026-10-20:* weapon chains require the same facing (A),
+     recorded in §2.7.
+  2. *Answered 2026-10-20:* Mortar is 360° (A), recorded in §2.10.
+  3. *Answered 2026-10-20:* L3/L5 perks approved as proposed (A),
+     recorded in §2.8.
 - Final title (working title: *Rolling Bastion*).
 - Hosting for sharing (Phase 7): itch.io, Netlify/Vercel, or making the repo
   public for GitHub Pages.
