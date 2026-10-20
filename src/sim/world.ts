@@ -68,7 +68,8 @@ export type WorldEvent =
   | { kind: 'tileDestroyed'; x: number; y: number; type: TileType }
   | { kind: 'enemyKilled'; x: number; y: number; type: EnemyType }
   | { kind: 'blast'; x: number; y: number; radius: number }
-  | { kind: 'levelUp'; level: number };
+  | { kind: 'levelUp'; level: number }
+  | { kind: 'gridExpanded'; size: number };
 
 /** City-derived data, recomputed only when the city changes (concept.md §9). */
 export interface CityCache {
@@ -113,6 +114,11 @@ export interface World {
   xp: number;
   level: number;
   pendingLevelUps: number;
+  /** Timed grid expansions done so far, and free build pauses still to open for them. */
+  expansions: number;
+  pendingExpansions: number;
+  /** Game time of the last grid expansion (for the banner). */
+  expandedAt: number;
   rerolls: number;
   kills: number;
   /** Half-diagonal of the visible area in world px; set by the renderer. */
@@ -149,6 +155,9 @@ export function createWorld(seed: number): World {
     xp: 0,
     level: 1,
     pendingLevelUps: 0,
+    expansions: 0,
+    pendingExpansions: 0,
+    expandedAt: -Infinity,
     rerolls: LEVEL_UP.rerollsPerRun,
     kills: 0,
     viewRadius: 1000,

@@ -141,8 +141,8 @@ export class RunScene extends Phaser.Scene {
     while (this.acc >= SIM.dt) {
       step(w, input, SIM.dt);
       this.acc -= SIM.dt;
-      // Stop at a level-up so the build pause opens on this exact tick.
-      if (w.pendingLevelUps > 0 || w.over) {
+      // Stop at a level-up or expansion so the build pause opens on this exact tick.
+      if (w.pendingLevelUps > 0 || w.pendingExpansions > 0 || w.over) {
         this.acc = 0;
         break;
       }
@@ -153,7 +153,8 @@ export class RunScene extends Phaser.Scene {
     this.ui.simMs += (t1 - t0 - this.ui.simMs) * TIMING_SMOOTHING;
     this.ui.drawMs += (t2 - t1 - this.ui.drawMs) * TIMING_SMOOTHING;
     if (w.over) return;
-    if (w.pendingLevelUps > 0) this.openBuild('level');
+    if (w.pendingExpansions > 0) this.openBuild('expand');
+    else if (w.pendingLevelUps > 0) this.openBuild('level');
   }
 
   private moveInput(): MoveInput {
@@ -185,6 +186,7 @@ export class RunScene extends Phaser.Scene {
       },
       done: (result) => {
         if (kind === 'level') w.pendingLevelUps--;
+        else w.pendingExpansions = Math.max(0, w.pendingExpansions - 1);
         applyBuildResult(w, result);
         this.scene.stop('Build');
         this.input.keyboard?.resetKeys();
@@ -218,7 +220,8 @@ export class RunScene extends Phaser.Scene {
         e.preventDefault();
         if (expandGrid(w.city)) {
           cityChanged(w);
-          this.openBuild('expand');
+          w.pendingExpansions++;
+          w.expandedAt = w.time;
         }
         break;
       case 'F3':

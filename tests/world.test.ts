@@ -8,7 +8,7 @@ import { coreTile, tileAt } from '../src/sim/grid';
 import { addXp, applyBuildResult, collectGems, xpToNext } from '../src/sim/progression';
 import { budgetRate, spawnEnemy } from '../src/sim/spawner';
 import { SpatialHash } from '../src/sim/spatialHash';
-import { moveCity, step } from '../src/sim/step';
+import { moveCity, step, updateTimeline } from '../src/sim/step';
 import { cityChanged, createWorld, tileCentre, type World } from '../src/sim/world';
 import { cityFrom } from './helpers';
 
@@ -211,5 +211,27 @@ describe('SpatialHash', () => {
     h.query(0, 0, 50, (i) => seen.push(i));
     expect(seen.sort()).toEqual(expect.arrayContaining([0, 1, 3]));
     expect(new Set(seen).size).toBe(seen.length);
+  });
+});
+
+describe('timed grid expansion', () => {
+  it('grows the grid at the configured times, each with a free build pause', () => {
+    const w = createWorld(1);
+    const [first, second] = GRID.expandAt;
+    w.time = first - 1;
+    updateTimeline(w);
+    expect(w.city.gridSize).toBe(GRID.startSize);
+    w.time = first;
+    updateTimeline(w);
+    expect(w.city.gridSize).toBe(GRID.startSize + GRID.expansionGrowth);
+    expect(w.pendingExpansions).toBe(1);
+    w.time = second;
+    updateTimeline(w);
+    updateTimeline(w);
+    expect(w.city.gridSize).toBe(GRID.maxSize);
+    expect(w.pendingExpansions).toBe(2);
+    w.time = 10_000;
+    updateTimeline(w);
+    expect(w.pendingExpansions).toBe(2);
   });
 });

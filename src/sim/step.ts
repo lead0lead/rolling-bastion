@@ -1,9 +1,10 @@
-import { MOVE } from '../config/balance';
+import { GRID, MOVE } from '../config/balance';
 import { healTiles, removeDead, updateProjectiles, updateWeapons } from './combat';
 import { updateEnemies } from './enemies';
 import { collectGems } from './progression';
 import { updateSpawner } from './spawner';
-import type { World } from './world';
+import { expandGrid } from './grid';
+import { cityChanged, type World } from './world';
 
 /** Player steering input; each axis in −1…1. */
 export interface MoveInput {
@@ -16,6 +17,7 @@ export function step(w: World, input: MoveInput, dt: number): void {
   if (w.over) return;
   w.time += dt;
   moveCity(w, input, dt);
+  updateTimeline(w);
   updateSpawner(w, dt);
   updateEnemies(w, dt);
   if (w.over) return;
@@ -43,4 +45,16 @@ export function moveCity(w: World, input: MoveInput, dt: number): void {
   w.vy += (iy * speed - w.vy) * k;
   w.x += w.vx * dt;
   w.y += w.vy * dt;
+}
+
+/** Grows the grid at the times in GRID.expandAt (concept.md §2.1); each queues a free build pause. */
+export function updateTimeline(w: World): void {
+  const at = GRID.expandAt[w.expansions];
+  if (at === undefined || w.time < at) return;
+  w.expansions++;
+  if (!expandGrid(w.city)) return;
+  cityChanged(w);
+  w.pendingExpansions++;
+  w.expandedAt = w.time;
+  w.events.push({ kind: 'gridExpanded', size: w.city.gridSize });
 }

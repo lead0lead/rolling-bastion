@@ -8,6 +8,10 @@ export const GRID = {
   maxSize: 10,
   /** World pixels per cell. */
   cellPx: 32,
+  /** Game times (s) at which the grid grows by one ring, with a free build pause. */
+  expandAt: [240, 480],
+  /** How long the "GRID EXPANDED" banner stays after the pause (s). */
+  bannerSec: 2.5,
 } as const;
 
 export const OFFERS = {

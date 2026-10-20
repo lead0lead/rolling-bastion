@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { GRID } from '../config/balance';
 import { COLORS } from '../render/tiles';
 import { budgetRate } from '../sim/spawner';
 import { coreTile } from '../sim/grid';
@@ -16,6 +17,7 @@ export class HudScene extends Phaser.Scene {
   private info!: Phaser.GameObjects.Text;
   private coreText!: Phaser.GameObjects.Text;
   private debug!: Phaser.GameObjects.Text;
+  private banner!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Hud');
@@ -32,6 +34,10 @@ export class HudScene extends Phaser.Scene {
     this.coreText = this.add
       .text(640, CORE_BAR.y - 18, '', { ...text, fontSize: '13px' })
       .setOrigin(0.5, 1);
+    this.banner = this.add
+      .text(640, 120, 'GRID EXPANDED', { ...text, fontSize: '32px', color: '#9fe8ff' })
+      .setOrigin(0.5)
+      .setVisible(false);
     this.debug = this.add.text(12, 50, '', {
       ...text,
       fontSize: '13px',
@@ -70,6 +76,11 @@ export class HudScene extends Phaser.Scene {
     g.fillStyle(frac < 0.3 ? CORE_BAR.low : CORE_BAR.color, 1);
     g.fillRect(x, CORE_BAR.y - CORE_BAR.h, CORE_BAR.w * frac, CORE_BAR.h);
     this.coreText.setText(`Core ${Math.ceil(core?.hp ?? 0)} / ${Math.round(core?.maxHp ?? 0)}`);
+
+    const bannerAge = w.time - w.expandedAt;
+    this.banner
+      .setVisible(bannerAge < GRID.bannerSec)
+      .setAlpha(Math.min(1, (GRID.bannerSec - bannerAge) / 0.5));
 
     this.debug.setVisible(ui.debugOverlay);
     if (ui.debugOverlay) {
