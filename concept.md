@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–3a merged into `main`. Phase 3b design questions answered (2026-10-20); building 3b on `phase-3b-layout-depth`. |
-| **Current phase** | 3b — building |
-| **Next step** | Build 3b in steps (see session log 2026-10-19 "End of session"): tiles + adjacency buffs, chains + rows, upgrades + perks, timed expansion, enemies + wave table, boss placeholder + win screen, Phase 3 pool. Then hand over for the tuning pass. |
+| **Status** | Phases 0–3a merged into `main`. Phase 3b built on `phase-3b-layout-depth` (v0.4.0), pushed, not merged. Handed to the user for full runs and the tuning pass. |
+| **Current phase** | 3b — done, waiting for the user's playtest = **decision milestone** |
+| **Next step** | User plays several full runs (§11 Phase 3 "Done when"), reports feel and numbers; one tuning pass together; user confirms or changes Claude's calls (§12). Then the user decides whether to continue to Phase 4. Do not start Phase 4 without that go-ahead. |
 | **Decision milestone** | **Phase 3** — one full 12-minute run with the core tile set, line/row bonuses, grid expansion, upgrades and the Sapper. Do not build past it without the user's go-ahead. |
-| **Live version** | none (local only); app version 0.3.0 |
+| **Live version** | none (local only); app version 0.4.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (Phase 3b design answered) |
+| **Last updated** | 2026-10-20 (Phase 3b built, handed over) |
 
 ---
 
@@ -122,7 +122,7 @@ whether the grid puzzle makes a survivor-like run more interesting.
 
 All numbers are **starting values to tune**, kept in `src/config/` (see §9).
 
-### 2.1 The grid
+### 2.1 The grid (as implemented)
 
 - The city lives on a square grid. **Starting size 6×6**, expanding to **8×8**
   at 4:00 and **10×10** at 8:00 (each expansion adds one ring of cells around
@@ -210,7 +210,7 @@ As implemented (Phase 1, `src/sim/build.ts` + `src/scenes/BuildScene.ts`):
   0.08 s; the city's world position is its grid centre, so grid expansion
   and rearranging don't move it. Numbers in `MOVE` (`src/config/balance.ts`).
 
-### 2.6 Combat (as implemented for Core pistol, Gatling, Cannon)
+### 2.6 Combat (as implemented)
 
 - Weapons **auto-target the nearest enemy within range** and within their
   firing arc (§2.10; 360° for the Core pistol), measured from the tile's
@@ -228,10 +228,12 @@ As implemented (Phase 1, `src/sim/build.ts` + `src/scenes/BuildScene.ts`):
 - As implemented: weapons fire projectiles (speed, size, spread, knockback per
   weapon in `TILES[*].weapon`); a projectile hits the first enemy it touches
   and is gone. Enemies push each other apart and are pushed out of tiles;
-  an enemy within 1 px of a tile damages that one tile. Win condition and
-  boss are not built yet (Phase 3/4).
+  an enemy within 1 px of a tile damages that one tile. Mortar shells are
+  lobbed: they fly to the target point (over everything) and damage every
+  enemy within the blast radius there. Win condition and boss placeholder:
+  see §4.3 (Phase 3b); the full Colossus comes in Phase 4.
 
-### 2.7 Synergies
+### 2.7 Synergies (as implemented, Phase 3b)
 
 Three layout rules give placement its depth:
 
@@ -251,7 +253,25 @@ Three layout rules give placement its depth:
      breaks it; grid expansion "unfills" all edge-to-edge lines, which is
      intended.
 
-### 2.8 XP, levels and offers (as implemented except duplicate upgrades)
+As implemented (`src/sim/synergies.ts`, numbers in `LINES` and the tile
+config): a pure pass over the city computes per-tile modifiers whenever the
+city changes. Only online tiles give buffs; offline tiles still receive
+shield protection and healing.
+
+- **How bonuses combine** (Claude's call): weapon damage = base × level
+  multiplier × (1 + chain bonus + filled-line bonus + Generator L3 bonus).
+  Max HP = base × (1 + level HP + filled-line bonus + Hull L3 bonus).
+  Shield: 1 − min(sum, cap). Fire rate: 1 + min(sum of Generators, cap).
+- When max HP rises, the tile gains the difference as HP; when it falls, HP
+  is clamped.
+- Generators speed up every weapon neighbour, including the Core pistol and
+  the Saw's contact damage.
+- Chains include Saws and Mortars (no arc, facing ignored). Chains draw as a
+  white link line with dots through the tile centres; filled rows/columns
+  as a pale cyan frame. Both in the build screen (live while placing) and in
+  combat. The build screen lists the number of chains and filled lines.
+
+### 2.8 XP, levels and offers (as implemented)
 
 - Killed enemies drop **XP gems** (value 1, 3 or 10 by enemy type). A gem is
   collected when it comes within the pickup radius (24 px) of **any** tile —
@@ -290,8 +310,22 @@ Three layout rules give placement its depth:
     | Plating | −20% contact damage taken | 10 dmg/s to touching enemies |
 
     The Core cannot be upgraded this way (it is never offered).
+  - As implemented (`src/sim/upgrades.ts`, perks in `TILES[*].perks`): the
+    type a card upgrades is the piece's most common non-Hull tile (pure Hull
+    pieces upgrade Hull). The option shows when the city owns at least one
+    tile of that type at the start of the pause and it is below level 5.
+    Each card has an "Upgrade <type> → L<n>" strip (★ when it unlocks a
+    perk); click it or press Shift+1/2/3. It replaces taking a piece or
+    Repair Core and can be un-chosen. The card tooltip lists the current
+    level of each tile type and its perks. Perk names ("Twin feed",
+    "Sabot", …) are draft text.
+  - Perk details (Claude's calls): Gatling L3 doubles the spread for its two
+    projectiles; Cannon pierce 3 = passes through 3 enemies (hits up to 4);
+    Mortar salvo scatters shells ±40 px; Magnet drift 160 px/s, recall
+    600 px/s for gems within the visible area; Shield reflect returns 25% of
+    the attacker's contact damage per second.
 
-### 2.9 Tile catalogue (prototype)
+### 2.9 Tile catalogue (prototype; all built in Phase 3b)
 
 Colour codes are part of the readability pillar (§6).
 
@@ -353,6 +387,7 @@ fallback from §12).
 | Drive | WASD / arrow keys |
 | Pause menu | Esc |
 | Build: pick offer | Click card, or 1/2/3 |
+| Build: upgrade instead | Click the card's upgrade strip, or Shift+1/2/3 |
 | Build: place / move piece | Drag with left mouse |
 | Build: rotate held piece | R or right-click |
 | Build: scrap piece | Drag onto scrap zone, or hover + X |
@@ -380,7 +415,7 @@ on grid expansion if needed.
 
 ## 4. Content & Structure
 
-### 4.1 Run structure (12:00)
+### 4.1 Run structure (12:00) (as implemented, Phase 3b)
 
 | Time | Event | New element |
 |---|---|---|
@@ -403,18 +438,34 @@ groups (single Swarmer, Swarmer pack 3–5, Runner line 8–12) are picked by
 weight from the current wave entry and spawned when the budget covers their
 cost; budget/s is interpolated 0.9 (0:00) → 2.0 (1:00) → 3.5 (4:00) → 6
 (8:00) → 9 (10:00) → 10 (12:00). 2:30 spike: 40 Swarmers around the ring.
-Above 600 live enemies spawns are skipped (elites not built yet). Enemies
-left far behind are moved back onto the ring ahead of the city.
+Enemies left far behind are moved back onto the ring ahead of the city.
 
-### 4.2 Piece pool
+As implemented in Phase 3b: new groups Brute (1), Spitter trio (2–3),
+Sapper pair (2) and Bomber line (3–4) enter at 2:30, 4:00, 5:30 and 7:00
+(extra wave entries at 2:30, 5:30, 7:00 keep the budget curve). Grid
+expansion at 4:00 and 8:00 (`GRID.expandAt`) opens a free build pause; the
+"GRID EXPANDED" banner shows for 2.5 s after it closes. **Elites** (Claude's
+call): above 600 live enemies a picked group arrives as one elite instead
+(×1.4 size, white ring, HP and XP of max(4, group size) enemies), up to
+660 live enemies; beyond that spawns are skipped. **Elite Brute** at 7:00:
+×12 HP, drops the XP of 3 level-ups. At 12:00 regular spawns stop and the
+boss arrives (§4.3).
+
+### 4.2 Piece pool (as implemented)
 
 - Phase 2 pool: Gatling and Cannon pieces in 3–4 shapes each, plus pure Hull
   pieces.
 - Phase 3 pool: all tile types, ~14 piece definitions, weighted so support
   tiles appear about 1 in 3 offers. Pentominoes only after 4:00.
 - Offers never show three cards of the same tile type.
+- As implemented (`PHASE3_POOL`, `rollRunOffers`): 21 pieces — 16 small
+  ones (domino to tetromino) and 5 pentominoes from 4:00 (I5 Gatling
+  battery, T5 Cannon battery, U5 Mortar line, X5 Gatlings around a
+  Generator, L5 Plating). Support pieces are 32% of the early offer weight.
+  "Same tile type" means the card's main (upgrade) type; if all three
+  match, the last card is re-rolled from the other types.
 
-### 4.3 Enemies
+### 4.3 Enemies (as implemented, Phase 3b; boss is a placeholder)
 
 | Enemy | HP | Speed (px/s) | Damage | XP | Behaviour | Tests |
 |---|---|---|---|---|---|---|
@@ -427,6 +478,26 @@ left far behind are moved back onto the ring ahead of the city.
 | **Boss: Colossus** | 6000 | 35 | 60/s contact | — | 3 phases: walks + summons Swarmers; adds Spitter volleys; charges in straight lines at <30% HP | Whole build |
 
 Enemy HP scales +6% per minute (starting value).
+
+As implemented (Phase 3b, `src/config/enemies.ts`, `src/sim/enemies.ts`),
+Claude's calls where the table is silent:
+
+- Spawn costs: Brute 8, Spitter / Sapper / Bomber 2.5 (Swarmer 1,
+  Runner 0.8). Radii: Brute 13, Spitter 8, Sapper 7, Bomber 9.
+- **Spitter:** walks in until the nearest tile centre is 190 px away, then
+  holds and shoots every 2 s (red shots, 220 px/s) that hit the first tile
+  they enter; no contact damage. Shields reduce shot damage.
+- **Sapper:** walks to the nearest bridge tile (nearest tile if there are
+  none) and attacks a touched bridge first, otherwise whatever blocks it.
+- **Bomber:** on contact deals 40 to every tile in the 3×3 square around the
+  touched tile, then dies without a gem or kill (blast ring shown).
+- Shapes: Brute hexagon, Spitter triangle, Sapper yellow square with a
+  cross (matching the bridge colour), Bomber circle with a red core.
+- **Boss placeholder** (the "big Brute"): Colossus 6000 HP, 35 px/s,
+  60/s contact, radius 36, no HP growth over time, immune to knockback,
+  summons a ring of 5 Swarmers every 6 s. Boss HP bar under the timer;
+  enraged at 14:00 (×2 contact damage, red bar and tint). Killing it wins:
+  "The city rolls on." The 3 phases are Phase 4.
 
 ---
 
@@ -492,7 +563,8 @@ freesound (CC0 filter), each listed in `ASSETS.md`. One global mute toggle
 ## 8. UI, Progress & Saving
 
 **HUD (as implemented):** run timer (top centre), XP bar (top, full width), level, Core HP
-bar (bottom centre), current grid size, reroll count, kills.
+bar (bottom centre), current grid size, reroll count, kills; boss name and
+HP bar under the timer while the boss lives; "GRID EXPANDED" banner.
 
 **Screens:** title (Start, Mute) → run → build pause overlay → lose/win
 summary (time survived, kills, level, final city layout snapshot) →
@@ -571,7 +643,8 @@ src/
   sim/               // pure logic, no Phaser
     grid.ts          // placement, rotation, bounds, expansion
     connectivity.ts  // flood fill, bridge detection
-    synergies.ts     // adjacency, chains, filled rows
+    synergies.ts     // per-tile modifiers: adjacency buffs, chains, filled rows, perks
+    upgrades.ts      // tile type levels, perk lookup, upgrade choice
     combat.ts        // targeting, damage, destruction
     spawner.ts
     build.ts         // build-pause session: pick, move, rotate, scrap, repair, reroll
@@ -583,7 +656,7 @@ src/
     spatialHash.ts   // enemy hash for projectile hits and separation
     debugActions.ts
   scenes/            // Boot, Run, Hud, Build (overlay + ?sandbox=1), Summary
-  render/            // tiles.ts (tile drawing, label/sprite pools), textures.ts
+  render/            // tiles.ts (tile drawing, sprite pools), textures.ts, icons.ts, lines.ts (chains/rows)
   debug/             // flags.ts: DEBUG (dev or ?debug=1), SEED (?seed=), SANDBOX
 bench/               // sim.perf.ts, run with npm run bench
 tests/               // Vitest, mirrors src/sim
@@ -699,6 +772,22 @@ decision milestone, change the design before building more content.
 - Piece mirroring allowed or not.
 - Meta-progression after the decision milestone (unlocks, permanent stats).
 - All story and UI text in §5 is draft.
+- **Phase 3b calls made without asking** (confirm or change during the
+  tuning pass; details in §2.7, §2.8, §4.1–4.3):
+  - Upgrade type of a card = its most common non-Hull tile; shown only when
+    the city owns that type.
+  - Bonuses add up inside one multiplier (chain + filled lines + Generator
+    L3), times the level multiplier; max HP gains are added as HP.
+  - Generators also speed up the Core pistol and Saws; the Generator L3
+    damage bonus has no cap; the Shield cap stays −60% at higher levels.
+  - Elites above 600 enemies (HP/XP ×max(4, group size), stop at 660);
+    Elite Brute ×12 HP worth 3 level-ups.
+  - Spitter holds at 190 px; Sapper hits touched bridges first; Bombers
+    give no XP.
+  - Boss placeholder summons 5 Swarmers every 6 s and ignores knockback.
+  - Pool has 21 pieces instead of ~14; enemy spawn costs (Brute 8,
+    others 2.5); the budget curve is unchanged, so later minutes have
+    fewer but tougher enemies than in Phase 2.
 - Phase 1 build-screen calls made without asking (confirm or change):
   one offer must be taken per pause (no "skip"); scrapping a fresh offer
   counts as taking it; an invalid drop keeps the piece in hand; tile labels
@@ -736,10 +825,22 @@ decision milestone, change the design before building more content.
 - Sim performance (`npm run bench`, Node, this dev machine): ~2 ms average
   per tick with 600 enemies and 300 projectiles, p99 ~3 ms; rare 15–40 ms
   outliers (likely GC).
-- Mortar (Phase 3b) has an icon but no barrel; its arc is still undecided
-  (§2.10 says later tiles get decided when built).
 - Arc tuning (widths, +range) is untested by the user: starting values.
-- Spawns above the 600 enemy cap are skipped, not turned into elites.
+- **All Phase 3b numbers are untested starting values** (tile effects,
+  perks, chains/rows, enemies, wave table, boss). A naive headless bot
+  (place the first offer anywhere connected) loses every tile by ~3:30, so
+  it says nothing about balance; it only showed that a 15-minute run runs
+  without errors (avg 0.8 ms/tick, worst 4 ms).
+- `npm run bench` got slower (avg ~2.5 ms/tick, was ~1.8): spatial hash
+  queries now cover the radius of an elite Brute. Still far under budget;
+  watch it in the 600-enemy late game.
+- Mortar has no turning barrel (360° lobbed, so it would not show much);
+  shells look like flat orange balls without a lob arc.
+- Bridge detection is brute force and now runs on every city change (for
+  Sappers); fine at ≤100 tiles.
+- Magnet gem drift scans up to 9×9 cells per gem each tick at high Magnet
+  levels; fine at the 400-gem cap, but a candidate if the late game drops
+  frames.
 
 ---
 
@@ -772,6 +873,30 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Phase 3b: layout depth (decision milestone build)
+- Done (branch `phase-3b-layout-depth`, v0.4.0), one commit per step:
+  support tiles + Mortar + Saw + Plating with a pure synergies pass;
+  weapon chains and filled rows/columns with link/frame visuals; duplicate
+  upgrades with L3/L5 perks (card strip, Shift+1/2/3); timed grid
+  expansion at 4:00/8:00 with banner; Brute, Spitter, Sapper, Bomber,
+  elites, Elite Brute and the full wave table; boss placeholder with
+  enrage, boss bar and win screen; Phase 3 pool (21 pieces, pentominoes
+  from 4:00, no triple same-type offers). 106 tests.
+- Decisions (user, 2026-10-20): chains need the same facing (A); Mortar is
+  360° lobbed (A); L3/L5 perk list approved as proposed (A).
+- Claude's calls: listed in §12 "Phase 3b calls made without asking".
+- Tried and failed: a Mortar test kept exploding the same shell each tick
+  because the test never removed dead projectiles; `updateProjectiles` now
+  skips dead ones. Two test grids were accidentally filled rows (+15%).
+- State: typecheck, lint, format, 106/106 tests and build pass. Pushed,
+  not merged. Screenshots checked headless (Canvas renderer): build screen
+  with chains/rows/upgrade strips, enemy shapes, run with boss bar.
+- Next: user plays full runs; tuning pass; user decides at the milestone.
+- Watch out: the screenshot/smoke harness lived in `.shot/` (git-excluded
+  locally via `.git/info/exclude`): Chrome headless shell from the
+  Playwright cache, `--screenshot`, Phaser forced to CANVAS, state injected
+  with `setTimeout` (Phaser timers don't run before the shot).
 
 ### 2026-10-19 — End of session: 3a merged, 3b brainstorm started
 - Done: merged `phase-3a-arcs-graphics` into `main` (v0.3.0) and pushed;
