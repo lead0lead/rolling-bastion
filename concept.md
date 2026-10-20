@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–3 merged into `main` (v0.4.0). Decision milestone passed 2026-10-20: the user played full runs, "it's fun", numbers kept. Branch `phase-4-boss-balance` created. |
-| **Current phase** | 4 — Boss & balance: Colossus phases, 7 new pieces and `npm run sim` built on `phase-4-boss-balance` |
-| **Next step** | User decides on the sim findings (§12 Phase 4 Q4: boss HP), then finish Phase 4 docs, version 0.5.0 and hand over. |
+| **Status** | Phases 0–3 merged into `main` (v0.4.0). Phase 4 built on `phase-4-boss-balance` (v0.5.0), pushed, not merged. Handed to the user to try. |
+| **Current phase** | 4 — Boss & balance: done, waiting for the user's playtest |
+| **Next step** | User tries the Colossus fight (boss HP 50000, phases, charges) and the new pieces; feedback, then merge and Phase 5 (look & juice) on the user's go-ahead. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
-| **Live version** | none (local only); app version 0.4.0 |
+| **Live version** | none (local only); app version 0.5.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (milestone passed, Phase 4 starting) |
+| **Last updated** | 2026-10-20 (Phase 4 built, handed over) |
 
 ---
 
@@ -469,7 +469,7 @@ boss arrives (§4.3).
   "Same tile type" means the card's main (upgrade) type; if all three
   match, the last card is re-rolled from the other types.
 
-### 4.3 Enemies (as implemented, Phase 3b; boss is a placeholder)
+### 4.3 Enemies (as implemented; Colossus phases Phase 4)
 
 | Enemy | HP | Speed (px/s) | Damage | XP | Behaviour | Tests |
 |---|---|---|---|---|---|---|
@@ -479,7 +479,7 @@ boss arrives (§4.3).
 | **Spitter** | 25 | 55 | 8 per shot, 1 shot/2 s, range 240 | 3 | Keeps distance, shoots nearest tile | Shields, Mortars |
 | **Sapper** | 30 | 90 | 15/s contact | 3 | Targets the nearest **bridge tile**, ignores others unless blocked | Redundant connections |
 | **Bomber** | 20 | 80 | 40 to every tile in a 3×3 area on contact, then dies | 3 | Rushes the city | Not stacking value in one blob |
-| **Boss: Colossus** | 12000 (was 6000; raised 2026-10-20) | 35 | 60/s contact | — | 3 phases: walks + summons Swarmers; adds Spitter volleys; charges in straight lines at <30% HP | Whole build |
+| **Boss: Colossus** | 50000 (was 6000; raised 2026-10-20) | 35 | 60/s contact | — | 3 phases: walks + summons Swarmers; adds Spitter volleys; charges in straight lines at <30% HP | Whole build |
 
 Enemy HP scales +6% per minute (starting value).
 
@@ -512,8 +512,18 @@ Claude's calls where the table is silent:
 | 3 | <30% | No summons. Charges: 1 s red telegraph line, dash ~450 px at 400 px/s with ×3 contact damage, 3 s pause, repeat. Dodged by steering |
 
 Phase change: "PHASE 2/3" banner and a shockwave pushing nearby enemies
-away from the city. 12000 HP (user, 2026-10-20; was 6000), enrage at 14:00 (×2 damage) and win on kill
+away from the city. 50000 HP (user, 2026-10-20; was 6000, then 12000), enrage at 14:00 (×2 damage) and win on kill
 unchanged. Look: hexagon cracked in phase 2, glowing red in phase 3.
+
+As implemented (Phase 4, `src/sim/boss.ts`, numbers in `BOSS`): phase is
+taken from the HP fraction each tick (several thresholds at once skip
+ahead). Shots reuse the Spitter shot (`fireEnemyShot`). Claude's call: the
+"3 s pause" between charges means it walks normally for 3 s, then stands
+still during the 1 s telegraph (red lane as wide as the boss, filling up
+toward the target), then dashes in a straight line toward where the city
+was. The shockwave adds 420 px/s knockback to every enemy within 320 px of
+the city centre. "PHASE n" banner for 2 s in the HUD (pink). Debug: **H**
+takes 35% of the boss's max HP; E with the Colossus selected spawns one.
 
 ---
 
@@ -597,12 +607,22 @@ restart.
 - Build screen (Phase 1): `F2` expand grid, `Delete` destroy the hovered
   tile (tests splits and offline tiles).
 - Keys: `G` +1 level, `T` +60 s game time, `E` spawn 50 of the selected
-  enemy type, `[`/`]` change selected type, `I` god mode (Core invulnerable),
-  `K` kill all enemies, `P` print city layout JSON to console.
+  enemy type (one Colossus), `[`/`]` change selected type, `I` god mode
+  (Core invulnerable), `K` kill all enemies but the boss, `H` boss −35%
+  max HP, `P` print city layout JSON to console.
 - `?seed=<n>` for a fixed random seed (spawns and offers).
 - `?sandbox=1` opens the Phase 1 build-screen sandbox instead of a run.
 - `npm run bench`: simulation performance check (600 enemies, 300
   projectiles), outside `npm test`.
+- `npm run sim` (Phase 4, `bench/balance.sim.ts`): headless balance
+  comparison of five archetype builds (Gatling batteries, Cannon lines,
+  Mortar core, Saw wall, mixed cluster) on seeds `SIM_SEEDS` (default
+  1,2) with XP share `SIM_XP` (default 1 = bot collects every gem). The bot
+  grows each build 3 tiles per level (weapons/support first, connectors on
+  the shortest path), upgrades every 4th level, repairs the Core below 40%,
+  rearranges on expansion and steers only to dodge. Prints outcome, level,
+  kills, tiles, damage share per tile type and boss fight length. Takes
+  about 3 minutes. Damage per type comes from `World.damageBy`.
 - Live tuning: config values readable from a JSON override in
   `localStorage` so values can be tweaked without rebuilding (stretch goal
   for Phase 2).
@@ -661,6 +681,7 @@ src/
     connectivity.ts  // flood fill, bridge detection
     synergies.ts     // per-tile modifiers: adjacency buffs, chains, filled rows, perks
     upgrades.ts      // tile type levels, perk lookup, upgrade choice
+    boss.ts          // Colossus phases: summons, shot fans, charges
     combat.ts        // targeting, damage, destruction
     spawner.ts
     build.ts         // build-pause session: pick, move, rotate, scrap, repair, reroll
@@ -674,7 +695,7 @@ src/
   scenes/            // Boot, Run, Hud, Build (overlay + ?sandbox=1), Summary
   render/            // tiles.ts (tile drawing, sprite pools), textures.ts, icons.ts, lines.ts (chains/rows)
   debug/             // flags.ts: DEBUG (dev or ?debug=1), SEED (?seed=), SANDBOX
-bench/               // sim.perf.ts, run with npm run bench
+bench/               // sim.perf.ts (npm run bench), balance.sim.ts (npm run sim)
 tests/               // Vitest, mirrors src/sim
 ```
 
@@ -784,8 +805,10 @@ decision milestone, change the design before building more content.
   3. *Answered 2026-10-20:* add seven pieces (A), recorded in §4.2.
   4. *Answered 2026-10-20:* boss HP 6000 → 12000 (A). Measured after the
      change (`npm run sim` now prints the boss fight length): the fight
-     still lasts only 3–15 s from first hit, at full and at half XP; every
-     phase is reached but each lasts seconds. Follow-up question 5.
+     still lasted only 3–15 s from first hit, at full and at half XP.
+  5. *Answered 2026-10-20:* raise boss HP to 50000 (B), rather than phase
+     locks (A, Claude's recommendation: each phase at least 12 s) or
+     leaving it. Sim at 50000: see results below.
 
 - **Balance sim results 2026-10-20** (`npm run sim`, seeds 1–2, bot with
   automatic XP collection; compare builds with each other only):
@@ -797,6 +820,11 @@ decision milestone, change the design before building more content.
   - Reading: no single dominant build among the ranged ones; a pure Saw
     wall is not viable (Saws only work as part of a build); pure Cannon
     needs XP to keep up; the boss is short-lived against full builds.
+  - With boss HP 50000 (fight = first boss hit to its death): Gatling and
+    Mortar builds 10–15 s (full and half XP); mixed cluster 21–22 s at
+    full XP, 51–53 s at half XP; Cannon-only at full XP **loses** to the
+    enraged boss at 14:15–14:19 with 0–3% boss HP left (90° arcs struggle
+    against a charging boss). All winners reach phase 3.
 
 - **Phase 3b design questions** (ask one at a time, in this order, before
   building 3b):
@@ -866,8 +894,10 @@ decision milestone, change the design before building more content.
   per tick with 600 enemies and 300 projectiles, p99 ~3 ms; rare 15–40 ms
   outliers (likely GC).
 - Arc tuning (widths, +range) is untested by the user: starting values.
-- Phase 3b numbers were approved by the user after playing (2026-10-20);
-  the boss is still the placeholder. A naive headless bot
+- Phase 3b numbers were approved by the user after playing (2026-10-20).
+  Boss HP 50000 is untested by the user in play; the sim says strong
+  Gatling/Mortar builds still kill it in 10–15 s while a Cannon-only build
+  can lose to it. A naive headless bot
   (place the first offer anywhere connected) loses every tile by ~3:30, so
   it says nothing about balance; it only showed that a 15-minute run runs
   without errors (avg 0.8 ms/tick, worst 4 ms).
@@ -913,6 +943,28 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Phase 4: boss & balance
+- Done (branch `phase-4-boss-balance`, v0.5.0): Colossus with three
+  phases (summons, 7-shot fans, telegraphed charges), phase banner,
+  shockwave, phase looks, debug key H; seven new pieces (pool now 28);
+  `npm run sim` balance tool with damage per tile type and boss fight
+  length; boss HP 6000 → 12000 → 50000. 110 tests.
+- Decisions (user): Colossus phase values approved (A); balance via a
+  headless archetype sim (A); seven new pieces (A); boss HP 12000 (A),
+  then 50000 (B) after the sim showed 3–15 s fights at 12000.
+- Tried and failed: first sim bot fled from all enemies and never
+  collected gems (levels 4–9 despite 1000+ kills); gem-seeking steering
+  still failed for builds that kill far away. Fixed by letting the bot
+  collect all XP (scaled by `SIM_XP`). Claude's estimate that 12000 HP
+  would give 30–70 s fights was wrong: most of the extra time was the
+  boss walking in; measured fights were 3–15 s.
+- State: typecheck, lint, format, 110/110 tests and build pass. Pushed,
+  not merged. Phase 3 look checked in a headless screenshot (telegraph
+  lane, glow, banner).
+- Next: user plays the boss fight; merge; Phase 5 on go-ahead.
+- Watch out: `npm run sim` takes ~3 minutes per XP setting; the harness
+  in `.shot/` (git-excluded) still works for screenshots.
 
 ### 2026-10-20 — Decision milestone passed
 - Decisions: user played Phase 3b: "its fun and all the numbers work well,
