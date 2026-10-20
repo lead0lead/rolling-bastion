@@ -11,13 +11,14 @@ interface Contact {
   tile: PlacedTile | undefined;
   /** A touched bridge tile, if any (Sappers attack it first). */
   bridge: PlacedTile | undefined;
-  /** Summed damage/s from touching Saws and spiked Plating. */
+  /** Summed damage/s from touching Saws, and from touching spiked Plating. */
   thorns: number;
+  plating: number;
   /** Lowest speed factor among touched tiles. */
   slow: number;
 }
 
-const contact: Contact = { tile: undefined, bridge: undefined, thorns: 0, slow: 1 };
+const contact: Contact = { tile: undefined, bridge: undefined, thorns: 0, plating: 0, slow: 1 };
 
 /**
  * Enemy movement, ranged attacks, separation, collision with the city's
@@ -75,8 +76,9 @@ export function updateEnemies(w: World, dt: number): void {
     const dps = def.contactDps * (e === w.boss ? bossContactFactor(w) : 1);
     damageTile(w, t, dps * mods.contactTaken * dt);
     if (w.over) return;
-    const back = contact.thorns + dps * mods.reflect;
-    if (back > 0) hitEnemy(w, e, back * dt, 0, 0, 0);
+    if (contact.thorns > 0) hitEnemy(w, e, contact.thorns * dt, 0, 0, 0, 'saw');
+    if (contact.plating > 0) hitEnemy(w, e, contact.plating * dt, 0, 0, 0, 'plating');
+    if (mods.reflect > 0) hitEnemy(w, e, dps * mods.reflect * dt, 0, 0, 0, 'shield');
     e.slow = contact.slow;
   }
 
@@ -239,6 +241,7 @@ function collideWithCity(w: World, e: Enemy, out: Contact): void {
   out.tile = undefined;
   out.bridge = undefined;
   out.thorns = 0;
+  out.plating = 0;
   out.slow = 1;
   for (let dy = -span; dy <= span; dy++) {
     for (let dx = -span; dx <= span; dx++) {
@@ -257,7 +260,8 @@ function collideWithCity(w: World, e: Enemy, out: Contact): void {
       out.tile ??= t;
       if (!out.bridge && w.cache.bridges.has(t.id)) out.bridge = t;
       const m = modsOf(w, t);
-      out.thorns += m.thorns;
+      if (t.type === 'plating') out.plating += m.thorns;
+      else out.thorns += m.thorns;
       out.slow = Math.min(out.slow, m.slow);
       if (d2 >= r * r) continue;
       if (d2 > 0) {

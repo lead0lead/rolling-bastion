@@ -153,6 +153,8 @@ export interface World {
   bossState: BossState;
   /** The boss was defeated: the run is won. */
   won: boolean;
+  /** Damage dealt to enemies per tile type (for balance stats). */
+  damageBy: Partial<Record<TileType, number>>;
   rerolls: number;
   kills: number;
   /** Half-diagonal of the visible area in world px; set by the renderer. */
@@ -198,6 +200,7 @@ export function createWorld(seed: number): World {
     bossSpawned: false,
     bossState: newBossState(),
     won: false,
+    damageBy: {},
     rerolls: LEVEL_UP.rerollsPerRun,
     kills: 0,
     viewRadius: 1000,

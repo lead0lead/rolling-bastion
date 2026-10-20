@@ -1,6 +1,6 @@
 import { COMBAT } from '../config/balance';
 import { ELITE, ENEMIES } from '../config/enemies';
-import type { WeaponDef } from '../config/tiles';
+import type { TileType, WeaponDef } from '../config/tiles';
 import { destroyTile, facingAngle, type PlacedTile } from './grid';
 import { dropGem } from './progression';
 import type { WeaponStats } from './synergies';
@@ -195,7 +195,7 @@ export function updateProjectiles(w: World, dt: number): void {
         // Land exactly on the target point.
         p.x += p.vx * p.life;
         p.y += p.vy * p.life;
-        explode(w, p.x, p.y, p.blast, p.damage);
+        explode(w, p.x, p.y, p.blast, p.damage, p.source);
         p.dead = true;
       }
       continue;
@@ -221,7 +221,7 @@ export function updateProjectiles(w: World, dt: number): void {
     }
     if (hit) {
       const speed = Math.hypot(p.vx, p.vy) || 1;
-      hitEnemy(w, hit, p.damage, p.knockback, p.vx / speed, p.vy / speed);
+      hitEnemy(w, hit, p.damage, p.knockback, p.vx / speed, p.vy / speed, p.source);
       if (p.pierce > 0) {
         p.pierce--;
         p.hits.push(hit);
@@ -233,20 +233,28 @@ export function updateProjectiles(w: World, dt: number): void {
 }
 
 /** Damages every enemy within `radius` of (x, y). */
-export function explode(w: World, x: number, y: number, radius: number, damage: number): void {
+export function explode(
+  w: World,
+  x: number,
+  y: number,
+  radius: number,
+  damage: number,
+  source?: TileType,
+): void {
   w.hash.query(x, y, radius + MAX_ENEMY_RADIUS, (i) => {
     const e = w.enemies[i];
     if (!e || e.dead || e === w.boss) return;
     const r = radius + e.radius;
-    if ((e.x - x) ** 2 + (e.y - y) ** 2 <= r * r) hitEnemy(w, e, damage, 0, 0, 0);
+    if ((e.x - x) ** 2 + (e.y - y) ** 2 <= r * r) hitEnemy(w, e, damage, 0, 0, 0, source);
   });
   const boss = w.boss;
   if (boss && !boss.dead && (boss.x - x) ** 2 + (boss.y - y) ** 2 <= (radius + boss.radius) ** 2) {
-    hitEnemy(w, boss, damage, 0, 0, 0);
+    hitEnemy(w, boss, damage, 0, 0, 0, source);
   }
   w.events.push({ kind: 'blast', x, y, radius });
 }
 
+/** Damages an enemy; `source` is the tile type credited in `w.damageBy` (only damage up to its HP counts). */
 export function hitEnemy(
   w: World,
   e: Enemy,
@@ -254,7 +262,9 @@ export function hitEnemy(
   knockback: number,
   dirX: number,
   dirY: number,
+  source?: TileType,
 ): void {
+  if (source) w.damageBy[source] = (w.damageBy[source] ?? 0) + Math.min(damage, Math.max(0, e.hp));
   e.hp -= damage;
   e.hitTime = w.time;
   if (!ENEMIES[e.type].boss) {

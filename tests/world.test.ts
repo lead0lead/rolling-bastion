@@ -144,6 +144,8 @@ describe('weapons, kills and XP', () => {
     }
     expect(w.kills).toBe(1);
     expect(w.gems).toHaveLength(1);
+    // Credited to the Core, counting only damage up to the enemy's HP.
+    expect(w.damageBy.core).toBeCloseTo(ENEMIES.swarmer.maxHp);
   });
 
   it('offline weapons do not fire', () => {
