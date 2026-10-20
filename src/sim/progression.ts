@@ -1,8 +1,10 @@
 import { GRID, LEVEL_UP, XP } from '../config/balance';
 import type { PieceDef } from '../config/pieces';
+import type { TileType } from '../config/tiles';
 import { coreTile } from './grid';
 import type { Rng } from './rng';
-import { cityCentre, gridTopLeft, tileAtCell, type World } from './world';
+import { applyUpgrade } from './upgrades';
+import { cityCentre, cityChanged, gridTopLeft, tileAtCell, type World } from './world';
 
 /** Weighted random pick of `count` distinct pieces from the pool. */
 export function rollOffers(rng: Rng, pool: readonly PieceDef[], count: number): PieceDef[] {
@@ -127,12 +129,16 @@ export function repairCoreAmount(w: World): number {
 
 export interface BuildResult {
   repair: boolean;
+  /** Tile type levelled instead of placing a piece. */
+  upgrade?: TileType | null;
   /** Placed pieces scrapped during the pause (each refunds XP). */
   scrapped: number;
 }
 
-/** Applies a finished build pause to the run. The caller has already updated the city. */
+/** Applies a finished build pause to the run; the build screen has already edited the city. */
 export function applyBuildResult(w: World, result: BuildResult): void {
+  if (result.upgrade) applyUpgrade(w.city, result.upgrade);
+  cityChanged(w);
   if (result.repair) {
     const core = coreTile(w.city);
     if (core) core.hp += repairCoreAmount(w);

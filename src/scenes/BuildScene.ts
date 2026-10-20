@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { OFFERS } from '../config/balance';
+import { OFFERS, UPGRADES } from '../config/balance';
 import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
@@ -22,7 +22,9 @@ import {
   scrapAt,
   scrapHeld,
   startBuild,
+  chosenUpgrade,
   toggleRepair,
+  toggleUpgrade,
   type BuildSession,
 } from '../sim/build';
 import { findBridges } from '../sim/connectivity';
@@ -38,6 +40,7 @@ import type { BuildResult } from '../sim/progression';
 import { rollOffers } from '../sim/progression';
 import { createRng, type Rng } from '../sim/rng';
 import { computeSynergies, type Synergies } from '../sim/synergies';
+import { typeLevel } from '../sim/upgrades';
 
 /** Data for a build pause inside a run. Without it the scene runs as a sandbox. */
 export interface BuildSceneData {
@@ -59,6 +62,8 @@ const GRID_CENTRE = { x: 620, y: 390 };
 const GRID_MAX_PX = 540;
 const GRID_MAX_CELL = 64;
 const CARDS = { x: 1010, y: 80, w: 240, h: 130, gap: 12, cell: 20 };
+/** "Upgrade <type>" strip at the bottom of a card (inset, height). */
+const UPGRADE_STRIP = { inset: 8, h: 24 };
 const REPAIR = { x: 1010, y: 508, w: 240, h: 40 };
 const REROLL = { x: 1010, y: 556, w: 240, h: 40 };
 const CONFIRM = { x: 1010, y: 640, w: 240, h: 56 };
@@ -86,6 +91,12 @@ function cardRect(i: number): Rect {
   return { x: CARDS.x, y: CARDS.y + i * (CARDS.h + CARDS.gap), w: CARDS.w, h: CARDS.h };
 }
 
+function upgradeRect(i: number): Rect {
+  const r = cardRect(i);
+  const { inset, h } = UPGRADE_STRIP;
+  return { x: r.x + inset, y: r.y + r.h - h - inset, w: r.w - 2 * inset, h };
+}
+
 /**
  * Build pause (concept.md §2.3). In a run it edits the run's city and reports
  * back through `done`; without data it is the Phase 1 sandbox, where confirm
@@ -109,6 +120,7 @@ export class BuildScene extends Phaser.Scene {
   private crackImgs!: SpritePool;
   private barrelImgs!: SpritePool;
   private cardTexts: Phaser.GameObjects.Text[] = [];
+  private upgradeTexts: Phaser.GameObjects.Text[] = [];
   private confirmText!: Phaser.GameObjects.Text;
   private repairText!: Phaser.GameObjects.Text;
   private rerollText!: Phaser.GameObjects.Text;
@@ -137,6 +149,7 @@ export class BuildScene extends Phaser.Scene {
     this.press = null;
     this.flash = null;
     this.cardTexts = [];
+    this.upgradeTexts = [];
     const { width, height } = this.scale;
     this.add.rectangle(0, 0, width, height, COLORS.background, this.run ? 0.94 : 1).setOrigin(0);
     createTextures(this);
@@ -158,7 +171,7 @@ export class BuildScene extends Phaser.Scene {
         90,
         [
           'Pick a piece: click or 1/2/3',
-          ...(this.run ? ['Repair Core: 4 · Reroll: 5'] : []),
+          ...(this.run ? ['Repair Core: 4 · Reroll: 5', 'Upgrade instead: Shift+1/2/3'] : []),
           'Move: drag (or click, then click)',
           'Rotate: R / right-click',
           'Put back: Esc',
@@ -230,7 +243,7 @@ export class BuildScene extends Phaser.Scene {
   }
 
   private showOffers(): void {
-    for (const t of this.cardTexts) t.destroy();
+    for (const t of [...this.cardTexts, ...this.upgradeTexts]) t.destroy();
     this.cardTexts = this.session.offers.map((def, i) => {
       const r = cardRect(i);
       return this.add.text(r.x + 12, r.y + 10, `${i + 1}  ${pieceSummary(def)}`, {
@@ -239,6 +252,22 @@ export class BuildScene extends Phaser.Scene {
         color: COLORS.text,
         wordWrap: { width: CARDS.w - 24 },
       });
+    });
+    this.upgradeTexts = this.session.upgrades.map((type, i) => {
+      const r = upgradeRect(i);
+      const label = type
+        ? `⇧${i + 1}  Upgrade ${TILES[type].name} → L${typeLevel(this.city, type) + 1}` +
+          (perkAt(type, typeLevel(this.city, type) + 1) ? ' ★' : '')
+        : '';
+      return this.add
+        .text(r.x + r.w / 2, r.y + r.h / 2, label, {
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          color: COLORS.text,
+        })
+        .setOrigin(0.5)
+        .setDepth(2)
+        .setVisible(!!type);
     });
   }
 
@@ -263,6 +292,15 @@ export class BuildScene extends Phaser.Scene {
     const r = this.gridRect();
     const cs = this.cellPx();
     return { x: Math.floor((x - r.x) / cs), y: Math.floor((y - r.y) / cs) };
+  }
+
+  /** Index of the offer whose (available) upgrade strip is under the point, or -1. */
+  private upgradeAt(x: number, y: number): number {
+    if (!this.hasRunOptions()) return -1;
+    for (let i = 0; i < this.session.offers.length; i++) {
+      if (this.session.upgrades[i] && inRect(upgradeRect(i), x, y)) return i;
+    }
+    return -1;
   }
 
   private cardAt(x: number, y: number): number {
@@ -299,6 +337,11 @@ export class BuildScene extends Phaser.Scene {
       }
       if (this.hasRunOptions() && inRect(REROLL, p.x, p.y)) {
         this.tryReroll();
+        return;
+      }
+      const up = this.upgradeAt(p.x, p.y);
+      if (up >= 0) {
+        toggleUpgrade(this.session, up);
         return;
       }
       const card = this.cardAt(p.x, p.y);
@@ -346,6 +389,10 @@ export class BuildScene extends Phaser.Scene {
       case 'Digit2':
       case 'Digit3': {
         const index = Number(e.code.slice(-1)) - 1;
+        if (e.shiftKey) {
+          if (this.hasRunOptions()) toggleUpgrade(s, index);
+          break;
+        }
         if (s.heldOrigin?.kind === 'offer') cancelHeld(s);
         pickOffer(s, index);
         break;
@@ -420,7 +467,7 @@ export class BuildScene extends Phaser.Scene {
     durations.push((this.time.now - this.pauseStartedAt) / 1000);
     this.registry.set('pauseDurations', durations);
     if (this.run) {
-      this.run.done({ repair: s.repairChosen, scrapped: s.scrapped });
+      this.run.done({ repair: s.repairChosen, scrapped: s.scrapped, upgrade: chosenUpgrade(s) });
       return;
     }
     this.newPause(rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
@@ -609,7 +656,9 @@ export class BuildScene extends Phaser.Scene {
     const s = this.session;
     s.offers.forEach((def, i) => {
       const r = cardRect(i);
-      const taken = s.offerTaken || (s.heldOrigin?.kind === 'offer' && s.heldOrigin.index === i);
+      const upgraded = s.upgradeChosen === i;
+      const taken =
+        (s.offerTaken && !upgraded) || (s.heldOrigin?.kind === 'offer' && s.heldOrigin.index === i);
       const alpha = taken ? 0.3 : 1;
       this.cardTexts[i]?.setAlpha(alpha);
       const hovered = !s.held && !s.offerTaken && inRect(r, this.pointer.x, this.pointer.y);
@@ -622,7 +671,9 @@ export class BuildScene extends Phaser.Scene {
       const w = Math.max(...def.cells.map((c) => c.x)) + 1;
       const h = Math.max(...def.cells.map((c) => c.y)) + 1;
       const ox = r.x + (r.w - w * cs) / 2;
-      const oy = r.y + 44 + (r.h - 44 - h * cs) / 2;
+      const strip =
+        s.upgrades[i] && this.hasRunOptions() ? UPGRADE_STRIP.h + UPGRADE_STRIP.inset : 0;
+      const oy = r.y + 44 + (r.h - 44 - strip - h * cs) / 2;
       for (const c of def.cells) {
         this.drawTileImage(
           ox + c.x * cs,
@@ -631,6 +682,15 @@ export class BuildScene extends Phaser.Scene {
           { ...c, type: c.tile, online: true },
           alpha,
         );
+      }
+
+      const up = this.upgradeTexts[i];
+      const showUp = !!s.upgrades[i] && this.hasRunOptions();
+      up?.setVisible(showUp);
+      if (showUp) {
+        const enabled = upgraded || (!s.offerTaken && !s.held);
+        this.drawButton(upgradeRect(i), enabled, upgraded);
+        up?.setAlpha(enabled ? 1 : 0.4);
       }
     });
   }
@@ -665,7 +725,7 @@ export class BuildScene extends Phaser.Scene {
         ? 'Place the held piece (Esc puts it back)'
         : status.block === 'no_offer_taken'
           ? this.run
-            ? 'Pick a piece or Repair Core'
+            ? 'Pick a piece, an upgrade or Repair Core'
             : 'Pick one of the offered pieces'
           : status.block === 'disconnected'
             ? `${status.offline} tile${status.offline === 1 ? ' is' : 's are'} not connected to the Core — reconnect or scrap`
@@ -691,7 +751,7 @@ export class BuildScene extends Phaser.Scene {
       return;
     }
     const r = cardRect(i);
-    this.tooltip.setText(pieceDetails(def)).setVisible(true);
+    this.tooltip.setText(pieceDetails(def, this.city, s.upgrades[i] ?? null)).setVisible(true);
     this.tooltip.setPosition(r.x - this.tooltip.width - 10, r.y);
   }
 
@@ -702,6 +762,7 @@ export class BuildScene extends Phaser.Scene {
     const lines = [
       `Grid ${city.gridSize}×${city.gridSize}  ·  ${city.tiles.length} tiles`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
+      levelSummary(city),
       `Chains: ${this.syn.chains.length}  ·  Filled lines: ${this.syn.filledRows.length + this.syn.filledCols.length}`,
       this.run && this.run.refundPerScrap > 0
         ? `Scrap refund: ${this.run.refundPerScrap} XP per piece` +
@@ -721,13 +782,52 @@ function pieceSummary(def: PieceDef): string {
     .join(', ');
 }
 
-function pieceDetails(def: PieceDef): string {
-  return countTiles(def)
-    .map(([type, n]) => {
-      const t = TILES[type];
-      return `${n}× ${t.name} — ${t.maxHp} HP\n   ${t.description}`;
-    })
-    .join('\n');
+function pieceDetails(def: PieceDef, city: CityState, upgrade: TileType | null): string {
+  const lines = countTiles(def).map(([type, n]) => {
+    const t = TILES[type];
+    const level = typeLevel(city, type);
+    return `${n}× ${t.name} L${level} — ${t.maxHp} HP\n   ${t.description}`;
+  });
+  if (upgrade) {
+    const next = typeLevel(city, upgrade) + 1;
+    const family = TILES[upgrade].family;
+    const gain =
+      family === 'weapon'
+        ? `+${UPGRADES.damagePerLevel * 100}% damage`
+        : family === 'structure'
+          ? `+${UPGRADES.hpPerLevel * 100}% max HP`
+          : `+${UPGRADES.effectPerLevel * 100}% effect`;
+    const perk = perkAt(upgrade, next);
+    lines.push(
+      '',
+      `Upgrade instead: all ${TILES[upgrade].name} tiles → L${next}, ${gain}`,
+      ...(perk ? [`★ L${next} perk: ${perk}`] : []),
+    );
+  }
+  const perks = countTiles(def)
+    .map(
+      ([type]) =>
+        TILES[type].perks &&
+        `${TILES[type].name}: L3 ${TILES[type].perks?.l3.name} · L5 ${TILES[type].perks?.l5.name}`,
+    )
+    .filter(Boolean);
+  if (perks.length) lines.push('', 'Perks:', ...perks.map((p) => `   ${p}`));
+  return lines.join('\n');
+}
+
+/** "Levels: Gatling 3 · Cannon 2" for every type above level 1, or ''. */
+function levelSummary(city: CityState): string {
+  const up = (Object.keys(TILES) as TileType[]).filter((t) => typeLevel(city, t) > 1);
+  return up.length
+    ? `Levels: ${up.map((t) => `${TILES[t].name} ${typeLevel(city, t)}`).join(' · ')}`
+    : '';
+}
+
+/** Name of the perk a type unlocks at `level` (3 or 5), if any. */
+function perkAt(type: TileType, level: number): string | undefined {
+  const perks = TILES[type].perks;
+  if (!perks) return undefined;
+  return level === 3 ? perks.l3.name : level === 5 ? perks.l5.name : undefined;
 }
 
 function countTiles(def: PieceDef): [TileType, number][] {

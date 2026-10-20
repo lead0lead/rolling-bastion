@@ -1,4 +1,5 @@
 import type { PieceDef } from '../config/pieces';
+import type { TileType } from '../config/tiles';
 import { updateOnline } from './connectivity';
 import {
   destroyTile,
@@ -17,6 +18,7 @@ import {
   type HeldGroup,
   type PlacedTile,
 } from './grid';
+import { canUpgrade, upgradeType } from './upgrades';
 
 /** Where the held group came from, so a cancelled move can be undone. */
 export type HeldOrigin = { kind: 'offer'; index: number } | { kind: 'grid'; tiles: PlacedTile[] };
@@ -29,6 +31,10 @@ export interface BuildSession {
   offerTaken: boolean;
   /** Repair Core was chosen instead of a piece. */
   repairChosen: boolean;
+  /** Per offer: the tile type its "Upgrade" option would level, or null if not available. */
+  upgrades: (TileType | null)[];
+  /** Index of the offer taken as an upgrade instead of placing it, or null. */
+  upgradeChosen: number | null;
   /** Placed pieces scrapped during this pause (each refunds XP in a run). */
   scrapped: number;
   held: HeldGroup | null;
@@ -51,6 +57,8 @@ export function startBuild(city: CityState, offers: PieceDef[]): BuildSession {
     offers,
     offerTaken: offers.length === 0,
     repairChosen: false,
+    upgrades: offerUpgrades(city, offers),
+    upgradeChosen: null,
     scrapped: 0,
     held: null,
     heldOrigin: null,
@@ -157,6 +165,36 @@ export function toggleRepair(s: BuildSession): boolean {
   return true;
 }
 
+/**
+ * Duplicates upgrade instead of placing (concept.md §2.8): available when the
+ * city owns the piece's main tile type and it is below the max level.
+ */
+function offerUpgrades(city: CityState, offers: PieceDef[]): (TileType | null)[] {
+  return offers.map((def) => {
+    const type = upgradeType(def);
+    return canUpgrade(city, type) ? type : null;
+  });
+}
+
+/** Takes an offer as an upgrade instead of placing it, or un-chooses it again. */
+export function toggleUpgrade(s: BuildSession, index: number): boolean {
+  if (s.held || !s.upgrades[index]) return false;
+  if (s.upgradeChosen === index) {
+    s.upgradeChosen = null;
+    s.offerTaken = false;
+    return true;
+  }
+  if (s.offerTaken) return false;
+  s.offerTaken = true;
+  s.upgradeChosen = index;
+  return true;
+}
+
+/** The tile type chosen for an upgrade this pause, if any. */
+export function chosenUpgrade(s: BuildSession): TileType | null {
+  return s.upgradeChosen === null ? null : (s.upgrades[s.upgradeChosen] ?? null);
+}
+
 /** Replaces the offers. Only before an offer is taken and while no offer is held. */
 export function canReroll(s: BuildSession): boolean {
   return !s.offerTaken && s.heldOrigin?.kind !== 'offer' && s.offers.length > 0;
@@ -165,6 +203,7 @@ export function canReroll(s: BuildSession): boolean {
 export function reroll(s: BuildSession, offers: PieceDef[]): boolean {
   if (!canReroll(s)) return false;
   s.offers = offers;
+  s.upgrades = offerUpgrades(s.city, offers);
   return true;
 }
 

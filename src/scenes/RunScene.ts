@@ -185,7 +185,6 @@ export class RunScene extends Phaser.Scene {
       },
       done: (result) => {
         if (kind === 'level') w.pendingLevelUps--;
-        cityChanged(w);
         applyBuildResult(w, result);
         this.scene.stop('Build');
         this.input.keyboard?.resetKeys();
