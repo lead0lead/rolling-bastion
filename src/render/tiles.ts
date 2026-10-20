@@ -1,22 +1,6 @@
 import Phaser from 'phaser';
 import { TILES, type TileType } from '../config/tiles';
-
-export const COLORS = {
-  background: 0x0d0f14,
-  gridCell: 0x161a22,
-  gridLine: 0x232936,
-  offline: 0x3a3f4a,
-  invalid: 0xff4d5e,
-  valid: 0x7dffb0,
-  bridge: 0xffd166,
-  groupOutline: 0xffffff,
-  hover: 0xffffff,
-  panel: 0x161a22,
-  panelBorder: 0x2c3342,
-  text: '#e6e9ef',
-  textDim: '#8a93a6',
-  textWarn: '#ff8a95',
-} as const;
+import { COLORS } from './palette';
 
 export interface TileDrawOptions {
   offline?: boolean;
@@ -40,7 +24,15 @@ export function showsCracks(hpFrac: number): boolean {
   return hpFrac < DAMAGE.cracks;
 }
 
-/** Rounded square with a darker 2 px border (concept.md §6, placeholder look). */
+/** Outline darkness (Phaser darken %) and widths relative to the tile size (concept.md §6: agar.io-like). */
+const TILE_LOOK = { outlineDarken: 28, outline: 0.085, radius: 0.24, inset: 0.035 } as const;
+
+/** A colour's darker outline shade (same hue). */
+export function outlineOf(color: number, darken: number = TILE_LOOK.outlineDarken): number {
+  return Phaser.Display.Color.ValueToColor(color).darken(darken).color;
+}
+
+/** Rounded square with a thick darker outline of the same hue (concept.md §6). */
 export function drawTile(
   g: Phaser.GameObjects.Graphics,
   x: number,
@@ -52,19 +44,14 @@ export function drawTile(
   const hpFrac = opts.hpFrac ?? 1;
   const alpha = (opts.alpha ?? 1) * damageAlpha(hpFrac, opts.time ?? 0);
   const fill = opts.offline ? COLORS.offline : TILES[type].color;
-  const inset = Math.max(1, Math.round(size * 0.04));
-  const radius = Math.max(2, Math.round(size * 0.15));
-  const border = Phaser.Display.Color.ValueToColor(fill).darken(35).color;
+  const lw = Math.max(2, size * TILE_LOOK.outline);
+  const inset = lw / 2 + size * TILE_LOOK.inset;
+  const radius = size * TILE_LOOK.radius;
+  const border = outlineOf(fill);
   g.fillStyle(fill, alpha);
   g.fillRoundedRect(x + inset, y + inset, size - 2 * inset, size - 2 * inset, radius);
-  g.lineStyle(2, border, alpha);
-  g.strokeRoundedRect(
-    x + inset + 1,
-    y + inset + 1,
-    size - 2 * inset - 2,
-    size - 2 * inset - 2,
-    radius,
-  );
+  g.lineStyle(lw, border, alpha);
+  g.strokeRoundedRect(x + inset, y + inset, size - 2 * inset, size - 2 * inset, radius);
   if (showsCracks(hpFrac)) drawCracks(g, x, y, size, border, alpha);
 }
 
@@ -87,7 +74,6 @@ export function drawCracks(
   g.strokePath();
 }
 
-/** Small broken-chain mark for offline tiles. */
 /** Broken-link mark for offline tiles, in the tile's top-right corner. */
 export function drawOfflineMark(
   g: Phaser.GameObjects.Graphics,

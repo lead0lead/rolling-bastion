@@ -1,16 +1,16 @@
 import Phaser from 'phaser';
 import { GRID } from '../config/balance';
 import { BOSS, ENEMIES } from '../config/enemies';
-import { COLORS } from '../render/tiles';
+import { COLORS } from '../render/palette';
 import { budgetRate } from '../sim/spawner';
 import { coreTile } from '../sim/grid';
 import { xpToNext } from '../sim/progression';
 import { bossEnraged } from '../sim/world';
 import type { RunUiState } from './RunScene';
 
-const XP_BAR = { h: 8, color: 0x3ff0ff };
-const CORE_BAR = { w: 360, h: 14, y: 690, color: 0xf4f6fb, low: 0xff4d5e };
-const BOSS_BAR = { w: 560, h: 12, y: 74, color: 0xff2f6d, enraged: 0xff6060 };
+const XP_BAR = { h: 8 };
+const CORE_BAR = { w: 360, h: 14, y: 690 };
+const BOSS_BAR = { w: 560, h: 12, y: 74 };
 
 /** Run HUD (concept.md §8), drawn unzoomed over the run. */
 export class HudScene extends Phaser.Scene {
@@ -43,13 +43,13 @@ export class HudScene extends Phaser.Scene {
       .text(640, BOSS_BAR.y - 4, '', { ...text, fontSize: '13px' })
       .setOrigin(0.5, 1);
     this.banner = this.add
-      .text(640, 120, 'GRID EXPANDED', { ...text, fontSize: '32px', color: '#9fe8ff' })
+      .text(640, 120, 'GRID EXPANDED', { ...text, fontSize: '32px', color: COLORS.textInfo })
       .setOrigin(0.5)
       .setVisible(false);
     this.debug = this.add.text(12, 50, '', {
       ...text,
       fontSize: '13px',
-      backgroundColor: '#000000aa',
+      backgroundColor: '#ffffffdd',
       padding: { x: 8, y: 6 },
     });
   }
@@ -63,9 +63,9 @@ export class HudScene extends Phaser.Scene {
     g.clear();
 
     const need = xpToNext(w.level);
-    g.fillStyle(0x1b2230, 1);
+    g.fillStyle(COLORS.barBack, 1);
     g.fillRect(0, 0, width, XP_BAR.h);
-    g.fillStyle(XP_BAR.color, 1);
+    g.fillStyle(COLORS.xp, 1);
     g.fillRect(0, 0, width * Math.min(1, w.xp / need), XP_BAR.h);
 
     const mins = Math.floor(w.time / 60);
@@ -79,9 +79,9 @@ export class HudScene extends Phaser.Scene {
     const core = coreTile(w.city);
     const frac = core ? Math.max(0, core.hp / core.maxHp) : 0;
     const x = 640 - CORE_BAR.w / 2;
-    g.fillStyle(0x1b2230, 1);
+    g.fillStyle(COLORS.barBack, 1);
     g.fillRect(x, CORE_BAR.y - CORE_BAR.h, CORE_BAR.w, CORE_BAR.h);
-    g.fillStyle(frac < 0.3 ? CORE_BAR.low : CORE_BAR.color, 1);
+    g.fillStyle(frac < 0.3 ? COLORS.coreLow : COLORS.core, 1);
     g.fillRect(x, CORE_BAR.y - CORE_BAR.h, CORE_BAR.w * frac, CORE_BAR.h);
     this.coreText.setText(`Core ${Math.ceil(core?.hp ?? 0)} / ${Math.round(core?.maxHp ?? 0)}`);
 
@@ -90,9 +90,9 @@ export class HudScene extends Phaser.Scene {
     if (boss) {
       const enraged = bossEnraged(w);
       const bx = 640 - BOSS_BAR.w / 2;
-      g.fillStyle(0x1b2230, 1);
+      g.fillStyle(COLORS.barBack, 1);
       g.fillRect(bx, BOSS_BAR.y, BOSS_BAR.w, BOSS_BAR.h);
-      g.fillStyle(enraged ? BOSS_BAR.enraged : BOSS_BAR.color, 1);
+      g.fillStyle(enraged ? COLORS.bossEnraged : COLORS.boss, 1);
       g.fillRect(bx, BOSS_BAR.y, BOSS_BAR.w * Math.max(0, boss.hp / boss.maxHp), BOSS_BAR.h);
       this.bossText.setText(`${ENEMIES[boss.type].name}${enraged ? '  —  ENRAGED' : ''}`);
     }
@@ -105,7 +105,7 @@ export class HudScene extends Phaser.Scene {
     if (mode !== this.bannerMode) {
       // Text style changes re-render the texture, so only change them when needed.
       this.bannerMode = mode;
-      this.banner.setText(mode).setColor(phaseBanner ? '#ff6b8a' : '#9fe8ff');
+      this.banner.setText(mode).setColor(phaseBanner ? COLORS.textBoss : COLORS.textInfo);
     }
     if (phaseBanner) {
       this.banner.setVisible(true).setAlpha(Math.min(1, (BOSS.bannerSec - phaseAge) / 0.5));

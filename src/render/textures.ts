@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { ELITE, ENEMIES, ENEMY_TYPES, type EnemyType } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
 import { BARREL_TYPES, drawBarrel, drawIcon, type BarrelType } from './icons';
-import { COLORS, drawCracks, drawOfflineMark, drawTile } from './tiles';
+import { COLORS } from './palette';
+import { drawCracks, drawOfflineMark, drawTile, outlineOf } from './tiles';
 
 /** Procedural textures (concept.md §6: no external art in the prototype). */
 export const TEX = {
@@ -31,7 +32,7 @@ export function createTextures(scene: Phaser.Scene): void {
 
   g.fillStyle(COLORS.background, 1);
   g.fillRect(0, 0, BG_GRID_SIZE, BG_GRID_SIZE);
-  g.lineStyle(1, COLORS.gridCell, 1);
+  g.lineStyle(1, COLORS.bgGridLine, 1);
   g.strokeRect(0.5, 0.5, BG_GRID_SIZE, BG_GRID_SIZE);
   g.generateTexture(TEX.bgGrid, BG_GRID_SIZE, BG_GRID_SIZE);
   g.clear();
@@ -54,35 +55,19 @@ export function createTextures(scene: Phaser.Scene): void {
     g.clear();
   }
 
-  g.fillStyle(0xff4d5e, 1);
-  g.fillCircle(5, 5, 4);
-  g.lineStyle(1.5, 0xffc2c8, 1);
-  g.strokeCircle(5, 5, 4);
-  g.generateTexture(TEX.enemyShot, 10, 10);
-  g.clear();
-
-  g.fillStyle(0x3ff0ff, 1);
-  g.fillPoints(toPoints([5, 0, 10, 5, 5, 10, 0, 5]), true);
-  g.generateTexture(TEX.gem, 10, 10);
-  g.clear();
-
-  g.fillStyle(0xfff3b0, 1);
-  g.fillCircle(4, 4, 3);
-  g.generateTexture(TEX.shotSmall, 8, 8);
-  g.clear();
-
-  g.fillStyle(0xffb347, 1);
-  g.fillCircle(6, 6, 5);
-  g.lineStyle(1.5, 0xfff3b0, 1);
-  g.strokeCircle(6, 6, 5);
-  g.generateTexture(TEX.shotBig, 12, 12);
-  g.clear();
-
-  g.fillStyle(0x3a2a1a, 1);
-  g.fillCircle(6, 6, 5);
-  g.lineStyle(2, 0xffa040, 1);
-  g.strokeCircle(6, 6, 5);
-  g.generateTexture(TEX.shell, 12, 12);
+  // Shiny round dots (concept.md §6: like agar.io food), each in its own colour family.
+  for (const [key, color, r] of [
+    [TEX.enemyShot, COLORS.enemyShot, 4.5],
+    [TEX.gem, COLORS.gem, 5],
+    [TEX.shotSmall, COLORS.shot, 3.5],
+    [TEX.shotBig, COLORS.shotBig, 5.5],
+    [TEX.shell, COLORS.shell, 5.5],
+  ] as const) {
+    const size = Math.ceil(r * 2 + 4);
+    drawDot(g, size / 2, r, color);
+    g.generateTexture(key, size, size);
+    g.clear();
+  }
 
   g.destroy();
   createTileTextures(scene);
@@ -100,7 +85,7 @@ function createTileTextures(scene: Phaser.Scene): void {
       g.clear();
       drawTile(g, 0, 0, size, type, { offline });
       const body = offline ? COLORS.offline : TILES[type].color;
-      drawIcon(g, type, size, offline ? 0x8a93a6 : 0xffffff, body);
+      drawIcon(g, type, size, offline ? COLORS.offlineInk : 0xffffff, body);
       if (offline) drawOfflineMark(g, 0, 0, size);
       scene.textures.addDynamicTexture(TEX.tile(type, offline), size, size)?.draw(g);
     }
@@ -111,7 +96,7 @@ function createTileTextures(scene: Phaser.Scene): void {
     scene.textures.addDynamicTexture(TEX.barrel(type), size, size)?.draw(g);
   }
   g.clear();
-  drawCracks(g, 0, 0, size, 0x0d0f14, 0.7);
+  drawCracks(g, 0, 0, size, COLORS.ink, 0.6);
   scene.textures.addDynamicTexture(TEX.cracks, size, size)?.draw(g);
   g.destroy();
 }
@@ -204,6 +189,16 @@ function drawEnemy(
     g.lineStyle(2, ELITE.outline, 1);
     g.strokeCircle(c, c, r + 2);
   }
+}
+
+/** A flat dot with a darker outline and a small highlight, centred at (c, c). */
+function drawDot(g: Phaser.GameObjects.Graphics, c: number, r: number, color: number): void {
+  g.fillStyle(color, 1);
+  g.fillCircle(c, c, r);
+  g.lineStyle(Math.max(1.5, r * 0.35), outlineOf(color), 1);
+  g.strokeCircle(c, c, r);
+  g.fillStyle(0xffffff, 0.75);
+  g.fillCircle(c - r * 0.35, c - r * 0.35, r * 0.28);
 }
 
 function toPoints(xy: number[]): Phaser.Math.Vector2[] {

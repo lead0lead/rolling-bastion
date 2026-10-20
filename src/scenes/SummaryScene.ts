@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS } from '../render/tiles';
+import { COLORS } from '../render/palette';
 
 export interface SummaryData {
   time: number;
@@ -26,7 +26,7 @@ export class SummaryScene extends Phaser.Scene {
       .text(640, 240, data.won ? 'The city rolls on.' : 'The Core has fallen.', {
         ...text,
         fontSize: '36px',
-        color: data.won ? '#9fe8ff' : COLORS.text,
+        color: data.won ? COLORS.textInfo : COLORS.text,
       })
       .setOrigin(0.5);
     this.add

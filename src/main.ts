@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { COLORS, css } from './render/palette';
 import { BootScene } from './scenes/BootScene';
 import { BuildScene } from './scenes/BuildScene';
 import { HudScene } from './scenes/HudScene';
@@ -8,7 +9,7 @@ import { SummaryScene } from './scenes/SummaryScene';
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  backgroundColor: '#0d0f14',
+  backgroundColor: css(COLORS.background),
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

@@ -5,6 +5,7 @@ import { PHASE3_POOL } from '../config/pieces';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { drawSynergyLines } from '../render/lines';
+import { COLORS } from '../render/palette';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
@@ -34,14 +35,14 @@ const DEBUG_BOSS_HURT = 0.35;
 /** Barrel turn smoothing rate (1/s); barrels ease toward the weapon's aim. */
 const BARREL_TURN_RATE = 18;
 /** Tint for barrels of offline weapons. */
-const OFFLINE_TINT = 0x8a93a6;
+const OFFLINE_TINT = COLORS.offline;
 /** Colour of the boss charge telegraph. */
-const CHARGE_COLOR = 0xff3030;
+const CHARGE_COLOR = COLORS.charge;
 /** Tint of the enraged boss. */
 const ENRAGE_TINT = 0xff6060;
 /** Shell blasts: fade time (s) and colour. */
 const BLAST_FADE = 0.3;
-const BLAST_COLOR = 0xffa040;
+const BLAST_COLOR = COLORS.blast;
 
 /** Shared with the HUD scene through the registry. */
 export interface RunUiState {

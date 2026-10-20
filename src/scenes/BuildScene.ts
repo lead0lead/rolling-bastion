@@ -6,7 +6,8 @@ import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
-import { COLORS, damageAlpha, showsCracks, SpritePool } from '../render/tiles';
+import { COLORS, css } from '../render/palette';
+import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
   canReroll,
   cancelHeld,
@@ -82,7 +83,7 @@ const SCRAP = { x: 30, y: 590, w: 250, h: 106 };
 const ARC_PREVIEW_CELLS = 1.6;
 const ARC_FILL_ALPHA = 0.18;
 const ARC_LINE_ALPHA = 0.55;
-const OFFLINE_TINT = 0x8a93a6;
+const OFFLINE_TINT = COLORS.offline;
 /** Pointer travel (px) that turns a click into a drag. */
 const DRAG_THRESHOLD = 6;
 
@@ -227,7 +228,7 @@ export class BuildScene extends Phaser.Scene {
       .text(0, 0, '', {
         ...text,
         fontSize: '13px',
-        backgroundColor: '#0b0d12',
+        backgroundColor: css(COLORS.panel),
         padding: { x: 10, y: 8 },
         lineSpacing: 4,
         wordWrap: { width: 300 },
@@ -729,7 +730,7 @@ export class BuildScene extends Phaser.Scene {
 
     const status = confirmStatus(s);
     const hovered = status.ok && inRect(CONFIRM, this.pointer.x, this.pointer.y);
-    g.fillStyle(status.ok ? (hovered ? 0x4fd18b : 0x3ab577) : 0x2a2f3a, 1);
+    g.fillStyle(status.ok ? (hovered ? COLORS.confirmHover : COLORS.confirm) : COLORS.disabled, 1);
     g.fillRoundedRect(CONFIRM.x, CONFIRM.y, CONFIRM.w, CONFIRM.h, 8);
     this.confirmText.setAlpha(status.ok ? 1 : 0.4);
     this.reasonText.setText(
@@ -748,7 +749,7 @@ export class BuildScene extends Phaser.Scene {
   private drawButton(r: Rect, enabled: boolean, selected: boolean): void {
     const g = this.g;
     const hovered = enabled && !selected && inRect(r, this.pointer.x, this.pointer.y);
-    g.fillStyle(selected ? 0x2f5d48 : COLORS.panel, 1);
+    g.fillStyle(selected ? COLORS.selected : COLORS.panel, 1);
     g.fillRoundedRect(r.x, r.y, r.w, r.h, 8);
     g.lineStyle(2, hovered ? COLORS.hover : selected ? COLORS.valid : COLORS.panelBorder, 1);
     g.strokeRoundedRect(r.x, r.y, r.w, r.h, 8);

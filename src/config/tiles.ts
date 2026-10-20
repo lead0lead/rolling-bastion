@@ -76,7 +76,7 @@ export interface TileDef {
   name: string;
   family: TileFamily;
   maxHp: number;
-  /** Fill colour (0xRRGGBB). Colour families per concept.md §6. */
+  /** Fill colour (0xRRGGBB); the outline is a darker shade. Colour families per concept.md §6. */
   color: number;
   /** Short placeholder label drawn on the tile until real icons exist (Phase 5). */
   label: string;
@@ -95,7 +95,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Core',
     family: 'core',
     maxHp: 250,
-    color: 0xf4f6fb,
+    color: 0xffffff,
     label: '◆',
     description: 'Pistol: 8 dmg, 2 shots/s, range 200. Lose it and the run ends.',
     weapon: {
@@ -113,7 +113,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Hull',
     family: 'structure',
     maxHp: 40,
-    color: 0x7b8494,
+    color: 0xa9b4c6,
     label: '',
     description: 'No function. Connector, cheap armour.',
     perks: {
@@ -128,7 +128,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Plating',
     family: 'structure',
     maxHp: 120,
-    color: 0x5f86b0,
+    color: 0x4f8ef7,
     label: '▣',
     description: 'No function. Heavy armour for the edge.',
     perks: {
@@ -143,7 +143,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Gatling',
     family: 'weapon',
     maxHp: 35,
-    color: 0xf2b134,
+    color: 0xffc933,
     label: 'G',
     description: '4 dmg, 8 shots/s, range 270, fires in a 180° arc.',
     weapon: {
@@ -168,7 +168,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Cannon',
     family: 'weapon',
     maxHp: 35,
-    color: 0xf08a24,
+    color: 0xff9933,
     label: 'C',
     description: '30 dmg, 0.8 shots/s, range 380, fires in a 90° arc, knockback.',
     weapon: {
@@ -190,7 +190,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Mortar',
     family: 'weapon',
     maxHp: 35,
-    color: 0xe8692e,
+    color: 0xf2762e,
     label: 'M',
     description: '20 dmg in a 48 px blast, 0.5 shots/s, range 80–350, all directions.',
     weapon: {
@@ -217,7 +217,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Saw',
     family: 'weapon',
     maxHp: 60,
-    color: 0xf5d04a,
+    color: 0xffe14d,
     label: 'S',
     description: '25 dmg/s to touching enemies. Must be on the edge.',
     contactDps: 25,
@@ -236,7 +236,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Generator',
     family: 'support',
     maxHp: 30,
-    color: 0x3ecf8e,
+    color: 0x3ddc84,
     label: '⚡',
     description: '+25% fire rate to neighbours (cap +75%).',
     support: { amount: 0.25, cap: 0.75 },
@@ -252,7 +252,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Shield Emitter',
     family: 'support',
     maxHp: 30,
-    color: 0x2bb3b1,
+    color: 0x2ec4d6,
     label: '◇',
     description: 'Neighbours take −40% damage (cap −60%).',
     support: { amount: 0.4, cap: 0.6 },
@@ -268,7 +268,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Repair Bay',
     family: 'support',
     maxHp: 30,
-    color: 0x6fdc6f,
+    color: 0x86e05a,
     label: '+',
     description: 'Heals neighbours 3 HP/s.',
     support: { amount: 3 },
@@ -284,7 +284,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Magnet',
     family: 'support',
     maxHp: 30,
-    color: 0x26a69a,
+    color: 0x16b8a6,
     label: 'U',
     description: '+30% pickup radius city-wide (cap +150%).',
     support: { amount: 0.3, cap: 1.5 },
@@ -303,7 +303,7 @@ export const TILES: Record<TileType, TileDef> = {
     name: 'Engine',
     family: 'support',
     maxHp: 30,
-    color: 0x4fc3a1,
+    color: 0x5ad1b0,
     label: '»',
     description: '+12% base speed.',
     perks: {

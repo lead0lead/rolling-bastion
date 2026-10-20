@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { TileType } from '../config/tiles';
+import { COLORS } from './palette';
 
 /**
  * Procedural tile icons (concept.md §6), drawn into a `size`×`size` box at
@@ -26,7 +27,7 @@ export function drawIcon(
 
   switch (type) {
     case 'core':
-      g.lineStyle(4 * s, 0x0d0f14, 1);
+      g.lineStyle(4 * s, COLORS.ink, 1);
       g.strokeCircle(c, c, 14 * s);
       break;
     case 'hull':
@@ -129,8 +130,8 @@ export function barrelFor(type: TileType): BarrelType | null {
 export function drawBarrel(g: Phaser.GameObjects.Graphics, type: BarrelType, size: number): void {
   const s = size / 64;
   const c = size / 2;
-  const fill = type === 'core' ? 0x3a3f4a : 0xf4f6fb;
-  const edge = type === 'core' ? 0x3a3f4a : 0x0d0f14;
+  const fill = type === 'core' ? COLORS.ink : 0xffffff;
+  const edge = COLORS.ink;
   g.fillStyle(fill, 1);
   g.lineStyle(2 * s, edge, 1);
   if (type === 'gatling') {
