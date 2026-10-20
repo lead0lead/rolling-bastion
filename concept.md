@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–6 merged into `main` (v0.7.0). User on Phase 6: "im happy" (2026-10-20). Branch `phase-7-shareable` created. |
-| **Current phase** | 7 — Shareable build: hosting decided (GitHub Pages), setting up |
-| **Next step** | Set up GitHub Pages deployment (§12 "Phase 7"). |
+| **Status** | All build phases 0–7 done and on `main` (v0.8.0). The game is live on GitHub Pages; the repository is public. |
+| **Current phase** | 7 — Shareable build: done |
+| **Next step** | No planned phases left. User shares the link and collects feedback; possible next steps are in §12 (open decisions) and §13 (ideas for later) — ask the user what to do next. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
-| **Live version** | none (local only); app version 0.7.0 |
+| **Live version** | v0.8.0 at https://lead0lead.github.io/rolling-bastion/ |
 | **Repository** | Public GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` (made public 2026-10-20 for GitHub Pages, user's decision) |
 | **Play URL** | https://lead0lead.github.io/rolling-bastion/ — deployed by `.github/workflows/deploy.yml` on every push to `main` (lint, tests and build must pass). Locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (Phase 6 merged, Phase 7 starting) |
+| **Last updated** | 2026-10-20 (Phase 7 done, game live) |
 
 ---
 
@@ -1073,6 +1073,26 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Phase 7: shareable build
+- Done (v0.8.0): GitHub Actions workflow `.github/workflows/deploy.yml`
+  (lint, tests, build, deploy to Pages on push to `main`); repository made
+  public after a history scan (no secrets, no-reply author address);
+  Pages enabled in workflow mode; README and §0 carry the play link.
+  First deploy succeeded; action versions then raised to the current
+  majors (checkout v7, setup-node v7, configure-pages v6,
+  upload-pages-artifact v5, deploy-pages v5) after Node 20 deprecation
+  warnings.
+- Decisions (user): host on GitHub Pages; make the repository public (A).
+- Checked: live page, script bundle, font and sounds return 200; the live
+  game boots (Phaser WebGL), the font loads, Enter starts a run, no errors
+  in the console (headless browser).
+- Merged straight to `main`: deployment only runs from `main`, and the
+  user asked for hosting.
+- Next: user shares the link; decide what comes after the planned phases
+  (§12, §13). Open: code licence for the public repo.
+- Watch out: every push to `main` redeploys the live game — `main` must
+  always build (CI enforces lint, tests and build before deploying).
 
 ### 2026-10-20 — Phase 6 merged, hosting chosen
 - Decisions: user on Phase 6: "im happy, so go on please"; sounds kept.
