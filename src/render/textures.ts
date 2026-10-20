@@ -10,6 +10,7 @@ export const TEX = {
   gem: 'gem',
   shotSmall: 'shot-small',
   shotBig: 'shot-big',
+  shell: 'shell',
   enemy: (type: string) => `enemy-${type}`,
   tile: (type: TileType, offline: boolean) => `tile-${type}${offline ? '-off' : ''}`,
   barrel: (type: BarrelType) => `barrel-${type}`,
@@ -66,6 +67,13 @@ export function createTextures(scene: Phaser.Scene): void {
   g.lineStyle(1.5, 0xfff3b0, 1);
   g.strokeCircle(6, 6, 5);
   g.generateTexture(TEX.shotBig, 12, 12);
+  g.clear();
+
+  g.fillStyle(0x3a2a1a, 1);
+  g.fillCircle(6, 6, 5);
+  g.lineStyle(2, 0xffa040, 1);
+  g.strokeCircle(6, 6, 5);
+  g.generateTexture(TEX.shell, 12, 12);
 
   g.destroy();
   createTileTextures(scene);

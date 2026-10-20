@@ -445,10 +445,10 @@ export class BuildScene extends Phaser.Scene {
     x: number,
     y: number,
     cs: number,
-    t: Pick<PlacedTile, 'type' | 'facing' | 'online'> & { hp?: number },
+    t: Pick<PlacedTile, 'type' | 'facing' | 'online'> & { hp?: number; maxHp?: number },
     alpha = 1,
   ): void {
-    const hpFrac = (t.hp ?? TILES[t.type].maxHp) / TILES[t.type].maxHp;
+    const hpFrac = t.hp !== undefined && t.maxHp ? t.hp / t.maxHp : 1;
     const a = alpha * damageAlpha(hpFrac, this.time.now);
     const cx = x + cs / 2;
     const cy = y + cs / 2;

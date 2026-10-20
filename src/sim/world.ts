@@ -1,4 +1,4 @@
-import { GRID, LEVEL_UP, MOVE } from '../config/balance';
+import { GRID, LEVEL_UP } from '../config/balance';
 import type { EnemyType } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
 import type { SpawnGroupId } from '../config/waves';
@@ -6,6 +6,7 @@ import { updateOnline } from './connectivity';
 import { createCity, type CityState, type PlacedTile } from './grid';
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatialHash';
+import { applyMaxHp, computeSynergies, type Synergies, type TileMods } from './synergies';
 
 export interface Enemy {
   type: EnemyType;
@@ -21,6 +22,8 @@ export interface Enemy {
   kvy: number;
   /** Game time of the last hit (for the hit flash). */
   hitTime: number;
+  /** Speed factor from touching a slowing tile last tick (1 = none). */
+  slow: number;
   dead: boolean;
 }
 
@@ -34,6 +37,12 @@ export interface Projectile {
   damage: number;
   radius: number;
   knockback: number;
+  /** Lobbed shell: explodes with this radius where its life ends (0 = hits the first enemy). */
+  blast: number;
+  /** Enemies it may still pass through. */
+  pierce: number;
+  /** Enemies already hit (piercing shots hit each enemy once). */
+  hits: Enemy[];
   life: number;
   /** Tile type that fired it (for visuals). */
   source: TileType;
@@ -51,11 +60,14 @@ export interface Gem {
   x: number;
   y: number;
   value: number;
+  /** Pulled in by a Magnet L5 recall; flies to the city until collected. */
+  pulled?: boolean;
 }
 
 export type WorldEvent =
   | { kind: 'tileDestroyed'; x: number; y: number; type: TileType }
   | { kind: 'enemyKilled'; x: number; y: number; type: EnemyType }
+  | { kind: 'blast'; x: number; y: number; radius: number }
   | { kind: 'levelUp'; level: number };
 
 /** City-derived data, recomputed only when the city changes (concept.md §9). */
@@ -71,8 +83,8 @@ export interface CityCache {
   maxRy: number;
   /** Online tiles that have a weapon. */
   weapons: PlacedTile[];
-  /** Movement speed as a fraction of base. */
-  speedFactor: number;
+  /** Levels, buffs and bonuses per tile, plus city-wide effects. */
+  syn: Synergies;
 }
 
 export interface World {
@@ -94,6 +106,8 @@ export interface World {
   projectilePool: Projectile[];
   hash: SpatialHash;
   spawn: { budget: number; next: { id: SpawnGroupId; count: number } | null; spikeIndex: number };
+  /** Seconds until the next Magnet L5 recall. */
+  gemPullTimer: number;
   /** State of each weapon tile, by tile id. */
   weapons: Map<number, WeaponState>;
   xp: number;
@@ -131,6 +145,7 @@ export function createWorld(seed: number): World {
     hash: new SpatialHash(GRID.cellPx),
     spawn: { budget: 0, next: null, spikeIndex: 0 },
     weapons: new Map(),
+    gemPullTimer: 0,
     xp: 0,
     level: 1,
     pendingLevelUps: 0,
@@ -150,6 +165,24 @@ export function cityChanged(w: World): void {
   w.cache = buildCache(w.city);
 }
 
+/** Tile modifiers; falls back to neutral values for a tile not in the cache. */
+export function modsOf(w: World, t: PlacedTile): TileMods {
+  return w.cache.syn.mods.get(t.id) ?? NEUTRAL_MODS;
+}
+
+const NEUTRAL_MODS: TileMods = {
+  damage: 1,
+  fireRate: 1,
+  damageTaken: 1,
+  contactTaken: 1,
+  heal: 0,
+  regen: 0,
+  maxHp: 0,
+  thorns: 0,
+  slow: 1,
+  reflect: 0,
+};
+
 function buildCache(city: CityState): CityCache {
   const cell = GRID.cellPx;
   const half = (city.gridSize * cell) / 2;
@@ -160,7 +193,8 @@ function buildCache(city: CityState): CityCache {
   let maxRx = -Infinity;
   let minRy = Infinity;
   let maxRy = -Infinity;
-  let engines = 0;
+  const syn = computeSynergies(city);
+  applyMaxHp(city, syn);
   for (const t of city.tiles) {
     cells[t.gy * city.gridSize + t.gx] = t;
     const rx = (t.gx + 0.5) * cell - half;
@@ -172,12 +206,9 @@ function buildCache(city: CityState): CityCache {
     maxRy = Math.max(maxRy, ry);
     if (!t.online) continue;
     if (TILES[t.type].weapon) weapons.push(t);
-    if (t.type === 'engine') engines++;
   }
   if (centres.length === 0) minRx = maxRx = minRy = maxRy = 0;
-  const penalty = Math.max(0, city.tiles.length - MOVE.penaltyFreeTiles) * MOVE.penaltyPerTile;
-  const speedFactor = Math.max(MOVE.minSpeedFactor, 1 - penalty) + engines * MOVE.engineBonus;
-  return { cells, centres, minRx, maxRx, minRy, maxRy, weapons, speedFactor };
+  return { cells, centres, minRx, maxRx, minRy, maxRy, weapons, syn };
 }
 
 /** World x of the grid's left edge and y of its top edge. */

@@ -1,17 +1,12 @@
-import { COMBAT, UPGRADES } from '../config/balance';
+import { COMBAT } from '../config/balance';
 import { ENEMIES } from '../config/enemies';
-import { TILES, type WeaponDef } from '../config/tiles';
+import type { WeaponDef } from '../config/tiles';
 import { destroyTile, facingAngle, type PlacedTile } from './grid';
 import { dropGem } from './progression';
-import { cityChanged, tileCentre, type Enemy, type Projectile, type World } from './world';
+import type { WeaponStats } from './synergies';
+import { cityChanged, modsOf, tileCentre, type Enemy, type Projectile, type World } from './world';
 
 export const MAX_ENEMY_RADIUS = Math.max(...Object.values(ENEMIES).map((e) => e.radius));
-
-/** Damage multiplier from a tile type's upgrade level (level 1 = ×1). */
-export function damageMultiplier(w: World, t: PlacedTile): number {
-  const level = Math.max(1, w.city.typeLevels[t.type]);
-  return 1 + UPGRADES.damagePerLevel * (level - 1);
-}
 
 /** Firing arc as a unit facing vector and cos(half angle); null for 360°. */
 export interface Arc {
@@ -36,22 +31,24 @@ export function inArc(arc: Arc | null, dx: number, dy: number, d2: number): bool
   return dot >= 0 || dot * dot <= d2 * limit * limit;
 }
 
-/** Nearest live enemy within `range` of (x, y) and inside `arc`, or undefined. */
+/** Nearest live enemy between `minRange` and `range` of (x, y) and inside `arc`, or undefined. */
 export function nearestEnemy(
   w: World,
   x: number,
   y: number,
   range: number,
   arc: Arc | null = null,
+  minRange = 0,
 ): Enemy | undefined {
   let best: Enemy | undefined;
   let bestD2 = range * range;
+  const min2 = minRange * minRange;
   for (const e of w.enemies) {
     if (e.dead) continue;
     const dx = e.x - x;
     const dy = e.y - y;
     const d2 = dx * dx + dy * dy;
-    if (d2 <= bestD2 && inArc(arc, dx, dy, d2)) {
+    if (d2 <= bestD2 && d2 >= min2 && inArc(arc, dx, dy, d2)) {
       bestD2 = d2;
       best = e;
     }
@@ -66,9 +63,10 @@ export function nearestEnemy(
  */
 export function updateWeapons(w: World, dt: number): void {
   for (const t of w.cache.weapons) {
-    const weapon = TILES[t.type].weapon;
+    const weapon = w.cache.syn.weapons[t.type];
     if (!weapon) continue;
-    const interval = 1 / weapon.fireRate;
+    const mods = modsOf(w, t);
+    const interval = 1 / (weapon.fireRate * mods.fireRate);
     let st = w.weapons.get(t.id);
     if (!st) {
       st = { cooldown: w.rng.next() * interval, aim: facingAngle(t.facing), aimTimer: 0 };
@@ -80,7 +78,14 @@ export function updateWeapons(w: World, dt: number): void {
     if (!ready && st.aimTimer > 0) continue;
 
     const c = tileCentre(w, t);
-    const target = nearestEnemy(w, c.x, c.y, weapon.range, weaponArc(t, weapon));
+    const target = nearestEnemy(
+      w,
+      c.x,
+      c.y,
+      weapon.range,
+      weaponArc(t, weapon),
+      weapon.minRange ?? 0,
+    );
     st.aimTimer = COMBAT.aimInterval;
     st.aim = target ? Math.atan2(target.y - c.y, target.x - c.x) : facingAngle(t.facing);
     if (!ready) continue;
@@ -89,32 +94,98 @@ export function updateWeapons(w: World, dt: number): void {
       continue;
     }
 
-    const spread = ((w.rng.next() * 2 - 1) * weapon.spreadDeg * Math.PI) / 180;
-    const angle = st.aim + spread;
-    const p = w.projectilePool.pop() ?? ({} as Projectile);
-    p.x = p.px = c.x;
-    p.y = p.py = c.y;
-    p.vx = Math.cos(angle) * weapon.projectileSpeed;
-    p.vy = Math.sin(angle) * weapon.projectileSpeed;
-    p.damage = weapon.damage * damageMultiplier(w, t);
-    p.radius = weapon.projectileRadius;
-    p.knockback = weapon.knockback;
-    p.life = (weapon.range / weapon.projectileSpeed) * COMBAT.projectileLifeFactor;
-    p.source = t.type;
-    p.dead = false;
-    w.projectiles.push(p);
+    const damage = weapon.damage * mods.damage;
+    if (weapon.blastRadius) {
+      for (let i = 0; i < weapon.shells; i++) {
+        const s = i === 0 ? 0 : weapon.shellScatter;
+        const tx = target.x + (w.rng.next() * 2 - 1) * s;
+        const ty = target.y + (w.rng.next() * 2 - 1) * s;
+        fireShell(w, t, weapon, damage, c.x, c.y, tx, ty);
+      }
+    } else {
+      for (let i = 0; i < weapon.projectiles; i++) {
+        const spreadDeg = weapon.spreadDeg * (weapon.projectiles > 1 ? 2 : 1);
+        const spread = ((w.rng.next() * 2 - 1) * spreadDeg * Math.PI) / 180;
+        fireShot(w, t, weapon, damage, c.x, c.y, st.aim + spread);
+      }
+    }
     st.cooldown = Math.max(st.cooldown + interval, 0);
   }
+}
+
+function newProjectile(w: World, t: PlacedTile, x: number, y: number): Projectile {
+  const p = w.projectilePool.pop() ?? ({ hits: [] } as unknown as Projectile);
+  p.x = p.px = x;
+  p.y = p.py = y;
+  p.source = t.type;
+  p.dead = false;
+  p.hits.length = 0;
+  w.projectiles.push(p);
+  return p;
+}
+
+function fireShot(
+  w: World,
+  t: PlacedTile,
+  weapon: WeaponStats,
+  damage: number,
+  x: number,
+  y: number,
+  angle: number,
+): void {
+  const p = newProjectile(w, t, x, y);
+  p.vx = Math.cos(angle) * weapon.projectileSpeed;
+  p.vy = Math.sin(angle) * weapon.projectileSpeed;
+  p.damage = damage;
+  p.radius = weapon.projectileRadius;
+  p.knockback = weapon.knockback;
+  p.blast = 0;
+  p.pierce = weapon.pierce;
+  p.life = (weapon.range / weapon.projectileSpeed) * COMBAT.projectileLifeFactor;
+}
+
+/** A lobbed shell: flies over everything and explodes at (tx, ty). */
+function fireShell(
+  w: World,
+  t: PlacedTile,
+  weapon: WeaponStats,
+  damage: number,
+  x: number,
+  y: number,
+  tx: number,
+  ty: number,
+): void {
+  const p = newProjectile(w, t, x, y);
+  const d = Math.hypot(tx - x, ty - y) || 1;
+  p.vx = ((tx - x) / d) * weapon.projectileSpeed;
+  p.vy = ((ty - y) / d) * weapon.projectileSpeed;
+  p.damage = damage;
+  p.radius = weapon.projectileRadius;
+  p.knockback = weapon.knockback;
+  p.blast = weapon.blastRadius ?? 0;
+  p.pierce = 0;
+  p.life = d / weapon.projectileSpeed;
 }
 
 /** Moves projectiles and resolves hits. Uses the enemy hash built this tick. */
 export function updateProjectiles(w: World, dt: number): void {
   for (const p of w.projectiles) {
+    if (p.dead) continue;
     p.px = p.x;
     p.py = p.y;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.life -= dt;
+    if (p.blast > 0) {
+      if (p.life <= 0) {
+        // Land exactly on the target point.
+        p.x += p.vx * p.life;
+        p.y += p.vy * p.life;
+        explode(w, p.x, p.y, p.blast, p.damage);
+        p.dead = true;
+      }
+      continue;
+    }
     if (p.life <= 0) {
       p.dead = true;
       continue;
@@ -123,7 +194,7 @@ export function updateProjectiles(w: World, dt: number): void {
     w.hash.query(p.x, p.y, p.radius + MAX_ENEMY_RADIUS, (i) => {
       if (hit) return;
       const e = w.enemies[i];
-      if (!e || e.dead) return;
+      if (!e || e.dead || p.hits.includes(e)) return;
       const r = p.radius + ENEMIES[e.type].radius;
       const dx = e.x - p.x;
       const dy = e.y - p.y;
@@ -132,9 +203,25 @@ export function updateProjectiles(w: World, dt: number): void {
     if (hit) {
       const speed = Math.hypot(p.vx, p.vy) || 1;
       hitEnemy(w, hit, p.damage, p.knockback, p.vx / speed, p.vy / speed);
-      p.dead = true;
+      if (p.pierce > 0) {
+        p.pierce--;
+        p.hits.push(hit);
+      } else {
+        p.dead = true;
+      }
     }
   }
+}
+
+/** Damages every enemy within `radius` of (x, y). */
+export function explode(w: World, x: number, y: number, radius: number, damage: number): void {
+  w.hash.query(x, y, radius + MAX_ENEMY_RADIUS, (i) => {
+    const e = w.enemies[i];
+    if (!e || e.dead) return;
+    const r = radius + ENEMIES[e.type].radius;
+    if ((e.x - x) ** 2 + (e.y - y) ** 2 <= r * r) hitEnemy(w, e, damage, 0, 0, 0);
+  });
+  w.events.push({ kind: 'blast', x, y, radius });
 }
 
 export function hitEnemy(
@@ -153,12 +240,12 @@ export function hitEnemy(
 }
 
 /**
- * Damages a tile; at 0 HP it is destroyed for good and connectivity is
- * recomputed. Losing the Core ends the run.
+ * Damages a tile (after its Shield reduction); at 0 HP it is destroyed for
+ * good and connectivity is recomputed. Losing the Core ends the run.
  */
 export function damageTile(w: World, t: PlacedTile, amount: number): void {
   if (t.type === 'core' && w.godMode) return;
-  t.hp -= amount;
+  t.hp -= amount * modsOf(w, t).damageTaken;
   if (t.hp > 0) return;
   const c = tileCentre(w, t);
   destroyTile(w.city, t.id);
@@ -166,6 +253,18 @@ export function damageTile(w: World, t: PlacedTile, amount: number): void {
   cityChanged(w);
   w.events.push({ kind: 'tileDestroyed', x: c.x, y: c.y, type: t.type });
   if (t.type === 'core') w.over = true;
+}
+
+/** Repair Bays heal their neighbours; Hull L5 regenerates (concept.md §2.6: nothing else heals). */
+export function healTiles(w: World, dt: number): void {
+  const boost = w.cache.syn.lowHpHealBoost;
+  for (const t of w.city.tiles) {
+    const m = modsOf(w, t);
+    if (m.heal === 0 && m.regen === 0) continue;
+    if (t.hp >= t.maxHp) continue;
+    const heal = boost && t.hp < t.maxHp * boost.belowFrac ? m.heal * boost.factor : m.heal;
+    t.hp = Math.min(t.maxHp, t.hp + (heal + m.regen) * dt);
+  }
 }
 
 /** Removes dead enemies (dropping gems) and spent projectiles, returning them to their pools. */

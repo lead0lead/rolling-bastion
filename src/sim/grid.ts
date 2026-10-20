@@ -13,6 +13,8 @@ export interface PlacedTile {
   gx: number;
   gy: number;
   hp: number;
+  /** Max HP after levels and bonuses; set from the synergies (concept.md §2.7). */
+  maxHp: number;
   groupId: number;
   online: boolean;
   /** Compass facing; turns with the piece (concept.md §2.10). */
@@ -58,6 +60,7 @@ export function createCity(gridSize: number = GRID.startSize): CityState {
         gx: centre,
         gy: centre,
         hp: TILES.core.maxHp,
+        maxHp: TILES.core.maxHp,
         groupId: 1,
         online: true,
         facing: 0,
@@ -128,6 +131,7 @@ export function heldFromPiece(city: CityState, def: PieceDef): HeldGroup {
     gx: c.x,
     gy: c.y,
     hp: TILES[c.tile].maxHp,
+    maxHp: TILES[c.tile].maxHp,
     groupId,
     online: false,
     facing: c.facing,

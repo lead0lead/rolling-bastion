@@ -1,5 +1,5 @@
 import { MOVE } from '../config/balance';
-import { removeDead, updateProjectiles, updateWeapons } from './combat';
+import { healTiles, removeDead, updateProjectiles, updateWeapons } from './combat';
 import { updateEnemies } from './enemies';
 import { collectGems } from './progression';
 import { updateSpawner } from './spawner';
@@ -21,8 +21,9 @@ export function step(w: World, input: MoveInput, dt: number): void {
   if (w.over) return;
   updateWeapons(w, dt);
   updateProjectiles(w, dt);
+  healTiles(w, dt);
   removeDead(w);
-  collectGems(w);
+  collectGems(w, dt);
 }
 
 /** Free 8-direction driving with a short ease and the size penalty (concept.md §2.5). */
@@ -36,7 +37,7 @@ export function moveCity(w: World, input: MoveInput, dt: number): void {
     ix /= len;
     iy /= len;
   }
-  const speed = MOVE.baseSpeed * w.cache.speedFactor;
+  const speed = MOVE.baseSpeed * w.cache.syn.speedFactor;
   const k = Math.min(1, dt / MOVE.ease);
   w.vx += (ix * speed - w.vx) * k;
   w.vy += (iy * speed - w.vy) * k;

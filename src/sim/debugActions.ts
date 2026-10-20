@@ -45,6 +45,7 @@ export function debugFillGrid(w: World, type: TileType): void {
         gx,
         gy,
         hp: TILES[type].maxHp,
+        maxHp: TILES[type].maxHp,
         groupId,
         online: false,
         facing: 0,

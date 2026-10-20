@@ -1,9 +1,8 @@
 import { GRID, LEVEL_UP, XP } from '../config/balance';
 import type { PieceDef } from '../config/pieces';
-import { TILES } from '../config/tiles';
 import { coreTile } from './grid';
 import type { Rng } from './rng';
-import { gridTopLeft, tileAtCell, type World } from './world';
+import { cityCentre, gridTopLeft, tileAtCell, type World } from './world';
 
 /** Weighted random pick of `count` distinct pieces from the pool. */
 export function rollOffers(rng: Rng, pool: readonly PieceDef[], count: number): PieceDef[] {
@@ -52,31 +51,63 @@ export function dropGem(w: World, x: number, y: number, value: number): void {
   w.gems.push({ x, y, value });
 }
 
-/** A gem is collected when it is within the pickup radius of any tile. */
-export function collectGems(w: World): void {
+/**
+ * A gem is collected when it is within the pickup radius of any tile
+ * (Magnets widen it). With Magnet L3, gems within a wider radius drift toward
+ * the city; Magnet L5 periodically pulls in every gem on screen.
+ */
+export function collectGems(w: World, dt = 0): void {
+  const syn = w.cache.syn;
   const cell = GRID.cellPx;
-  const radius = XP.pickupRadius;
-  const reach = Math.ceil(radius / cell);
+  const radius = XP.pickupRadius * syn.pickupFactor;
+  const drift = syn.gemDrift ? radius * syn.gemDrift.radiusFactor : radius;
+  const reach = Math.ceil(drift / cell);
   const { left, top } = gridTopLeft(w);
+  const centre = cityCentre(w);
+
+  if (syn.gemPull) {
+    w.gemPullTimer -= dt;
+    if (w.gemPullTimer <= 0) {
+      w.gemPullTimer = syn.gemPull.intervalSec;
+      for (const gem of w.gems) {
+        if (Math.hypot(gem.x - centre.x, gem.y - centre.y) <= w.viewRadius) gem.pulled = true;
+      }
+    }
+  }
+
   let gained = 0;
   let n = 0;
   for (const gem of w.gems) {
     const gx = Math.floor((gem.x - left) / cell);
     const gy = Math.floor((gem.y - top) / cell);
-    let collected = false;
-    for (let dy = -reach; dy <= reach && !collected; dy++) {
-      for (let dx = -reach; dx <= reach && !collected; dx++) {
+    let best2 = Infinity;
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
         const t = tileAtCell(w, gx + dx, gy + dy);
         if (!t) continue;
         const minX = left + t.gx * cell;
         const minY = top + t.gy * cell;
         const qx = Math.min(Math.max(gem.x, minX), minX + cell);
         const qy = Math.min(Math.max(gem.y, minY), minY + cell);
-        collected = (gem.x - qx) ** 2 + (gem.y - qy) ** 2 <= radius * radius;
+        best2 = Math.min(best2, (gem.x - qx) ** 2 + (gem.y - qy) ** 2);
       }
     }
-    if (collected) gained += gem.value;
-    else w.gems[n++] = gem;
+    if (best2 <= radius * radius) {
+      gained += gem.value;
+      continue;
+    }
+    const speed = gem.pulled
+      ? (syn.gemPull?.speed ?? 0)
+      : best2 <= drift * drift
+        ? (syn.gemDrift?.speed ?? 0)
+        : 0;
+    if (speed > 0) {
+      const d = Math.hypot(centre.x - gem.x, centre.y - gem.y) || 1;
+      const step = Math.min(d, speed * dt);
+      gem.x += ((centre.x - gem.x) / d) * step;
+      gem.y += ((centre.y - gem.y) / d) * step;
+    }
+    w.gems[n++] = gem;
   }
   w.gems.length = n;
   if (gained > 0) addXp(w, gained);
@@ -91,8 +122,7 @@ export function scrapRefund(w: World): number {
 export function repairCoreAmount(w: World): number {
   const core = coreTile(w.city);
   if (!core) return 0;
-  const max = TILES.core.maxHp;
-  return Math.min(max - core.hp, max * LEVEL_UP.repairCoreFraction);
+  return Math.min(core.maxHp - core.hp, core.maxHp * LEVEL_UP.repairCoreFraction);
 }
 
 export interface BuildResult {

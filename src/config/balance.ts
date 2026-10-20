@@ -104,4 +104,9 @@ export const SIM = {
 export const UPGRADES = {
   /** Weapon damage per level above 1. */
   damagePerLevel: 0.25,
+  /** Support effect per level above 1. */
+  effectPerLevel: 0.2,
+  /** Hull/Plating max HP per level above 1. */
+  hpPerLevel: 0.2,
+  maxLevel: 5,
 } as const;

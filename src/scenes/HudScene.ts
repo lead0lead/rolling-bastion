@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { TILES } from '../config/tiles';
 import { COLORS } from '../render/tiles';
 import { budgetRate } from '../sim/spawner';
 import { coreTile } from '../sim/grid';
@@ -64,13 +63,13 @@ export class HudScene extends Phaser.Scene {
     );
 
     const core = coreTile(w.city);
-    const frac = core ? Math.max(0, core.hp / TILES.core.maxHp) : 0;
+    const frac = core ? Math.max(0, core.hp / core.maxHp) : 0;
     const x = 640 - CORE_BAR.w / 2;
     g.fillStyle(0x1b2230, 1);
     g.fillRect(x, CORE_BAR.y - CORE_BAR.h, CORE_BAR.w, CORE_BAR.h);
     g.fillStyle(frac < 0.3 ? CORE_BAR.low : CORE_BAR.color, 1);
     g.fillRect(x, CORE_BAR.y - CORE_BAR.h, CORE_BAR.w * frac, CORE_BAR.h);
-    this.coreText.setText(`Core ${Math.ceil(core?.hp ?? 0)} / ${TILES.core.maxHp}`);
+    this.coreText.setText(`Core ${Math.ceil(core?.hp ?? 0)} / ${Math.round(core?.maxHp ?? 0)}`);
 
     this.debug.setVisible(ui.debugOverlay);
     if (ui.debugOverlay) {

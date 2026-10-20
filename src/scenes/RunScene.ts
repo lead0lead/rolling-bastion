@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
 import { ENEMY_TYPES } from '../config/enemies';
 import { PHASE2_POOL } from '../config/pieces';
-import { TILES } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
@@ -31,6 +30,9 @@ const DEBUG_SPAWN_COUNT = 50;
 const BARREL_TURN_RATE = 18;
 /** Tint for barrels of offline weapons. */
 const OFFLINE_TINT = 0x8a93a6;
+/** Shell blasts: fade time (s) and colour. */
+const BLAST_FADE = 0.3;
+const BLAST_COLOR = 0xffa040;
 
 /** Shared with the HUD scene through the registry. */
 export interface RunUiState {
@@ -66,6 +68,8 @@ export class RunScene extends Phaser.Scene {
   private enemySprites!: SpritePool;
   private shotSprites!: SpritePool;
   private gemSprites!: SpritePool;
+  private blastGfx!: Phaser.GameObjects.Graphics;
+  private blasts: { x: number; y: number; r: number; at: number }[] = [];
   private cam = { x: 0, y: 0, zoom: 1 };
   private debugEnemyIndex = 0;
 
@@ -95,6 +99,8 @@ export class RunScene extends Phaser.Scene {
     this.barrelAngles.clear();
     this.enemySprites = new SpritePool(this, 3);
     this.shotSprites = new SpritePool(this, 4);
+    this.blastGfx = this.add.graphics().setDepth(3.5);
+    this.blasts = [];
 
     this.cam = { x: this.world.x, y: this.world.y, zoom: this.targetZoom() };
     this.cameras.main.setZoom(this.cam.zoom).centerOn(this.cam.x, this.cam.y);
@@ -294,7 +300,7 @@ export class RunScene extends Phaser.Scene {
     for (const t of w.city.tiles) {
       const x = left + (t.gx + 0.5) * cell;
       const y = top + (t.gy + 0.5) * cell;
-      const hpFrac = t.hp / TILES[t.type].maxHp;
+      const hpFrac = t.hp / t.maxHp;
       const alpha = damageAlpha(hpFrac, this.time.now);
       this.tileSprites
         .add(x, y, TEX.tile(t.type, !t.online))
@@ -331,13 +337,11 @@ export class RunScene extends Phaser.Scene {
 
     this.shotSprites.begin();
     for (const p of w.projectiles) {
-      this.shotSprites.add(
-        lerp(p.px, p.x),
-        lerp(p.py, p.y),
-        p.source === 'cannon' ? TEX.shotBig : TEX.shotSmall,
-      );
+      const key = p.blast > 0 ? TEX.shell : p.source === 'cannon' ? TEX.shotBig : TEX.shotSmall;
+      this.shotSprites.add(lerp(p.px, p.x), lerp(p.py, p.y), key);
     }
     this.shotSprites.end();
+    this.drawBlasts(w);
 
     this.gemSprites.begin();
     for (const gem of w.gems) this.gemSprites.add(gem.x, gem.y, TEX.gem);
@@ -345,7 +349,25 @@ export class RunScene extends Phaser.Scene {
 
     for (const ev of w.events) {
       if (ev.kind === 'tileDestroyed') camera.shake(TILE_LOSS_SHAKE.ms, TILE_LOSS_SHAKE.intensity);
+      if (ev.kind === 'blast') this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
     }
     w.events.length = 0;
+  }
+
+  /** Fading rings where shells landed (game time, so they freeze with the pause). */
+  private drawBlasts(w: World): void {
+    const g = this.blastGfx;
+    g.clear();
+    let n = 0;
+    for (const b of this.blasts) {
+      const age = (w.time - b.at) / BLAST_FADE;
+      if (age >= 1) continue;
+      this.blasts[n++] = b;
+      g.fillStyle(BLAST_COLOR, 0.35 * (1 - age));
+      g.fillCircle(b.x, b.y, b.r * (0.6 + 0.4 * age));
+      g.lineStyle(2, BLAST_COLOR, 0.8 * (1 - age));
+      g.strokeCircle(b.x, b.y, b.r);
+    }
+    this.blasts.length = n;
   }
 }

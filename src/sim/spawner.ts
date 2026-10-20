@@ -107,6 +107,7 @@ export function spawnEnemy(w: World, type: EnemyType, x: number, y: number): Ene
   e.hp = e.maxHp = maxHp;
   e.kvx = e.kvy = 0;
   e.hitTime = -Infinity;
+  e.slow = 1;
   e.dead = false;
   w.enemies.push(e);
   return e;

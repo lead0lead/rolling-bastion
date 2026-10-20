@@ -1,8 +1,20 @@
 import { ENEMY_PHYSICS, GRID } from '../config/balance';
 import { ENEMIES } from '../config/enemies';
 import type { PlacedTile } from './grid';
-import { damageTile, MAX_ENEMY_RADIUS } from './combat';
-import { gridTopLeft, tileAtCell, type Enemy, type World } from './world';
+import { damageTile, hitEnemy, MAX_ENEMY_RADIUS } from './combat';
+import { gridTopLeft, modsOf, tileAtCell, type Enemy, type World } from './world';
+
+/** What an enemy touched this tick (reused, no allocation). */
+interface Contact {
+  /** The tile it attacks. */
+  tile: PlacedTile | undefined;
+  /** Summed damage/s from touching Saws and spiked Plating. */
+  thorns: number;
+  /** Lowest speed factor among touched tiles. */
+  slow: number;
+}
+
+const contact: Contact = { tile: undefined, thorns: 0, slow: 1 };
 
 /**
  * Enemy movement, separation, collision with the city's tiles and contact
@@ -23,10 +35,11 @@ export function updateEnemies(w: World, dt: number): void {
       const dy = target.y - e.y;
       const d = Math.hypot(dx, dy);
       if (d > 0) {
-        mx = (dx / d) * def.speed;
-        my = (dy / d) * def.speed;
+        mx = (dx / d) * def.speed * e.slow;
+        my = (dy / d) * def.speed * e.slow;
       }
     }
+    e.slow = 1;
     e.x += (mx + e.kvx) * dt;
     e.y += (my + e.kvy) * dt;
     e.kvx *= decay;
@@ -37,9 +50,16 @@ export function updateEnemies(w: World, dt: number): void {
   separate(w);
 
   for (const e of w.enemies) {
-    const touched = collideWithCity(w, e);
-    if (touched) damageTile(w, touched, ENEMIES[e.type].contactDps * dt);
+    collideWithCity(w, e, contact);
+    const t = contact.tile;
+    if (!t) continue;
+    const mods = modsOf(w, t);
+    const dps = ENEMIES[e.type].contactDps;
+    damageTile(w, t, dps * mods.contactTaken * dt);
     if (w.over) return;
+    const back = contact.thorns + dps * mods.reflect;
+    if (back > 0) hitEnemy(w, e, back * dt, 0, 0, 0);
+    e.slow = contact.slow;
   }
 }
 
@@ -94,16 +114,19 @@ function separate(w: World): void {
 
 /**
  * Pushes the enemy out of any tile it overlaps (tiles are solid squares) and
- * returns the first tile it touches, if any.
+ * records what it touches in `out`: the first tile (the one it attacks), plus
+ * thorns and slow from all touched tiles.
  */
-function collideWithCity(w: World, e: Enemy): PlacedTile | undefined {
+function collideWithCity(w: World, e: Enemy, out: Contact): void {
   const cell = GRID.cellPx;
   const r = ENEMIES[e.type].radius;
-  const contact = r + ENEMY_PHYSICS.contactSlack;
+  const reach = r + ENEMY_PHYSICS.contactSlack;
   const { left, top } = gridTopLeft(w);
   const gx = Math.floor((e.x - left) / cell);
   const gy = Math.floor((e.y - top) / cell);
-  let touched: PlacedTile | undefined;
+  out.tile = undefined;
+  out.thorns = 0;
+  out.slow = 1;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       const t = tileAtCell(w, gx + dx, gy + dy);
@@ -117,8 +140,11 @@ function collideWithCity(w: World, e: Enemy): PlacedTile | undefined {
       const ox = e.x - qx;
       const oy = e.y - qy;
       const d2 = ox * ox + oy * oy;
-      if (d2 > contact * contact) continue;
-      touched ??= t;
+      if (d2 > reach * reach) continue;
+      out.tile ??= t;
+      const m = modsOf(w, t);
+      out.thorns += m.thorns;
+      out.slow = Math.min(out.slow, m.slow);
       if (d2 >= r * r) continue;
       if (d2 > 0) {
         const d = Math.sqrt(d2);
@@ -135,5 +161,4 @@ function collideWithCity(w: World, e: Enemy): PlacedTile | undefined {
       }
     }
   }
-  return touched;
 }

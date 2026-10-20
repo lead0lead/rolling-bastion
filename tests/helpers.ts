@@ -1,4 +1,4 @@
-import { TILES } from '../src/config/tiles';
+import { TILES, type TileType } from '../src/config/tiles';
 import { createCity, type CityState } from '../src/sim/grid';
 
 /**
@@ -24,6 +24,7 @@ export function cityFrom(rows: string[]): CityState {
         gx,
         gy,
         hp: TILES[type].maxHp,
+        maxHp: TILES[type].maxHp,
         groupId,
         online: false,
         facing: 0,
@@ -49,4 +50,32 @@ export function groupPicture(city: CityState): string[] {
     (rows[t.gy] as string[])[t.gx] = name;
   }
   return rows.map((r) => r.join(''));
+}
+
+/**
+ * Builds a city from an ASCII picture with one tile type per character
+ * (`legend`); every tile is its own group, facing up. '.' is empty.
+ */
+export function typedCity(rows: string[], legend: Record<string, TileType>): CityState {
+  const city = createCity(rows.length);
+  city.tiles = [];
+  rows.forEach((row, gy) => {
+    [...row].forEach((ch, gx) => {
+      if (ch === '.') return;
+      const type = legend[ch];
+      if (!type) throw new Error(`typedCity: unknown char '${ch}'`);
+      city.tiles.push({
+        id: city.nextTileId++,
+        type,
+        gx,
+        gy,
+        hp: TILES[type].maxHp,
+        maxHp: TILES[type].maxHp,
+        groupId: city.nextGroupId++,
+        online: false,
+        facing: 0,
+      });
+    });
+  });
+  return city;
 }

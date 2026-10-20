@@ -31,16 +31,16 @@ describe('movement', () => {
 
   it('applies the size penalty, its floor, and engines after it', () => {
     const w = worldWith(['Caaaaa', 'aaaaaa', 'aaaaaa', 'aaaaaa', '......', '......']); // 24 tiles
-    expect(w.cache.speedFactor).toBeCloseTo(1 - 14 * MOVE.penaltyPerTile);
+    expect(w.cache.syn.speedFactor).toBeCloseTo(1 - 14 * MOVE.penaltyPerTile);
     const big = worldWith(
       Array.from({ length: 10 }, (_, i) => (i === 0 ? 'Caaaaaaaaa' : 'aaaaaaaaaa')),
     );
-    expect(big.cache.speedFactor).toBeCloseTo(MOVE.minSpeedFactor);
+    expect(big.cache.syn.speedFactor).toBeCloseTo(MOVE.minSpeedFactor);
     const engine = big.city.tiles.find((t) => t.type === 'hull');
     if (!engine) throw new Error('no hull');
     engine.type = 'engine';
     cityChanged(big);
-    expect(big.cache.speedFactor).toBeCloseTo(MOVE.minSpeedFactor + MOVE.engineBonus);
+    expect(big.cache.syn.speedFactor).toBeCloseTo(MOVE.minSpeedFactor + MOVE.engineBonus);
   });
 
   it('stops quickly when input is released', () => {
