@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–4 merged into `main` (v0.5.0). Phase 5 built on `phase-5-look-juice` (v0.6.0), pushed, not merged. Handed to the user to try. |
-| **Current phase** | 5 — Look & juice: done, waiting for the user's look and frame-rate check |
-| **Next step** | User plays: look and feel (agar.io style, faces, effects), frame rate with 600 enemies (F1 overlay). Feedback, then merge and Phase 6 (audio, menus, polish) on the user's go-ahead. |
+| **Status** | Phases 0–5 merged into `main` (v0.6.0). User on Phase 5: "its awesome" (2026-10-20). Branch `phase-6-audio-menus` created. |
+| **Current phase** | 6 — Audio, menus, polish: design questions open, no code yet |
+| **Next step** | Phase 6 brainstorm, one question at a time (§12 "Phase 6 design questions"), then build on `phase-6-audio-menus`. |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
 | **Live version** | none (local only); app version 0.6.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (Phase 5 built, handed over) |
+| **Last updated** | 2026-10-20 (Phase 5 merged, Phase 6 starting) |
 
 ---
 
@@ -844,6 +844,12 @@ decision milestone, change the design before building more content.
 
 **Open decisions (user)**
 
+- **Phase 6 design questions** (ask one at a time):
+  1. Sound source: procedural Web Audio sounds, or CC0 sample packs.
+  2. Music or not.
+  3. Pause menu and settings contents.
+  4. Summary screen with layout snapshot: what it shows.
+
 - **Phase 5 design questions** (ask one at a time):
   1. *Answered 2026-10-20:* visual direction — user asked for simple,
      colourful, fun graphics like agar.io; Claude's translation approved
@@ -1007,6 +1013,13 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Phase 5 merged
+- Decisions: user played Phase 5: "its awesome, please continue". Look
+  and effect strengths kept. (Frame rate with 600 enemies not reported.)
+- Done: merged `phase-5-look-juice` into `main` (fast-forward), pushed;
+  created `phase-6-audio-menus`.
+- Next: Phase 6 design questions in §12, one at a time.
 
 ### 2026-10-20 — Phase 5: look & juice
 - Done (branch `phase-5-look-juice`, v0.6.0): light agar.io-like palette
