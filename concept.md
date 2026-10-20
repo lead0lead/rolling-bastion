@@ -65,15 +65,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 0–5 merged into `main` (v0.6.0). Phase 6 built on `phase-6-audio-menus` (v0.7.0), pushed, not merged. Handed to the user to try. |
-| **Current phase** | 6 — Audio, menus, polish: done, waiting for the user's check (sounds especially) |
-| **Next step** | User listens to the sounds and tries the pause menu, settings and end screen; feedback, then merge and Phase 7 (shareable build: choose hosting, §12) on the user's go-ahead. |
+| **Status** | Phases 0–6 merged into `main` (v0.7.0). User on Phase 6: "im happy" (2026-10-20). Branch `phase-7-shareable` created. |
+| **Current phase** | 7 — Shareable build: hosting decided (GitHub Pages), setting up |
+| **Next step** | Set up GitHub Pages deployment (§12 "Phase 7"). |
 | **Decision milestone** | **Phase 3 — passed 2026-10-20** (user: fun, numbers work well, continue). No further milestone gates; still stop at the end of each phase. |
 | **Live version** | none (local only); app version 0.7.0 |
 | **Repository** | Private GitHub repository https://github.com/lead0lead/rolling-bastion, branch `main` |
 | **Play URL** | Runs locally: `npm install`, then `npm run dev` |
 | **Target** | Desktop browsers (current Chrome, Firefox, Edge, Safari), keyboard + mouse, 1280×720 and up. Out of scope for the prototype: mobile/touch, gamepad, accounts, servers, saving runs. |
-| **Last updated** | 2026-10-20 (Phase 6 built, handed over) |
+| **Last updated** | 2026-10-20 (Phase 6 merged, Phase 7 starting) |
 
 ---
 
@@ -950,8 +950,7 @@ decision milestone, change the design before building more content.
   3. *Answered 2026-10-20:* L3/L5 perks approved as proposed (A),
      recorded in §2.8.
 - Final title (working title: *Rolling Bastion*).
-- Hosting for sharing (Phase 7): itch.io, Netlify/Vercel, or making the repo
-  public for GitHub Pages.
+- Hosting for sharing (Phase 7): *decided 2026-10-20 (user):* GitHub Pages.
 - Piece mirroring allowed or not.
 - Meta-progression after the decision milestone (unlocks, permanent stats).
 - All story and UI text in §5 is draft.
@@ -1067,6 +1066,12 @@ Format:
 - Next: the exact next step.
 - Watch out: anything a new session would otherwise get wrong.
 ```
+
+### 2026-10-20 — Phase 6 merged, hosting chosen
+- Decisions: user on Phase 6: "im happy, so go on please"; sounds kept.
+  Hosting: GitHub Pages.
+- Done: merged `phase-6-audio-menus` into `main` (fast-forward), pushed;
+  created `phase-7-shareable`.
 
 ### 2026-10-20 — Phase 6: audio, menus, polish
 - Done (branch `phase-6-audio-menus`, v0.7.0): settings store; 24 Kenney
