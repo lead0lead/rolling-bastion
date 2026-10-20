@@ -258,7 +258,16 @@ export class RunScene extends Phaser.Scene {
 
   private endRun(): void {
     const w = this.world;
-    const summary: SummaryData = { time: w.time, kills: w.kills, level: w.level, won: w.won };
+    const summary: SummaryData = {
+      time: w.time,
+      kills: w.kills,
+      level: w.level,
+      won: w.won,
+      gridSize: w.city.gridSize,
+      tiles: w.city.tiles.map((t) => ({ ...t })),
+      coreLostAt: w.coreLostAt,
+      damageBy: { ...w.damageBy },
+    };
     this.scene.stop('Hud');
     this.scene.start('Summary', summary);
   }

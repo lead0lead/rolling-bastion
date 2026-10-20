@@ -123,6 +123,7 @@ describe('tile damage', () => {
     w.godMode = false;
     damageTile(w, core, 1000);
     expect(w.over).toBe(true);
+    expect(w.coreLostAt).toEqual({ gx: core.gx, gy: core.gy });
   });
 });
 

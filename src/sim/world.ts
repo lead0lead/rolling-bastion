@@ -153,6 +153,8 @@ export interface World {
   bossState: BossState;
   /** The boss was defeated: the run is won. */
   won: boolean;
+  /** Grid cell where the Core was destroyed (for the end screen), or null. */
+  coreLostAt: { gx: number; gy: number } | null;
   /** Damage dealt to enemies per tile type (for balance stats). */
   damageBy: Partial<Record<TileType, number>>;
   /**
@@ -206,6 +208,7 @@ export function createWorld(seed: number): World {
     bossSpawned: false,
     bossState: newBossState(),
     won: false,
+    coreLostAt: null,
     damageBy: {},
     tally: { shots: {}, gems: 0, enemyShots: 0 },
     rerolls: LEVEL_UP.rerollsPerRun,

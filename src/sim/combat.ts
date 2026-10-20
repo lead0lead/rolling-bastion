@@ -288,7 +288,10 @@ export function damageTile(w: World, t: PlacedTile, amount: number): void {
   w.weapons.delete(t.id);
   cityChanged(w);
   w.events.push({ kind: 'tileDestroyed', x: c.x, y: c.y, type: t.type });
-  if (t.type === 'core') w.over = true;
+  if (t.type === 'core') {
+    w.coreLostAt = { gx: t.gx, gy: t.gy };
+    w.over = true;
+  }
 }
 
 /** Repair Bays heal their neighbours; Hull L5 regenerates (concept.md §2.6: nothing else heals). */
