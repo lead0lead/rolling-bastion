@@ -45,8 +45,13 @@ export type CellProblem = 'off_board' | 'overlap';
 
 const ALL_TILE_TYPES = Object.keys(TILES) as TileType[];
 
-/** Coordinates must stay within ±COORD_LIMIT − 1 for `cellId` to be unique. */
-const COORD_LIMIT = 32768;
+/**
+ * Coordinates must stay within ±COORD_LIMIT − 1 for `cellId` to be unique.
+ * This limit keeps every id below 2^30, a small integer for V8: map lookups
+ * on the hot path then allocate nothing (larger ids measurably slowed the
+ * bench).
+ */
+const COORD_LIMIT = 16384;
 
 /** A number key per cell, for sparse maps and sets on the open-ended grid. */
 export function cellId(x: number, y: number): number {
