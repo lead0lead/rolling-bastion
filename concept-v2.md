@@ -62,8 +62,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Both spikes built and handed to the user: Spike A on `v2-spike-a-shop` (2.0.0-spike.a), Spike B on `v2-spike-b-grid` (2.0.0-spike.b). `v2` itself still has no v2 code. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Spike A **dropped**, Spike B **change** (2026-10-21). Spike B2 (land shapes at set levels) **built** on `v2-spike-b2-land` (2.0.0-spike.b2), waiting for the user's keep / change / drop. |
-| **Next step** | Spike B2 verdict; then rewrite the build plan (§11: Phases 1–2, endless without waves) with the user before any phase. |
+| **Current step** | All spikes decided (2026-10-21): Spike A **dropped**, Spike B **changed** into Spike B2, Spike B2 **kept**. Land pacing retuned on the spike branch (levels 8/15/22/29/36) for another try. |
+| **Next step** | Rewrite the build plan (§11) with the user: Phase 1 = unbounded grid + board mask + land shapes; drop or rewrite Phase 2 (waves/shop) and the endless plan. No phase before the plan is agreed. |
 | **Decision milestone** | **Keep-or-drop after Spike A and after Spike B.** No v2 phase starts before both are decided. Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | Spikes: `2.0.0-spike.a`, `2.0.0-spike.b`, `2.0.0-spike.b2` (on their branches only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
@@ -148,8 +148,17 @@ several **land shapes** (same cell count, big enough to matter) and place
 it anywhere it touches the board. Edge expansion buttons and classes are
 set aside until land shapes are judged.
 
-**Spike B2 (built 2026-10-21, `v2-spike-b2-land`, awaiting the user's
-verdict).** Agreed draft, all numbers Claude's guesses: board = set of
+**Spike B2: kept (user, 2026-10-21).** The user likes land shapes.
+Feedback: land came too fast early and too rarely late, which hurt the
+puzzle; the level-up screen panned the view because WASD was still held
+from driving. Changed on the spike branch (commit after df99dc8): land at
+levels **8, 15, 22, 29, 36** (was 5, 9, 13; the balance sim's bots reach
+them at about 2:10, 3:30, 5:35, 7:20, 9:05, while 5/9/13 all came between
+1:40 and 3:00), board 36 → 96 cells; pan keys only pan after a fresh
+press in the build screen (a phase must keep this rule).
+
+Spike B2 as first built (draft agreed with the user, numbers Claude's
+guesses): board = set of
 buildable cells, starting as v1's 6×6 around the Core (36 cells); land at
 levels **5, 9, 13** (`LAND.atLevels`): the level-up first offers **3 land
 shapes of 12 cells** (block 3×4, strip 2×6, big L, big T, plus, U, thick
@@ -555,7 +564,7 @@ these v2 changes:
 |---|---|---|
 | **Spike A — shop loop** (riskiest) | On v1's code and bounded grid: waves (§2.8) replacing the 12:00 timeline; coins instead of XP; shop after each wave with 4 piece slots, 2 upgrade slots, Repair, Reroll, lock, prices with inflation; scrap refund 50%; leftover coins at 50%; boss wave. Grid expansions move to the shops after waves 6 and 10. No endless, no new editing tools. | **User answers: does the wave/shop rhythm feel better than level-ups?** Keep / change / drop, plus first price feedback. |
 | **Spike B — unbounded grid** | On `v2` (v1 levels, not Spike A): Core fixed at (0, 0), no bounds or expansions, build screen pan/zoom/fit, combat camera zoom (§3.2), filled rows removed. | **User answers: does free growth feel good, or does the city sprawl into a slow blob?** Keep / change / drop. |
-| **Spike B2 — land shapes** (built 2026-10-21) | Board mask; at set levels choose one of 3 equal-size land shapes and place it touching the board (§2.1). Reuses Spike B's coordinates, pan/zoom and camera. (Replaced the earlier plan of class shapes + paid edge expansions.) | User answers: do land shapes lead to more creative builds? |
+| **Spike B2 — land shapes** (built and **kept** 2026-10-21) | Board mask; at set levels choose one of 3 equal-size land shapes and place it touching the board (§2.1). Reuses Spike B's coordinates, pan/zoom and camera. (Replaced the earlier plan of class shapes + paid edge expansions.) | User answers: do land shapes lead to more creative builds? |
 | **Phase 1 — unbounded grid** | Sparse grid, Core fixed, Tarjan bridges, camera zoom and spawn ring from view size, filled rows removed (tests updated to the new rules). | Kept Spike B behaviour, rebuilt properly; all tests pass. |
 | **Phase 2 — waves and shop** | `waves.ts`, `economy.ts`, `shop.ts` with tests; shop scene; HUD and end screen changes; coin visuals. | A full normal run with the shop. |
 | **Phase 3 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo, pan/zoom polish (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
@@ -574,8 +583,10 @@ start early if the user asks.
 **Open decisions (user)**
 
 - Spike A: **dropped** 2026-10-21 (XP and level-ups stay). Spike B:
-  **change** 2026-10-21 (land shapes at set levels, Spike B2). Open:
-  Spike B2 details; rewrite of Phase 2 and the endless plan without waves.
+  **change** 2026-10-21 → Spike B2 (land shapes at set levels), **kept**
+  2026-10-21. Open: rewrite §11 (Phase 1 with board mask and land; Phase 2
+  and the endless plan without waves); final land levels, size and shape
+  set (Claude's guesses: levels 8/15/22/29/36, 12 cells, 7 shapes).
 - v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
   on GitHub Pages (the workflow would build both branches into one Pages
   artifact), or v2 replaces v1 on `main`.
@@ -645,6 +656,17 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Spike B2 verdict
+- Decisions (user): Spike B2 **kept**. Feedback: land too fast early and
+  too rare late; WASD held from driving panned the level-up screen.
+- Done on the spike branch: level timings measured with a temporary log in
+  the balance sim (not committed; bots reach level 5 ≈ 1:40, 13 ≈ 3:00,
+  then ~20 s per level up to level 44 ≈ 11:10); land moved to levels
+  8/15/22/29/36; build screen pans only on fresh key presses (checked with
+  held and auto-repeat keys in a headless browser).
+- Next: the user may re-try the pacing; rewrite the build plan (§11) with
+  the user before Phase 1.
 
 ### 2026-10-21 — Spike B2: land shapes
 - Done: Spike B2 on `v2-spike-b2-land` from `v2` (commit df99dc8, built on
