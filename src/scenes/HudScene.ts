@@ -94,7 +94,7 @@ export class HudScene extends Phaser.Scene {
     this.timer.setText(`${mins}:${secs.toString().padStart(2, '0')}`);
     this.level.setText(`Lv ${w.level}`);
     this.info.setText(
-      `Grid ${w.city.gridSize}×${w.city.gridSize}\nRerolls ${w.rerolls}\nKills ${w.kills}`,
+      `Tiles ${w.city.tiles.length}  ·  Speed ${Math.round(w.cache.syn.speedFactor * 100)}%\nRerolls ${w.rerolls}\nKills ${w.kills}`,
     );
 
     const core = coreTile(w.city);
@@ -154,7 +154,7 @@ export class HudScene extends Phaser.Scene {
           `E spawns: ${ui.debugEnemy}  ([ / ] to change)`,
           `god mode ${w.godMode ? 'ON' : 'off'} (I)`,
           'G level · T +60 s · K kill all · H hurt boss 35% · L layout',
-          'F2 grow grid · F3 fill grid with Gatlings',
+          'F3 fill around the city with Gatlings',
         ].join('\n'),
       );
     }

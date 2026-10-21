@@ -42,8 +42,11 @@ export function debugFillGrid(w: World, type: TileType): void {
   const city = w.city;
   const groupId = city.nextGroupId++;
   const taken = new Set(city.tiles.map((t) => `${t.gx},${t.gy}`));
-  for (let gy = 0; gy < city.gridSize; gy++) {
-    for (let gx = 0; gx < city.gridSize; gx++) {
+  // Spike B: fills the city's bounding box grown by one ring (the grid is unbounded).
+  const xs = city.tiles.map((t) => t.gx);
+  const ys = city.tiles.map((t) => t.gy);
+  for (let gy = Math.min(...ys) - 1; gy <= Math.max(...ys) + 1; gy++) {
+    for (let gx = Math.min(...xs) - 1; gx <= Math.max(...xs) + 1; gx++) {
       if (taken.has(`${gx},${gy}`)) continue;
       city.tiles.push({
         id: city.nextTileId++,

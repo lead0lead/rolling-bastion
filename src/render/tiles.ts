@@ -163,6 +163,8 @@ export class SpritePool {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly depth: number,
+    /** Spike B: put the images into this layer (for per-camera rendering). */
+    private readonly layer?: Phaser.GameObjects.Layer,
   ) {}
 
   begin(): void {
@@ -173,6 +175,7 @@ export class SpritePool {
     let img = this.images[this.used];
     if (!img) {
       img = this.scene.add.image(0, 0, key).setDepth(this.depth);
+      this.layer?.add(img);
       this.images.push(img);
     }
     this.used++;

@@ -92,11 +92,10 @@ interface Acc {
  * every city change (≤100 tiles). Only online tiles give buffs.
  */
 export function computeSynergies(city: CityState): Synergies {
-  const n = city.gridSize;
-  const grid: (PlacedTile | undefined)[] = new Array(n * n);
-  for (const t of city.tiles) grid[t.gy * n + t.gx] = t;
-  const at = (x: number, y: number) =>
-    x < 0 || y < 0 || x >= n || y >= n ? undefined : grid[y * n + x];
+  // Spike B: sparse lookup on the unbounded grid.
+  const grid = new Map<string, PlacedTile>();
+  for (const t of city.tiles) grid.set(`${t.gx},${t.gy}`, t);
+  const at = (x: number, y: number) => grid.get(`${x},${y}`);
 
   const acc = new Map<number, Acc>();
   for (const t of city.tiles) {
@@ -158,18 +157,9 @@ export function computeSynergies(city: CityState): Synergies {
   const sawSlow = perk(city, 'saw', 'slowTouching')?.speedFactor ?? 1;
 
   const { chains, chainBonus } = findChains(city, at);
+  // Spike B: filled rows/columns are removed (concept-v2.md §2.7).
   const filledRows: number[] = [];
   const filledCols: number[] = [];
-  for (let i = 0; i < n; i++) {
-    let row = true;
-    let col = true;
-    for (let j = 0; j < n; j++) {
-      if (!at(j, i)?.online) row = false;
-      if (!at(i, j)?.online) col = false;
-    }
-    if (row) filledRows.push(i);
-    if (col) filledCols.push(i);
-  }
 
   const mods = new Map<number, TileMods>();
   for (const t of city.tiles) {
@@ -254,7 +244,13 @@ function findChains(
   city: CityState,
   at: (x: number, y: number) => PlacedTile | undefined,
 ): { chains: Chain[]; chainBonus: Map<number, number> } {
-  const n = city.gridSize;
+  // Spike B: scan the city's bounding box instead of a fixed grid.
+  const xs = city.tiles.map((t) => t.gx);
+  const ys = city.tiles.map((t) => t.gy);
+  const minX = Math.min(0, ...xs);
+  const minY = Math.min(0, ...ys);
+  const maxX = Math.max(0, ...xs);
+  const maxY = Math.max(0, ...ys);
   const chains: Chain[] = [];
   const chainBonus = new Map<number, number>();
   const links = (a: PlacedTile | undefined, b: PlacedTile | undefined) =>
@@ -263,9 +259,11 @@ function findChains(
     !!t && t.online && TILES[t.type].family === 'weapon';
 
   for (const horizontal of [true, false]) {
-    for (let line = 0; line < n; line++) {
+    const [lineMin, lineMax] = horizontal ? [minY, maxY] : [minX, maxX];
+    const [from, n] = horizontal ? [minX, maxX + 1] : [minY, maxY + 1];
+    for (let line = lineMin; line <= lineMax; line++) {
       const cell = (i: number) => (horizontal ? at(i, line) : at(line, i));
-      let start = 0;
+      let start = from;
       while (start < n) {
         const first = cell(start);
         if (!chainable(first)) {

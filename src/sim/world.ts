@@ -96,9 +96,9 @@ export type WorldEvent =
 
 /** City-derived data, recomputed only when the city changes (concept.md §9). */
 export interface CityCache {
-  /** Tile per cell, row-major, `gridSize²` entries. */
-  cells: (PlacedTile | undefined)[];
-  /** Tile centres relative to the city origin (grid centre). */
+  /** Spike B: tile per cell, keyed by `cellNum` (sparse, unbounded grid). */
+  cells: Map<number, PlacedTile>;
+  /** Tile centres relative to the city origin (the Core's cell (0, 0)). */
   centres: { tile: PlacedTile; rx: number; ry: number }[];
   /** Bounding box of tile centres, relative to the origin. */
   minRx: number;
@@ -282,8 +282,8 @@ const NEUTRAL_MODS: TileMods = {
 
 function buildCache(city: CityState): CityCache {
   const cell = GRID.cellPx;
-  const half = (city.gridSize * cell) / 2;
-  const cells: (PlacedTile | undefined)[] = new Array(city.gridSize * city.gridSize);
+  const half = cell / 2;
+  const cells = new Map<number, PlacedTile>();
   const centres: CityCache['centres'] = [];
   const weapons: PlacedTile[] = [];
   let minRx = Infinity;
@@ -295,7 +295,7 @@ function buildCache(city: CityState): CityCache {
   const bridges = findBridges(city);
   const bridgeCentres: CityCache['bridgeCentres'] = [];
   for (const t of city.tiles) {
-    cells[t.gy * city.gridSize + t.gx] = t;
+    cells.set(cellNum(t.gx, t.gy), t);
     const rx = (t.gx + 0.5) * cell - half;
     const ry = (t.gy + 0.5) * cell - half;
     centres.push({ tile: t, rx, ry });
@@ -311,20 +311,26 @@ function buildCache(city: CityState): CityCache {
   return { cells, centres, minRx, maxRx, minRy, maxRy, weapons, bridges, bridgeCentres, syn };
 }
 
-/** World x of the grid's left edge and y of its top edge. */
+/** Spike B: a number key per cell (|coordinates| stay far below 50000). */
+export function cellNum(gx: number, gy: number): number {
+  return gx * 100003 + gy;
+}
+
+/**
+ * World x/y of the left/top edge of cell column/row 0. The world position
+ * (w.x, w.y) is the centre of the Core's cell (0, 0), so this is half a cell off.
+ */
 export function gridTopLeft(w: World): { left: number; top: number } {
-  const half = (w.city.gridSize * GRID.cellPx) / 2;
+  const half = GRID.cellPx / 2;
   return { left: w.x - half, top: w.y - half };
 }
 
 export function tileAtCell(w: World, gx: number, gy: number): PlacedTile | undefined {
-  const n = w.city.gridSize;
-  if (gx < 0 || gy < 0 || gx >= n || gy >= n) return undefined;
-  return w.cache.cells[gy * n + gx];
+  return w.cache.cells.get(cellNum(gx, gy));
 }
 
 export function tileCentre(w: World, t: PlacedTile): { x: number; y: number } {
-  const half = (w.city.gridSize * GRID.cellPx) / 2;
+  const half = GRID.cellPx / 2;
   return { x: w.x + (t.gx + 0.5) * GRID.cellPx - half, y: w.y + (t.gy + 0.5) * GRID.cellPx - half };
 }
 

@@ -78,16 +78,25 @@ export class SummaryScene extends Phaser.Scene {
     g.fillRoundedRect(box.x - 16, box.y - 16, box.size + 32, box.size + 32, 18);
     g.lineStyle(4, COLORS.panelBorder, 1);
     g.strokeRoundedRect(box.x - 16, box.y - 16, box.size + 32, box.size + 32, 18);
-    const cs = box.size / data.gridSize;
-    for (let y = 0; y < data.gridSize; y++) {
-      for (let x = 0; x < data.gridSize; x++) {
+    // Spike B: fit the city's bounding box (plus a one-cell margin) into the box.
+    const cellsOf = [...data.tiles, ...(data.coreLostAt ? [data.coreLostAt] : [])];
+    const minX = Math.min(...cellsOf.map((t) => t.gx)) - 1;
+    const minY = Math.min(...cellsOf.map((t) => t.gy)) - 1;
+    const spanX = Math.max(...cellsOf.map((t) => t.gx)) + 2 - minX;
+    const spanY = Math.max(...cellsOf.map((t) => t.gy)) + 2 - minY;
+    const span = Math.max(spanX, spanY);
+    const cs = box.size / span;
+    const bx = box.x + ((span - spanX) * cs) / 2 - minX * cs;
+    const by = box.y + ((span - spanY) * cs) / 2 - minY * cs;
+    for (let y = 0; y < spanY; y++) {
+      for (let x = 0; x < spanX; x++) {
         g.lineStyle(1, COLORS.gridLine, 1);
-        g.strokeRect(box.x + x * cs, box.y + y * cs, cs, cs);
+        g.strokeRect(bx + (minX + x) * cs, by + (minY + y) * cs, cs, cs);
       }
     }
     for (const t of data.tiles) {
-      const cx = box.x + (t.gx + 0.5) * cs;
-      const cy = box.y + (t.gy + 0.5) * cs;
+      const cx = bx + (t.gx + 0.5) * cs;
+      const cy = by + (t.gy + 0.5) * cs;
       this.add.image(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(cs, cs);
       if (showsCracks(t.hp / t.maxHp)) this.add.image(cx, cy, TEX.cracks).setDisplaySize(cs, cs);
       const barrel = barrelFor(t.type);
@@ -103,8 +112,8 @@ export class SummaryScene extends Phaser.Scene {
       const inset = cs * 0.1;
       g.lineStyle(Math.max(2, cs * 0.08), COLORS.invalid, 1);
       g.strokeRoundedRect(
-        box.x + gx * cs + inset,
-        box.y + gy * cs + inset,
+        bx + gx * cs + inset,
+        by + gy * cs + inset,
         cs - 2 * inset,
         cs - 2 * inset,
         cs * 0.2,

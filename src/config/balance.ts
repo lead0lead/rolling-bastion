@@ -39,6 +39,10 @@ export const CAMERA = {
   marginPx: 400,
   /** Never zoom in beyond 1:1. */
   maxZoom: 1,
+  /** Spike B (concept-v2.md §3.2): the city's bounding box takes at most this share of the view. */
+  cityFrame: 0.35,
+  /** Spike B: never zoom out beyond this (enemies stop being readable). */
+  minZoom: 0.4,
   /** Follow smoothing rate (1/s). */
   followRate: 8,
   zoomRate: 3,

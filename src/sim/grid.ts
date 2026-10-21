@@ -50,7 +50,8 @@ export function createCity(gridSize: number = GRID.startSize): CityState {
     number
   >;
   typeLevels.core = 1;
-  const centre = Math.floor(gridSize / 2);
+  // Spike B (concept-v2.md §2.1): the Core is fixed at (0, 0) on an unbounded grid.
+  const centre = 0;
   return {
     gridSize,
     tiles: [
@@ -70,10 +71,6 @@ export function createCity(gridSize: number = GRID.startSize): CityState {
     nextTileId: 2,
     nextGroupId: 2,
   };
-}
-
-export function inBounds(city: CityState, x: number, y: number): boolean {
-  return x >= 0 && y >= 0 && x < city.gridSize && y < city.gridSize;
 }
 
 export function tileAt(city: CityState, x: number, y: number): PlacedTile | undefined {
@@ -106,8 +103,8 @@ export function placementProblems(
   const problems = new Map<string, CellProblem>();
   for (const c of cells) {
     const key = cellKey(c.x, c.y);
-    if (!inBounds(city, c.x, c.y)) problems.set(key, 'out_of_bounds');
-    else if (tileAt(city, c.x, c.y)) problems.set(key, 'overlap');
+    // Spike B: the grid is unbounded, so only overlaps are problems.
+    if (tileAt(city, c.x, c.y)) problems.set(key, 'overlap');
   }
   return problems;
 }
@@ -194,7 +191,8 @@ export function scrapGroup(city: CityState, groupId: number): void {
 
 /** Adds one ring of cells around the grid; the layout stays centred. */
 export function expandGrid(city: CityState): boolean {
-  if (city.gridSize >= GRID.maxSize) return false;
+  // Spike B: no expansions on the unbounded grid.
+  if (city.gridSize > 0) return false;
   const shift = GRID.expansionGrowth / 2;
   city.gridSize += GRID.expansionGrowth;
   for (const t of city.tiles) {
