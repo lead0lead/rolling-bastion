@@ -25,6 +25,7 @@ import {
   pickOffer,
   pickUpAt,
   previewAt,
+  redo,
   reroll,
   rotate,
   scrapAt,
@@ -38,6 +39,7 @@ import {
   toggleRepair,
   toggleSelectAt,
   toggleUpgrade,
+  undo,
   type BuildSession,
 } from '../sim/build';
 import { findBridges } from '../sim/connectivity';
@@ -276,13 +278,12 @@ export class BuildScene extends Phaser.Scene {
           ...(this.run ? ['Repair Core: 4 · Reroll: 5', 'Upgrade instead: Shift+1/2/3'] : []),
           'Move: drag (or click, then click)',
           'Select: Shift+click · drag on empty space · Ctrl+A',
-          'Rotate: R / right-click',
-          'Put back: Esc',
+          'Undo / redo: Ctrl+Z / Ctrl+Shift+Z',
+          'Rotate: R / right-click · Put back: Esc',
           'Scrap: drag onto SCRAP, or X (selection or hovered)',
-          'Bridges: B · Arcs: V',
+          'Bridges: B · Arcs: V · Confirm: Enter',
           'Pan: WASD / arrows / middle-drag',
           'Zoom: wheel · Fit: F or Home',
-          'Confirm: Enter',
           ...(DEBUG ? ['Debug: K destroys hovered tile · F2 offers land'] : []),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
@@ -714,6 +715,13 @@ export class BuildScene extends Phaser.Scene {
         if (s.held || s.heldLand) cancelHeld(s);
         else clearSelection(s);
         break;
+      case 'KeyZ':
+      case 'KeyY':
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          this.undoRedo(e.code === 'KeyZ' && !e.shiftKey);
+        }
+        break;
       case 'KeyA':
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
@@ -748,6 +756,18 @@ export class BuildScene extends Phaser.Scene {
         if (DEBUG) debugDestroyAt(s, cell.x, cell.y);
         break;
     }
+  }
+
+  /** Ctrl+Z undoes, Ctrl+Shift+Z / Ctrl+Y redoes a change of this pause (concept-v2.md §3.1). */
+  private undoRedo(isUndo: boolean): void {
+    const s = this.session;
+    if (!(isUndo ? undo(s) : redo(s))) {
+      this.showFlash(isUndo ? 'Nothing to undo' : 'Nothing to redo');
+      return;
+    }
+    playSfx(this, 'ui-toggle');
+    // Undo can bring back the land step or other offers.
+    this.showOffers();
   }
 
   /** X / Delete: scrap the held group, else the selection, else the hovered group. */
@@ -1270,6 +1290,7 @@ export class BuildScene extends Phaser.Scene {
     const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
     const lines = [
       `Board ${city.board.size} cells  ·  ${city.tiles.length} tiles  ·  speed ${Math.round(this.syn.speedFactor * 100)}%`,
+      `Undo ${this.session.history.length} · Redo ${this.session.future.length}`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
       levelSummary(city),
       `Chains: ${this.syn.chains.length}`,
