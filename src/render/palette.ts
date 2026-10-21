@@ -21,6 +21,8 @@ export const COLORS = {
   /** Outlines of piece groups and the hovered group. */
   groupOutline: 0x2b2f3a,
   hover: 0x2b2f3a,
+  /** Selected groups and the box select (concept-v2.md §3.1). */
+  selection: 0x3a86ff,
   panel: 0xffffff,
   panelBorder: 0xd3d9e3,
   /** Buttons: confirm green (hover darker), disabled grey, selected toggle. */
