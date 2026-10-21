@@ -10,7 +10,9 @@ import { facingAngle, type PlacedTile } from '../sim/grid';
 export interface SummaryData {
   time: number;
   kills: number;
-  level: number;
+  /** Spike A: the wave the run ended in, and coins earned. */
+  wave: number;
+  coinsEarned: number;
   /** The boss was defeated. */
   won: boolean;
   /** The city as the run ended. */
@@ -60,7 +62,7 @@ export class SummaryScene extends Phaser.Scene {
       .text(
         width / 2,
         125,
-        `Survived ${mins}:${secs}   ·   Level ${data.level}   ·   Kills ${data.kills}`,
+        `${data.won ? 'Boss defeated' : `Survived ${data.wave - 1} waves`}   ·   ${mins}:${secs} of combat   ·   Kills ${data.kills}   ·   Coins ${data.coinsEarned}`,
         { ...text, fontSize: '22px', color: COLORS.textDim },
       )
       .setOrigin(0.5);

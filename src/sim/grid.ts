@@ -19,6 +19,8 @@ export interface PlacedTile {
   online: boolean;
   /** Compass facing; turns with the piece (concept.md §2.10). */
   facing: Facing;
+  /** Spike A: coins paid for this tile (its piece's price / cells), for scrap refunds. */
+  paid?: number;
 }
 
 export interface CityState {

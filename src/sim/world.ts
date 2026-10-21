@@ -1,5 +1,7 @@
 import { GRID, LEVEL_UP } from '../config/balance';
 import { BOSS, type EnemyType } from '../config/enemies';
+import { ECONOMY, WAVE_PLAN } from '../config/economy';
+import type { PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import type { SpawnGroupId } from '../config/waves';
 import { findBridges, updateOnline } from './connectivity';
@@ -165,6 +167,19 @@ export interface World {
   tally: { shots: Partial<Record<TileType, number>>; gems: number; enemyShots: number };
   rerolls: number;
   kills: number;
+  /** Spike A (concept-v2.md §2.8): coins, waves and the shop. */
+  coins: number;
+  coinsEarned: number;
+  /** Current wave (1-based); WAVE_PLAN.count + 1 is the boss wave. */
+  wave: number;
+  /** Combat time at which the current wave started. */
+  waveStart: number;
+  /** The current wave's timer ran out; the shop opens next. */
+  waveCleared: boolean;
+  /** Combat time the boss arrived (for its enrage). */
+  bossAt: number;
+  /** Shop slots kept between visits (locks). */
+  shop: ShopSlots;
   /** Half-diagonal of the visible area in world px; set by the renderer. */
   viewRadius: number;
   godMode: boolean;
@@ -213,6 +228,13 @@ export function createWorld(seed: number): World {
     tally: { shots: {}, gems: 0, enemyShots: 0 },
     rerolls: LEVEL_UP.rerollsPerRun,
     kills: 0,
+    coins: ECONOMY.startCoins,
+    coinsEarned: 0,
+    wave: 1,
+    waveStart: 0,
+    waveCleared: false,
+    bossAt: Infinity,
+    shop: { pieces: [], upgrades: [] },
     viewRadius: 1000,
     godMode: false,
     over: false,
@@ -255,9 +277,27 @@ export function newBossState(): BossState {
   };
 }
 
-/** The boss enrages if still alive at BOSS.enrageAt (concept.md §2.6). */
+/** Spike A: the boss enrages if still alive WAVE_PLAN.bossEnrageAfter s after it arrived. */
 export function bossEnraged(w: World): boolean {
-  return w.boss !== null && w.time >= BOSS.enrageAt;
+  return w.boss !== null && w.time >= w.bossAt + WAVE_PLAN.bossEnrageAfter;
+}
+
+/** A piece slot in the shop. `paid` is set once bought (owned, not yet placed). */
+export interface PieceSlot {
+  def: PieceDef;
+  locked: boolean;
+  paid: number | null;
+}
+
+export interface UpgradeSlot {
+  type: TileType;
+  locked: boolean;
+}
+
+export interface ShopSlots {
+  /** null = sold (empty until the next reroll or visit). */
+  pieces: (PieceSlot | null)[];
+  upgrades: (UpgradeSlot | null)[];
 }
 
 /** Tile modifiers; falls back to neutral values for a tile not in the cache. */

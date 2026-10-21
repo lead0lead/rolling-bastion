@@ -5,6 +5,7 @@ import { updateEnemies } from './enemies';
 import { collectGems } from './progression';
 import { updateSpawner } from './spawner';
 import { expandGrid } from './grid';
+import { updateWave } from './waves';
 import { cityChanged, type World } from './world';
 
 /** Player steering input; each axis in −1…1. */
@@ -15,10 +16,11 @@ export interface MoveInput {
 
 /** Advances the world by one fixed tick. */
 export function step(w: World, input: MoveInput, dt: number): void {
-  if (w.over) return;
+  if (w.over || w.waveCleared) return;
   w.time += dt;
   moveCity(w, input, dt);
-  updateTimeline(w);
+  updateWave(w);
+  if (w.waveCleared) return;
   updateSpawner(w, dt);
   updateBoss(w, dt);
   updateEnemies(w, dt);

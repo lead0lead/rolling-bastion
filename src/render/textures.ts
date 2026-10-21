@@ -59,7 +59,6 @@ export function createTextures(scene: Phaser.Scene): void {
   // Shiny round dots (concept.md §6: like agar.io food), each in its own colour family.
   for (const [key, color, r] of [
     [TEX.enemyShot, COLORS.enemyShot, 4.5],
-    [TEX.gem, COLORS.gem, 5],
     [TEX.shotSmall, COLORS.shot, 3.5],
     [TEX.shotBig, COLORS.shotBig, 5.5],
     [TEX.shell, COLORS.shell, 5.5],
@@ -67,6 +66,17 @@ export function createTextures(scene: Phaser.Scene): void {
     const size = Math.ceil(r * 2 + 4);
     drawDot(g, size / 2, r, color);
     g.generateTexture(key, size, size);
+    g.clear();
+  }
+
+  // Spike A: a gold coin (darker rim plus an inner ring), bigger than shots.
+  {
+    const r = 6;
+    const size = Math.ceil(r * 2 + 4);
+    drawDot(g, size / 2, r, COLORS.gem);
+    g.lineStyle(1.2, outlineOf(COLORS.gem), 1);
+    g.strokeCircle(size / 2, size / 2, r * 0.55);
+    g.generateTexture(TEX.gem, size, size);
     g.clear();
   }
 

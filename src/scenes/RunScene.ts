@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
-import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
+import { CAMERA, GRID, SIM } from '../config/balance';
+import { ECONOMY, WAVE_PLAN } from '../config/economy';
 import { ENEMIES, ENEMY_TYPES } from '../config/enemies';
 import type { SoundKey } from '../config/audio';
 import { FX } from '../config/fx';
-import { PHASE3_POOL } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
-import { DEBUG, nextSeed } from '../debug/flags';
+import { DEBUG, nextSeed, SANDBOX } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { drawSynergyLines } from '../render/lines';
 import { COLORS } from '../render/palette';
@@ -15,17 +15,25 @@ import { Particles } from '../render/particles';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { damageAlpha, outlineOf, showsCracks, SpritePool } from '../render/tiles';
 import {
-  debugAddTime,
   debugFillGrid,
   debugHurtBoss,
   debugKillAll,
   debugLayoutJson,
-  debugLevelUp,
   debugSpawn,
 } from '../sim/debugActions';
 import { chargePath } from '../sim/boss';
 import { expandGrid, facingAngle } from '../sim/grid';
-import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
+import {
+  addCoins,
+  addStarterPiece,
+  clearField,
+  endWave,
+  isBossWave,
+  rollShop,
+  startNextWave,
+  waveDuration,
+  waveStartTime,
+} from '../sim/waves';
 import { step, type MoveInput } from '../sim/step';
 import {
   bossEnraged,
@@ -84,6 +92,8 @@ export class RunScene extends Phaser.Scene {
   private ui!: RunUiState;
   private acc = 0;
   private buildOpen = false;
+  /** Real time (ms) the current wave was cleared, for the banner and the enemy fade; null while fighting. */
+  private clearedAt: number | null = null;
   private keys!: MoveKeys;
   private bg!: Phaser.GameObjects.TileSprite;
   private tileSprites!: SpritePool;
@@ -132,6 +142,9 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run', this.ui);
     this.acc = 0;
     this.buildOpen = false;
+    this.clearedAt = null;
+    addStarterPiece(this.world.city);
+    cityChanged(this.world);
 
     this.bg = this.add.tileSprite(0, 0, 10, 10, TEX.bgGrid).setOrigin(0).setDepth(-10);
     this.gemSprites = new SpritePool(this, 1);
@@ -174,6 +187,11 @@ export class RunScene extends Phaser.Scene {
     });
 
     this.scene.launch('Hud');
+    // ?sandbox=1: the shop opens at once with a large coin balance, before wave 1.
+    if (SANDBOX) {
+      this.world.coins = ECONOMY.sandboxCoins;
+      this.openShop(true);
+    }
   }
 
   override update(_time: number, delta: number): void {
@@ -188,8 +206,8 @@ export class RunScene extends Phaser.Scene {
     while (this.acc >= SIM.dt) {
       step(w, input, SIM.dt);
       this.acc -= SIM.dt;
-      // Stop at a level-up or expansion so the build pause opens on this exact tick.
-      if (w.pendingLevelUps > 0 || w.pendingExpansions > 0 || w.over) {
+      // Stop when the wave ends so the shop opens on this exact tick.
+      if (w.waveCleared || w.over) {
         this.acc = 0;
         break;
       }
@@ -199,9 +217,10 @@ export class RunScene extends Phaser.Scene {
     const t2 = performance.now();
     this.ui.simMs += (t1 - t0 - this.ui.simMs) * TIMING_SMOOTHING;
     this.ui.drawMs += (t2 - t1 - this.ui.drawMs) * TIMING_SMOOTHING;
-    if (w.over) return;
-    if (w.pendingExpansions > 0) this.openBuild('expand');
-    else if (w.pendingLevelUps > 0) this.openBuild('level');
+    if (w.over || !w.waveCleared || this.buildOpen) return;
+    // Wave cleared: banner and enemy fade for a moment, then the shop.
+    this.clearedAt ??= this.time.now;
+    if (this.time.now - this.clearedAt >= WAVE_PLAN.clearedBannerMs) this.openShop(false);
   }
 
   private moveInput(): MoveInput {
@@ -214,28 +233,40 @@ export class RunScene extends Phaser.Scene {
 
   // ------------------------------------------------------------ build pause
 
-  private openBuild(kind: 'level' | 'expand'): void {
+  /** Spike A: the shop between waves (concept-v2.md §2.8). `beforeFirst`: sandbox shop before wave 1. */
+  private openShop(beforeFirst: boolean): void {
     if (this.buildOpen) return;
     this.buildOpen = true;
-    if (kind === 'level') playSfx(this, 'level-up');
     const w = this.world;
+    clearField(w);
+    let note: string | undefined;
+    // Spike A: the grid grows in the shops after the waves in WAVE_PLAN.expandAfter
+    // (catching up on any skipped by the J debug jump).
+    const due = beforeFirst ? 0 : WAVE_PLAN.expandAfter.filter((n) => n <= w.wave).length;
+    while (w.expansions < due) {
+      w.expansions++;
+      if (!expandGrid(w.city)) continue;
+      cityChanged(w);
+      note = 'GRID EXPANDED — one more ring of cells';
+    }
+    if (note) playSfx(this, 'grid-expand');
+    if (!note) playSfx(this, 'level-up');
+    rollShop(w);
+    const bossNext = !beforeFirst && w.wave === WAVE_PLAN.count;
     const data: BuildSceneData = {
-      city: w.city,
-      offers: kind === 'level' ? rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time) : [],
-      title:
-        kind === 'level' ? `Salvage!  Level ${w.level - w.pendingLevelUps + 1}` : 'GRID EXPANDED',
-      coreHeal: repairCoreAmount(w),
-      rerollsLeft: w.rerolls,
-      refundPerScrap: scrapRefund(w),
-      reroll: () => {
-        if (w.rerolls <= 0) return null;
-        w.rerolls--;
-        return rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time);
-      },
-      done: (result) => {
-        if (kind === 'level') w.pendingLevelUps--;
-        else w.pendingExpansions = Math.max(0, w.pendingExpansions - 1);
-        applyBuildResult(w, result);
+      world: w,
+      title: beforeFirst ? 'Shop — sandbox' : `Shop — wave ${w.wave} cleared`,
+      ...(note ? { note } : {}),
+      nextLabel: beforeFirst
+        ? 'START WAVE 1  (Enter)'
+        : bossNext
+          ? 'BOSS WAVE  (Enter)'
+          : `START WAVE ${w.wave + 1}  (Enter)`,
+      done: () => {
+        if (beforeFirst) w.waveStart = w.time;
+        else startNextWave(w);
+        cityChanged(w);
+        this.clearedAt = null;
         this.scene.stop('Build');
         this.input.keyboard?.resetKeys();
         this.buildOpen = false;
@@ -261,7 +292,8 @@ export class RunScene extends Phaser.Scene {
     const summary: SummaryData = {
       time: w.time,
       kills: w.kills,
-      level: w.level,
+      wave: w.wave,
+      coinsEarned: w.coinsEarned,
       won: w.won,
       gridSize: w.city.gridSize,
       tiles: w.city.tiles.map((t) => ({ ...t })),
@@ -282,23 +314,27 @@ export class RunScene extends Phaser.Scene {
         e.preventDefault();
         this.ui.debugOverlay = !this.ui.debugOverlay;
         break;
-      case 'F2':
-        e.preventDefault();
-        if (expandGrid(w.city)) {
-          cityChanged(w);
-          w.pendingExpansions++;
-          w.expandedAt = w.time;
-        }
-        break;
       case 'F3':
         e.preventDefault();
         debugFillGrid(w, 'gatling');
         break;
       case 'KeyG':
-        debugLevelUp(w);
+        addCoins(w, 50);
         break;
       case 'KeyT':
-        debugAddTime(w, 60);
+        // End the current wave now (its combat time is skipped).
+        if (!w.waveCleared && !isBossWave(w)) {
+          w.time = w.waveStart + waveDuration(w.wave);
+          endWave(w);
+        }
+        break;
+      case 'KeyJ':
+        // Jump to the boss wave, with the shop after wave 15 first.
+        if (!w.waveCleared && !isBossWave(w)) {
+          w.wave = WAVE_PLAN.count;
+          w.time = waveStartTime(WAVE_PLAN.count + 1);
+          endWave(w);
+        }
         break;
       case 'KeyE':
         debugSpawn(w, this.ui.debugEnemy as (typeof ENEMY_TYPES)[number], DEBUG_SPAWN_COUNT);
@@ -423,7 +459,11 @@ export class RunScene extends Phaser.Scene {
     }
     this.linesGfx.setPosition(left, top);
 
-    // Enemies, projectiles, gems.
+    // Enemies, projectiles, gems. After a wave ends they fade out until the shop opens.
+    const fade =
+      this.clearedAt === null
+        ? 1
+        : Math.max(0, 1 - (this.time.now - this.clearedAt) / WAVE_PLAN.clearedBannerMs);
     this.enemySprites.begin();
     for (const e of w.enemies) {
       const img = this.enemySprites.add(
@@ -444,6 +484,7 @@ export class RunScene extends Phaser.Scene {
             (e === w.boss ? FX.bossSquashFactor : 1)
           : 0;
       const base = 1 / FX.enemyTexScale;
+      img.setAlpha(e === w.boss ? 1 : fade);
       img.setScale(
         base * (1 + motion() * FX.wobbleAmount * wob + squash),
         base * (1 - motion() * FX.wobbleAmount * wob - squash),
@@ -454,10 +495,10 @@ export class RunScene extends Phaser.Scene {
     this.shotSprites.begin();
     for (const p of w.projectiles) {
       const key = p.blast > 0 ? TEX.shell : p.source === 'cannon' ? TEX.shotBig : TEX.shotSmall;
-      this.shotSprites.add(lerp(p.px, p.x), lerp(p.py, p.y), key);
+      this.shotSprites.add(lerp(p.px, p.x), lerp(p.py, p.y), key).setAlpha(fade);
     }
     for (const s of w.enemyShots) {
-      this.shotSprites.add(lerp(s.px, s.x), lerp(s.py, s.y), TEX.enemyShot);
+      this.shotSprites.add(lerp(s.px, s.x), lerp(s.py, s.y), TEX.enemyShot).setAlpha(fade);
     }
     this.shotSprites.end();
     this.drawBlasts(w);

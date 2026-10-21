@@ -322,7 +322,7 @@ export function removeDead(w: World): void {
     }
     if (e.noDrop) continue;
     w.kills++;
-    dropGem(w, e.x, e.y, e.xp);
+    if (e.xp > 0) dropGem(w, e.x, e.y, e.xp);
     w.events.push({ kind: 'enemyKilled', x: e.x, y: e.y, type: e.type });
   }
   w.enemies.length = n;

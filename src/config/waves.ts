@@ -1,3 +1,4 @@
+import { ELITE_BRUTE_COINS } from './economy';
 import type { EnemyType } from './enemies';
 
 /** A spawn group: one pick from the wave table spawns `count` enemies together. */
@@ -121,10 +122,15 @@ export interface WaveSpike {
    * Spawn as one elite with this HP multiplier that drops the XP of
    * `levels` level-ups (the 7:00 Elite Brute).
    */
-  elite?: { hpMultiplier: number; levels: number };
+  elite?: { hpMultiplier: number; levels: number; coins?: number };
 }
 
 export const SPIKES: WaveSpike[] = [
   { at: 150, enemy: 'swarmer', count: 40 },
-  { at: 420, enemy: 'brute', count: 1, elite: { hpMultiplier: 12, levels: 3 } },
+  {
+    at: 420,
+    enemy: 'brute',
+    count: 1,
+    elite: { hpMultiplier: 12, levels: 3, coins: ELITE_BRUTE_COINS },
+  },
 ];

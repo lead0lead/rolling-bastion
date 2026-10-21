@@ -153,8 +153,8 @@ export class TitleScene extends Phaser.Scene {
         318,
         [
           'Drive with WASD or the arrow keys — your guns fire by themselves',
-          'Level up, then place pieces: keep every tile connected to the Core',
-          'Build chains of guns and fill rows — or upgrade a tile type instead',
+          'Kills drop coins: between waves, buy pieces and keep every tile connected to the Core',
+          'Build chains of guns and fill rows — or buy upgrades for a tile type',
         ].join('\n'),
         { ...text, fontSize: '18px', color: COLORS.textDim, align: 'center', lineSpacing: 6 },
       )

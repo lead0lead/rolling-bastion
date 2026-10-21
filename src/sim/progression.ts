@@ -134,7 +134,9 @@ export function collectGems(w: World, dt = 0): void {
   w.gems.length = n;
   if (gained > 0) {
     w.tally.gems++;
-    addXp(w, gained);
+    // Spike A: coins instead of XP.
+    w.coins += gained;
+    w.coinsEarned += gained;
   }
 }
 

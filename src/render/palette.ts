@@ -42,7 +42,8 @@ export const COLORS = {
   shotBig: 0xff9f1c,
   shell: 0x8d5a2b,
   enemyShot: 0xe5383b,
-  gem: 0x00b4ff,
+  /** Spike A: gold coins instead of cyan XP gems. */
+  gem: 0xf2b705,
   blast: 0xff9f1c,
   /** The boss charge telegraph. */
   charge: 0xf0405a,

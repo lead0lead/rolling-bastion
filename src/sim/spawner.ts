@@ -2,6 +2,7 @@ import { SPAWN } from '../config/balance';
 import { BOSS, ELITE, ENEMIES, type EnemyType } from '../config/enemies';
 import { SPAWN_GROUPS, SPIKES, WAVES, type SpawnGroupId, type WaveEntry } from '../config/waves';
 import { xpToNext } from './progression';
+import { isBossWave, spawnClock } from './waves';
 import { cityCentre, newBossState, type Enemy, type World } from './world';
 
 /** Spawn budget per second at game time `t`, interpolated from the wave table. */
@@ -28,17 +29,20 @@ export function spawnRingRadius(w: World): number {
 }
 
 export function updateSpawner(w: World, dt: number): void {
-  if (w.time >= BOSS.at) {
+  // Spike A: the boss wave replaces BOSS.at; the v1 spawner runs on the remapped clock.
+  if (isBossWave(w)) {
     updateBossPhase(w);
     relocateFarEnemies(w);
     return;
   }
+  const clock = spawnClock(w);
   while (w.spawn.spikeIndex < SPIKES.length) {
     const spike = SPIKES[w.spawn.spikeIndex];
-    if (!spike || spike.at > w.time) break;
+    if (!spike || spike.at > clock) break;
     if (spike.elite) {
-      let xp = 0;
-      for (let i = 0; i < spike.elite.levels; i++) xp += xpToNext(w.level + i);
+      let xp = spike.elite.coins ?? 0;
+      if (spike.elite.coins === undefined)
+        for (let i = 0; i < spike.elite.levels; i++) xp += xpToNext(w.level + i);
       const p = ringPoint(w, w.rng.next() * Math.PI * 2);
       spawnEnemy(w, spike.enemy, p.x, p.y, { hpMultiplier: spike.elite.hpMultiplier, xp });
     } else {
@@ -47,8 +51,8 @@ export function updateSpawner(w: World, dt: number): void {
     w.spawn.spikeIndex++;
   }
 
-  w.spawn.budget = Math.min(SPAWN.maxBankedBudget, w.spawn.budget + budgetRate(w.time) * dt);
-  w.spawn.next ??= pickGroup(w);
+  w.spawn.budget = Math.min(SPAWN.maxBankedBudget, w.spawn.budget + budgetRate(clock) * dt);
+  w.spawn.next ??= pickGroup(w, clock);
   const next = w.spawn.next;
   const def = SPAWN_GROUPS[next.id];
   const cost = ENEMIES[def.enemy].cost * next.count;
@@ -75,13 +79,14 @@ export function updateSpawner(w: World, dt: number): void {
 function updateBossPhase(w: World): void {
   if (w.bossSpawned) return;
   w.bossSpawned = true;
+  w.bossAt = w.time;
   w.bossState = newBossState();
   const p = ringPoint(w, w.rng.next() * Math.PI * 2);
   spawnEnemy(w, BOSS.type, p.x, p.y);
 }
 
-function pickGroup(w: World): { id: SpawnGroupId; count: number } {
-  const groups = Object.entries(currentWave(w.time).groups) as [SpawnGroupId, number][];
+function pickGroup(w: World, clock: number): { id: SpawnGroupId; count: number } {
+  const groups = Object.entries(currentWave(clock).groups) as [SpawnGroupId, number][];
   const total = groups.reduce((s, [, weight]) => s + weight, 0);
   let roll = w.rng.next() * total;
   let id = groups[groups.length - 1]?.[0] ?? 'swarmer';

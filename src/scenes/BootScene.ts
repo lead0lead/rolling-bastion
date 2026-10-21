@@ -13,6 +13,6 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     // `?sandbox=1` opens the standalone build screen from Phase 1; otherwise the title screen.
-    this.scene.start(SANDBOX ? 'Build' : 'Title');
+    this.scene.start(SANDBOX ? 'Run' : 'Title');
   }
 }
