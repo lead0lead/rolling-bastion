@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Spike A built on `v2-spike-a-shop` (2.0.0-spike.a), handed to the user. `v2` itself still has no v2 code. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Spike A — shop loop: **built, waiting for the user's keep / change / drop** and first price feedback |
-| **Next step** | Record the Spike A decision (§2.8, §12, session log); then Spike B on `v2-spike-b-grid` from `v2`. |
+| **Status** | Both spikes built and handed to the user: Spike A on `v2-spike-a-shop` (2.0.0-spike.a), Spike B on `v2-spike-b-grid` (2.0.0-spike.b). `v2` itself still has no v2 code. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | **Decision milestone:** waiting for the user's keep / change / drop on Spike A (plus price feedback) and Spike B |
+| **Next step** | Record both decisions (§2, §11, §12, session log), then plan Phase 1 with the user. No phase before both are decided. |
 | **Decision milestone** | **Keep-or-drop after Spike A and after Spike B.** No v2 phase starts before both are decided. Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | Spike A: `2.0.0-spike.a` (on its branch only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | Spikes: `2.0.0-spike.a`, `2.0.0-spike.b` (on their branches only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-21 (Spike A built, awaiting decision) |
+| **Last updated** | 2026-10-21 (both spikes built, awaiting decisions) |
 
 ---
 
@@ -129,6 +129,20 @@ not mentioned here works as in v1 (`concept.md` §2).
 - The city's world position is the Core's centre (v1 used the grid centre).
 - Implementation: a sparse map keyed by cell (no fixed-size arrays), so a
   scattered city costs only its tile count.
+
+**Spike B (built 2026-10-21, `v2-spike-b-grid`, awaiting the user's
+verdict).** How the spike does it: the Core starts at (0, 0) and cells may
+be negative; the run cache keys cells by a number (`cellNum`), synergies
+scan the city's bounding box; the world position is the centre of cell
+(0, 0). Placement only checks overlaps. Combat camera: follows the Core,
+zoom = city bounding box ≤ 35% of the view's width and height, clamped to
+0.4–1 (`CAMERA.cityFrame`, `CAMERA.minZoom`). Build screen: the city has
+its own camera in the middle of the screen (pan WASD / arrows /
+middle-drag at 700 px/s, wheel zoom ×1.15 per step toward the pointer,
+0.3–3, F/Home fits with 3 empty cells of margin, also on every pause).
+The HUD and build screen show tile count and speed, for the "slow blob"
+question. Still v1 levels; filled rows/columns are gone (their HP bonus
+too). Debug F3 fills the city's bounding box plus one ring.
 
 ### 2.2 Pieces and tiles
 
@@ -527,8 +541,8 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- Spike A and Spike B: keep / change / drop. (Spike A built 2026-10-21,
-  waiting for the verdict.)
+- Spike A and Spike B: keep / change / drop. (Both built 2026-10-21,
+  waiting for the verdicts.)
 - v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
   on GitHub Pages (the workflow would build both branches into one Pages
   artifact), or v2 replaces v1 on `main`.
@@ -592,6 +606,27 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Spike B: unbounded grid
+- Done: Spike B on `v2-spike-b-grid` from `v2` (commit 2c780dc, not
+  merged, by the spike rules; started after the user said "continue"
+  without a Spike A verdict yet; the two spikes are independent): fixed
+  Core at (0, 0), sparse unbounded grid, no expansions, filled
+  rows/columns removed, combat camera framing (35%, zoom 0.4–1), build
+  screen pan / zoom / fit, HUD tiles and speed. Version label
+  `2.0.0-spike.b`.
+- Checked in a headless browser: sandbox build screen (placing in every
+  direction, wheel zoom, WASD and middle-drag pan, F fit), a run with a
+  level-up pause and a 25-tile city (speed 70%). No console errors. Build,
+  type check and lint pass. The headless browser runs at ~10 fps, so
+  game time there runs slower than real time (environment, not the game).
+- Failing tests on the spike branch, on purpose (rules changed, not
+  edited), 14 in total: Core no longer at the grid centre and no bounds
+  (`grid.test.ts`, `build.test.ts`, `arcs.test.ts`), grid expansion
+  (`grid.test.ts`, `build.test.ts`, `world.test.ts`), filled rows
+  (`synergies.test.ts`), and the Bomber test, whose Hull survived only
+  through the filled-row HP bonus (`enemies.test.ts`).
+- Next: the user decides keep / change / drop for both spikes.
 
 ### 2026-10-21 — Spike A: shop loop
 - Done: Spike A on `v2-spike-a-shop` (commit d41e7ad, not merged, by the
