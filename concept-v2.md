@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phase 1 merged into `v2` (2.0.0-alpha.1). **Phase 2 — editing UX built** on `v2-phase-2-editing` (2.0.0-alpha.2), handed to the user; not merged yet. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 2 done, waiting for the user to try it ("rearranging a 60-tile city feels quick"). |
-| **Next step** | User tries Phase 2 → merge into `v2`; then Phase 3 (readability and synergies); schedule the Saw rework. |
+| **Status** | Phases 1 (board and land) and 2 (editing UX) done and **merged into `v2`** (2.0.0-alpha.2). v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Between phases; session ended 2026-10-22. |
+| **Next step** | Start Phase 3 (readability and synergies, §11) on `v2-phase-3-readability`. First ask the user where the Saw rework (§2.9) goes: inside Phase 3 or its own step. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.2` on `v2-phase-2-editing`; `v2` is at `2.0.0-alpha.1`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.2` on `v2`. Phase 3 will be `2.0.0-alpha.3`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-21 (Phase 2 built) |
+| **Last updated** | 2026-10-22 (Phase 2 merged, session end) |
 
 ---
 
@@ -584,6 +584,15 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase 2 merged, session end
+- Decision (user): Phase 2 "feels good"; merged `v2-phase-2-editing`
+  into `v2`. The user continues in a new session.
+- State: `v2` at 2.0.0-alpha.2; build, lint and 139 tests pass. Nothing
+  pushed (spike and phase branches are local only; ask before pushing).
+- Open: where the Saw rework goes; the bench spike and bench timeout
+  (§12 Known issues); land numbers still Claude's guesses.
+- Next: Phase 3.
 
 ### 2026-10-21 — Phase 2: editing UX
 - Decision (user): a plain click on a tile keeps v1's one-click carry
