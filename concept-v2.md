@@ -62,8 +62,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Both spikes built and handed to the user: Spike A on `v2-spike-a-shop` (2.0.0-spike.a), Spike B on `v2-spike-b-grid` (2.0.0-spike.b). `v2` itself still has no v2 code. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Spike B decided: **change** (2026-10-21, free growth disliked). Spike A: the user is test-playing it. |
-| **Next step** | Spike A verdict; then Spike B2 (board shapes + paid directional expansions, §11). No phase before both spikes are decided. |
+| **Current step** | Both spikes decided (2026-10-21): Spike A **dropped** (stay with XP and level-ups), Spike B **change**. Planning Spike B2 (land shapes at set levels) with the user. |
+| **Next step** | Agree the Spike B2 details, then build it on `v2-spike-b2-land` from `v2`. Phases 1–2 need rewriting with the user afterwards (§11). |
 | **Decision milestone** | **Keep-or-drop after Spike A and after Spike B.** No v2 phase starts before both are decided. Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | Spikes: `2.0.0-spike.a`, `2.0.0-spike.b` (on their branches only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
@@ -553,8 +553,9 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- Spike A and Spike B: keep / change / drop. (Both built 2026-10-21,
-  waiting for the verdicts.)
+- Spike A: **dropped** 2026-10-21 (XP and level-ups stay). Spike B:
+  **change** 2026-10-21 (land shapes at set levels, Spike B2). Open:
+  Spike B2 details; rewrite of Phase 2 and the endless plan without waves.
 - v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
   on GitHub Pages (the workflow would build both branches into one Pages
   artifact), or v2 replaces v1 on `main`.
@@ -602,6 +603,9 @@ start early if the user asks.
 
 ## 13. Ideas for Later (not planned)
 
+- **Dropped 2026-10-21 (Spike A):** waves with a shop between them and
+  coins instead of XP. Reason (user): did not like the loop much after a
+  test run. Branch `v2-spike-a-shop` kept as a record.
 - Trading posts in the world you drive to (the shop-timing alternative,
   2026-10-21).
 - Magnet as interest on saved coins (alternative to the pulse).
@@ -621,6 +625,19 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Spike A verdict
+- Decisions (user): Spike A **dropped**: after a test run the user did
+  not like the wave/shop loop much; stay with XP and level-ups. The
+  paid-expansion idea is replaced too: the grid grows at **set levels**
+  instead of set times; at such a level you choose one of several **land
+  shapes** (all the same cell count, large enough to matter) and place it
+  anywhere it touches the existing grid. This revisits land plots in a new
+  form (few, large shapes at set levels, not a purchase every visit).
+- Consequences: Phase 2 (waves and shop) and the endless-after-boss plan
+  (which built on waves) need rewriting with the user; the Spike A branch
+  stays as a record.
+- Next: agree the Spike B2 details, then build it.
 
 ### 2026-10-21 — Spike B verdict
 - Decisions (user): Spike B **change**: free infinite growth disliked, but
