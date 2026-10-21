@@ -5,6 +5,7 @@ import {
   cancelHeld,
   confirmStatus,
   landPreviewAt,
+  offerLand,
   pickLand,
   pickOffer,
   pickUpAt,
@@ -126,6 +127,15 @@ describe('build session: land step', () => {
     expect(placeLandAt(s, 0, 0)).toBe(false); // overlaps the board
     expect(s.heldLand).toEqual({ index: 0, turns: 1 });
     expect(placeLandAt(s, 0, -6)).toBe(true); // a 2×6 column above the board
+  });
+
+  it('can add a land step to a running pause, but not while a group is held', () => {
+    const s = startBuild(createCity(6), [MONO]);
+    pickOffer(s, 0);
+    expect(offerLand(s, [STRIP])).toBe(false);
+    cancelHeld(s);
+    expect(offerLand(s, [STRIP])).toBe(true);
+    expect(confirmStatus(s)).toEqual({ ok: false, block: 'land' });
   });
 
   it('puts the land back with cancel, and a session without land skips the step', () => {

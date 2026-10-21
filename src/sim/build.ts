@@ -81,6 +81,14 @@ export function startBuild(
 
 // --------------------------------------------------------------------- land
 
+/** Debug/sandbox: adds a land step to this pause. Not while a group is held. */
+export function offerLand(s: BuildSession, land: LandShape[]): boolean {
+  if (s.held || land.length === 0) return false;
+  s.land = land;
+  s.heldLand = null;
+  return true;
+}
+
 /** Takes a land shape in hand (swapping out one already held, keeping its rotation). */
 export function pickLand(s: BuildSession, index: number): boolean {
   if (!s.land?.[index] || s.held) return false;

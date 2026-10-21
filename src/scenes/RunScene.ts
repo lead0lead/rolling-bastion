@@ -4,6 +4,7 @@ import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
 import { ENEMIES, ENEMY_TYPES } from '../config/enemies';
 import type { SoundKey } from '../config/audio';
 import { FX } from '../config/fx';
+import { LAND_SHAPES } from '../config/land';
 import { PHASE3_POOL } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
@@ -26,6 +27,7 @@ import {
 import { chargePath } from '../sim/boss';
 import { facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
+import { rollLand } from '../sim/land';
 import { step, type MoveInput } from '../sim/step';
 import { bossEnraged, createWorld, type CityCache, type Enemy, type World } from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
@@ -211,10 +213,15 @@ export class RunScene extends Phaser.Scene {
     this.buildOpen = true;
     playSfx(this, 'level-up');
     const w = this.world;
+    // A land level-up offers land first, then the usual piece pick (concept-v2.md §2.1).
+    const land = w.pendingLand > 0 ? rollLand(w.rng, LAND_SHAPES) : null;
+    if (land) w.pendingLand--;
+    const level = w.level - w.pendingLevelUps + 1;
     const data: BuildSceneData = {
       city: w.city,
       offers: rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time),
-      title: `Salvage!  Level ${w.level - w.pendingLevelUps + 1}`,
+      land,
+      title: land ? `New land!  Level ${level}` : `Salvage!  Level ${level}`,
       coreHeal: repairCoreAmount(w),
       rerollsLeft: w.rerolls,
       refundPerScrap: scrapRefund(w),
@@ -271,6 +278,12 @@ export class RunScene extends Phaser.Scene {
       case 'F1':
         e.preventDefault();
         this.ui.debugOverlay = !this.ui.debugOverlay;
+        break;
+      case 'F2':
+        // The next level-up offers land.
+        e.preventDefault();
+        w.pendingLand++;
+        debugLevelUp(w);
         break;
       case 'F3':
         e.preventDefault();
