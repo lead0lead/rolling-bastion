@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phase 1 — board and land: tried by the user ("works well") and **merged into `v2`** 2026-10-21 (2.0.0-alpha.1). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 2 — editing UX: agreeing the interaction details with the user. |
-| **Next step** | Build Phase 2 on `v2-phase-2-editing` from `v2`. Saw rework still to schedule. |
+| **Status** | Phase 1 merged into `v2` (2.0.0-alpha.1). **Phase 2 — editing UX built** on `v2-phase-2-editing` (2.0.0-alpha.2), handed to the user; not merged yet. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 2 done, waiting for the user to try it ("rearranging a 60-tile city feels quick"). |
+| **Next step** | User tries Phase 2 → merge into `v2`; then Phase 3 (readability and synergies); schedule the Saw rework. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.1` on `v2`. Phase 2 will be `2.0.0-alpha.2`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.2` on `v2-phase-2-editing`; `v2` is at `2.0.0-alpha.1`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-21 (Phase 1 merged) |
+| **Last updated** | 2026-10-21 (Phase 2 built) |
 
 ---
 
@@ -271,15 +271,15 @@ Unchanged from v1 (`concept.md` §2.10).
 | Action | Input |
 |---|---|
 | Land: pick / rotate / place | Click a land card or 1/2/3; R or right-click; click on the board view |
-| Select a group | Click a tile (Phase 2) |
-| Add/remove a group from the selection | Shift+click (Phase 2) |
-| Box select | Drag on empty space (selects every group that has a tile in the box) (Phase 2) |
-| Select all (except Core) | Ctrl+A (Phase 2) |
+| Pick up a group (as v1) | Click a tile: carries its group, or the whole selection if the tile is selected (user's choice 2026-10-21; selecting is Shift+click, box and Ctrl+A) |
+| Add/remove a group from the selection | Shift+click |
+| Box select | Drag on empty board space (selects every group that has a tile in the box; Shift adds); a plain click there clears the selection |
+| Select all (except Core) | Ctrl+A |
 | Move selection | Drag any selected tile; or click once to carry it, click again to drop (as v1) |
 | Rotate held selection | R or right-click, 90° around the grabbed cell |
 | Scrap selection | X or Delete, or drop on the scrap zone |
-| Undo / redo | Ctrl+Z / Ctrl+Shift+Z (also Ctrl+Y) (Phase 2) |
-| Clear selection / put held back | Esc |
+| Undo / redo | Ctrl+Z / Ctrl+Shift+Z (also Ctrl+Y) |
+| Clear selection / put held back | Esc (puts the held group back first; otherwise clears the selection) |
 | Pan | WASD / arrows, or middle-drag. A key only pans after a fresh press in the pause, so keys still held from driving don't scroll (user feedback 2026-10-21). |
 | Zoom | Mouse wheel (toward the pointer) |
 | Fit board to view | F or Home |
@@ -287,7 +287,7 @@ Unchanged from v1 (`concept.md` §2.10).
 | Rules legend | ? or H (Phase 3) |
 | Confirm | Enter / button |
 
-### 3.1 Editing rules (v2, Phase 2)
+### 3.1 Editing rules (v2, as implemented in Phase 2)
 
 - A **selection** is a set of groups. Moving a selection keeps the relative
   positions of its groups; a drop is valid only if every cell is on the
@@ -298,6 +298,23 @@ Unchanged from v1 (`concept.md` §2.10).
 - **Undo** covers everything in the current build pause: land placement,
   taking an offer or upgrade, Repair Core, placements, moves, rotations,
   scraps and rerolls. History is cleared when the pause closes.
+- As implemented (`src/sim/build.ts`, `src/sim/grid.ts`): a held group can
+  hold tiles of several groups (`liftGroups`; each tile keeps its group).
+  `BuildSession.selection` holds group ids; `toggleSelectAt`, `selectBox`,
+  `selectAll`, `clearSelection`, `scrapSelection`; picking up a selected
+  tile lifts the selection, which stays selected after the drop; picking
+  up another group clears it. Scrapping counts every piece (XP refund
+  each). Undo/redo: the session snapshots tiles, board, ids and the pause's
+  choices before each change (`history` / `future`); a held group's
+  pick-up state is recorded once it is dropped or scrapped; undo while
+  holding only puts the held group back; undo/redo clear the selection.
+  Rerolls are counted in the session (`rerollsUsed`) and charged by
+  `applyBuildResult`, so undone rerolls come back. Build screen: selected
+  groups get a blue outline, the box is drawn while dragging, a held
+  selection floats with a soft shadow, the scrap zone shows "n pieces",
+  the status panel shows the undo/redo counts. X and Delete scrap (held,
+  else selection, else hovered); the debug "destroy hovered tile" key
+  moved from Delete to K.
 
 ### 3.2 Camera (v2, as implemented in Phase 1)
 
@@ -567,6 +584,22 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Phase 2: editing UX
+- Decision (user): a plain click on a tile keeps v1's one-click carry
+  (the whole selection when the tile is selected); selecting is
+  Shift+click, box drag on empty space and Ctrl+A.
+- Done (branch `v2-phase-2-editing`, one commit per step, all checks
+  green): multi-group held selections in the grid; selection in the build
+  session; snapshot undo/redo including land, offers, upgrades, Repair
+  Core and rerolls (rerolls now charged at the end of the pause); build
+  screen selection, box select, Ctrl+A, Esc, scrap selection, outlines and
+  shadow; undo/redo keys and counts. Version `2.0.0-alpha.2`.
+- Tests: 139 pass (new: multi-group lift/drop, selection, undo/redo,
+  reroll charge).
+- Checked in a headless browser: box select and Ctrl+A outlines; land
+  placed, undone (land cards back) and redone; no console errors.
+- Next: the user tries Phase 2; merge; Phase 3.
 
 ### 2026-10-21 — Phase 1 merged
 - Decision (user): Phase 1 works well; merged `v2-phase-1-board` into
