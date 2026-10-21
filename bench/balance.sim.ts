@@ -2,11 +2,13 @@ import { it } from 'vitest';
 import { SIM, UPGRADES } from '../src/config/balance';
 import { BOSS } from '../src/config/enemies';
 import { TILES, type Facing, type TileType } from '../src/config/tiles';
-import { coreTile } from '../src/sim/grid';
+import { LAND_SHAPES } from '../src/config/land';
+import { cellFromId, cellId, coreTile, type CityState } from '../src/sim/grid';
+import { addLand, landCells, landProblems, rollLand } from '../src/sim/land';
 import { addXp, applyBuildResult } from '../src/sim/progression';
 import { step } from '../src/sim/step';
 import { canUpgrade, typeLevel } from '../src/sim/upgrades';
-import { cityCentre, cityChanged, createWorld, type World } from '../src/sim/world';
+import { cityCentre, createWorld, type World } from '../src/sim/world';
 
 /**
  * Balance check (concept.md §11 Phase 4): plays the same seeds with a few
@@ -101,23 +103,41 @@ const TIME_LIMIT = BOSS.enrageAt + 120;
 type Layout = Map<string, { type: TileType; facing: Facing }>;
 
 const key = (x: number, y: number) => `${x},${y}`;
+/** Rings counted inward from the board edge stop here (deeper cells all count as interior). */
+const BOARD_DEPTH_LIMIT = 4;
+/** Land centres are tried this many cells around the board. */
+const LAND_REACH = 4;
 
-/** The archetype's full layout for an n×n grid. Weapons face away from the Core. */
-function layoutFor(arch: Archetype, n: number): Layout {
-  const c = Math.floor(n / 2);
+/**
+ * The archetype's full layout for the city's board (concept-v2.md §2.1).
+ * `edge` counts rings in from the board's edge; weapons face away from the Core.
+ */
+function layoutFor(arch: Archetype, city: CityState): Layout {
+  const core = coreTile(city);
+  const cx = core?.gx ?? 0;
+  const cy = core?.gy ?? 0;
+  const on = (x: number, y: number) => city.board.has(cellId(x, y));
   const out: Layout = new Map();
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      if (x === c && y === c) continue;
-      const edge = Math.min(x, y, n - 1 - x, n - 1 - y);
-      const corner = (x === 0 || x === n - 1) && (y === 0 || y === n - 1);
-      const dx = x - c;
-      const dy = y - c;
-      const type = arch.rule({ edge, cross: dx === 0 || dy === 0, corner, dx, dy });
-      if (!type) continue;
-      const facing: Facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : dy > 0 ? 2 : 0;
-      out.set(key(x, y), { type, facing });
+  for (const id of city.board) {
+    const { x, y } = cellFromId(id);
+    if (x === cx && y === cy) continue;
+    let edge = 0;
+    while (edge < BOARD_DEPTH_LIMIT) {
+      const r = edge + 1;
+      let inside = true;
+      for (let d = -r; d <= r && inside; d++) {
+        inside = on(x + d, y - r) && on(x + d, y + r) && on(x - r, y + d) && on(x + r, y + d);
+      }
+      if (!inside) break;
+      edge++;
     }
+    const corner = (!on(x - 1, y) || !on(x + 1, y)) && (!on(x, y - 1) || !on(x, y + 1));
+    const dx = x - cx;
+    const dy = y - cy;
+    const type = arch.rule({ edge, cross: dx === 0 || dy === 0, corner, dx, dy });
+    if (!type) continue;
+    const facing: Facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : dy > 0 ? 2 : 0;
+    out.set(key(x, y), { type, facing });
   }
   return out;
 }
@@ -132,7 +152,7 @@ const NEIGHBOURS = [
 /** Adds up to `count` tiles from the layout, each orthogonally connected to the city. */
 function grow(w: World, arch: Archetype, count: number): number {
   const city = w.city;
-  const layout = layoutFor(arch, city.gridSize);
+  const layout = layoutFor(arch, city);
   let added = 0;
   for (let i = 0; i < count; i++) {
     const taken = new Set(city.tiles.map((t) => key(t.gx, t.gy)));
@@ -190,12 +210,41 @@ function grow(w: World, arch: Archetype, count: number): number {
   return added;
 }
 
-/** Rearranges the city into the (bigger) layout, keeping its tile count. */
-function rearrange(w: World, arch: Archetype): void {
-  const count = w.city.tiles.length - 1;
-  w.city.tiles = w.city.tiles.filter((t) => t.type === 'core');
-  grow(w, arch, count);
-  cityChanged(w);
+/**
+ * Land (concept-v2.md §2.1): of the offered shapes, rotations and spots
+ * touching the board, take the one sharing the most edges with it (a
+ * compact board), then the one closest to the Core. Simple on purpose;
+ * Phase 4 gives the bots real land plans.
+ */
+function placeLand(w: World): void {
+  const city = w.city;
+  const cells = [...city.board].map(cellFromId);
+  const minX = Math.min(...cells.map((c) => c.x)) - LAND_REACH;
+  const maxX = Math.max(...cells.map((c) => c.x)) + LAND_REACH;
+  const minY = Math.min(...cells.map((c) => c.y)) - LAND_REACH;
+  const maxY = Math.max(...cells.map((c) => c.y)) + LAND_REACH;
+  let best: { cells: { x: number; y: number }[]; score: number } | null = null;
+  for (const shape of rollLand(w.rng, LAND_SHAPES)) {
+    for (let turns = 0; turns < 4; turns++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const land = landCells(shape, turns, x, y);
+          if (landProblems(city, land).size > 0) continue;
+          let shared = 0;
+          let dist = 0;
+          for (const c of land) {
+            dist += Math.abs(c.x) + Math.abs(c.y);
+            for (const [dx, dy] of NEIGHBOURS) {
+              if (city.board.has(cellId(c.x + dx, c.y + dy))) shared++;
+            }
+          }
+          const score = shared * 1000 - dist;
+          if (!best || score > best.score) best = { cells: land, score };
+        }
+      }
+    }
+  }
+  if (best) addLand(city, best.cells);
 }
 
 function levelUp(w: World, arch: Archetype): void {
@@ -268,11 +317,11 @@ function play(arch: Archetype, seed: number, xpShare: number): Result {
     if (bossHitAt === null && (w.won || (w.boss && w.boss.hp < w.boss.maxHp))) bossHitAt = w.time;
     collectAll(w, xpShare);
     w.events.length = 0;
-    while (w.pendingExpansions > 0) {
-      w.pendingExpansions--;
-      rearrange(w, arch);
-    }
     while (w.pendingLevelUps > 0 && !w.over) {
+      if (w.pendingLand > 0) {
+        w.pendingLand--;
+        placeLand(w);
+      }
       w.pendingLevelUps--;
       levelUp(w, arch);
     }

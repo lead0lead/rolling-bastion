@@ -109,7 +109,7 @@ describe('arc targeting', () => {
 
   it('the Core pistol still fires all around', () => {
     const w = createWorld(1);
-    const core = tileAt(w.city, 3, 3);
+    const core = tileAt(w.city, 0, 0);
     if (!core) throw new Error('missing core');
     const c = tileCentre(w, core);
     spawnEnemy(w, 'swarmer', c.x, c.y + 150); // below; core faces up

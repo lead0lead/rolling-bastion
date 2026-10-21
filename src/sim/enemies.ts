@@ -3,7 +3,7 @@ import { ENEMIES, type EnemyDef, type RangedDef } from '../config/enemies';
 import type { PlacedTile } from './grid';
 import { bossContactFactor, bossMove } from './boss';
 import { damageTile, fireEnemyShot, hitEnemy, MAX_ENEMY_RADIUS } from './combat';
-import { gridTopLeft, modsOf, tileAtCell, type Enemy, type World } from './world';
+import { cellOrigin, modsOf, tileAtCell, type Enemy, type World } from './world';
 
 /** What an enemy touched this tick (reused, no allocation). */
 interface Contact {
@@ -134,7 +134,7 @@ function rangedAttack(
 /** Enemy shots fly straight and hit the first tile they enter. */
 function updateEnemyShots(w: World, dt: number): void {
   const cell = GRID.cellPx;
-  const { left, top } = gridTopLeft(w);
+  const { left, top } = cellOrigin(w);
   let n = 0;
   for (const s of w.enemyShots) {
     s.px = s.x;
@@ -167,7 +167,7 @@ function detonate(w: World, e: Enemy, def: EnemyDef, t: PlacedTile): void {
       if (o) hit.push(o);
     }
   }
-  const { left, top } = gridTopLeft(w);
+  const { left, top } = cellOrigin(w);
   w.events.push({
     kind: 'blast',
     x: left + (t.gx + 0.5) * GRID.cellPx,
@@ -235,7 +235,7 @@ function collideWithCity(w: World, e: Enemy, out: Contact): void {
   const cell = GRID.cellPx;
   const r = e.radius;
   const reach = r + ENEMY_PHYSICS.contactSlack;
-  const { left, top } = gridTopLeft(w);
+  const { left, top } = cellOrigin(w);
   const gx = Math.floor((e.x - left) / cell);
   const gy = Math.floor((e.y - top) / cell);
   const span = Math.ceil(reach / cell);

@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Both spikes built and handed to the user: Spike A on `v2-spike-a-shop` (2.0.0-spike.a), Spike B on `v2-spike-b-grid` (2.0.0-spike.b). `v2` itself still has no v2 code. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | All spikes decided (2026-10-21): Spike A **dropped**, Spike B **changed** into Spike B2, Spike B2 **kept**. Land pacing retuned on the spike branch (levels 8/15/22/29/36) for another try. |
-| **Next step** | Rewrite the build plan (§11) with the user: Phase 1 = unbounded grid + board mask + land shapes; drop or rewrite Phase 2 (waves/shop) and the endless plan. No phase before the plan is agreed. |
-| **Decision milestone** | **Keep-or-drop after Spike A and after Spike B.** No v2 phase starts before both are decided. Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
+| **Status** | Spikes done (A dropped, B changed into B2, B2 kept). **Phase 1 — board and land built** on `v2-phase-1-board` (2.0.0-alpha.1), handed to the user; not merged into `v2` yet. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 1 done, waiting for the user to try it. |
+| **Next step** | User tries Phase 1 → merge `v2-phase-1-board` into `v2`; then Phase 2 (editing UX) and scheduling the Saw rework with the user. |
+| **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | Spikes: `2.0.0-spike.a`, `2.0.0-spike.b`, `2.0.0-spike.b2` (on their branches only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.1` (Phase 1, on its branch). Spikes: `2.0.0-spike.a/.b/.b2` on theirs; `v2` says 0.8.0 until the merge. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-21 (Spike B2 built, awaiting decision) |
+| **Last updated** | 2026-10-21 (Phase 1 built) |
 
 ---
 
@@ -77,40 +77,45 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 Unchanged at heart: a survivor-like where you only steer a moving city built
 from polyomino pieces; every tile acts automatically, and everything must stay
-connected to the Core. See `concept.md` §1.
+connected to the Core. See `concept.md` §1. XP, level-ups and the 12:00 run
+with the Colossus stay as in v1 (the wave/shop loop was tried in Spike A and
+dropped, §13).
 
-**What v2 changes (decided by the user 2026-10-21):**
+**What v2 changes (decided by the user 2026-10-21, revised after the
+spikes):**
 
-1. **Unbounded grid.** The Core sits fixed at the centre; the city grows from
-   it in any direction with no size limit. Growth is limited by coins, by the
-   size speed penalty, and by a longer outer edge to defend.
-2. **Waves and a shop instead of level-ups.** The run is 15 waves plus a boss
-   wave. Kills drop coins; between waves the shop opens, and you buy pieces and
-   upgrades and rearrange the city there.
-3. **Endless after the boss.** "Keep going" after the win continues with
-   scaling waves.
-4. **Readability:** where a piece starts and ends, which tiles a support tile
+1. **Board and land.** The Core sits fixed at (0, 0) on an open-ended grid.
+   You build on a **board** of buildable cells that starts as v1's 6×6
+   square. At set levels you choose one of several equal-size **land
+   shapes** and attach it anywhere along the board's edge, so the board
+   grows into a shape of your choosing (Spikes B and B2, §2.1).
+2. **Endless after the boss.** "Keep going" after the win continues with
+   scaling difficulty, returning Colossi and more land (§2.11).
+3. **Readability:** where a piece starts and ends, which tiles a support tile
    affects, and how chains work must all be obvious.
-5. **Editing UX:** multi-select, box select, group move and rotate, undo.
-6. **Synergy changes:** filled rows/columns are removed; Generators and
+4. **Editing UX:** multi-select, box select, group move and rotate, undo.
+5. **Synergy changes:** filled rows/columns are removed; Generators and
    Engines can form chains; Magnets pulse.
 
 **Design pillars:** v1's pillars stay (space is the resource, calm puzzle /
 hectic drive, readable at a glance, power fantasy first, connected or useless).
-v2 adds one:
+v2 adds two:
 
 - **Edit without friction.** Rearranging a big city must take as few actions
   as rearranging a small one. If an edit needs more than a few clicks, the
   build screen is missing a tool.
+- **Shape the board, don't puzzle it.** Land is a few big, clear choices per
+  run; building the board must never become a second piece puzzle (user,
+  2026-10-21).
 
 **Targets**
 
-- Normal run: 15 waves (~10:40 of combat) + boss wave; shop visits average
-  under 20 s.
+- Normal run: 12:00 plus the boss, as v1.
 - Endless: playable until the city is overwhelmed; 60 fps at 600 enemies with
   a city of up to ~200 tiles.
-- Content: v1's 12 tile types, 21 pieces, 6 enemies and the Colossus. v2 adds
-  no new content until the spikes are decided.
+- Content: v1's 12 tile types, 21 pieces, 6 enemies and the Colossus, plus
+  the land shapes. Tile reworks (first: the Saw, §2.9) are planned with the
+  user.
 
 ---
 
@@ -119,110 +124,83 @@ v2 adds one:
 All numbers are **starting values to tune**, kept in `src/config/`. Anything
 not mentioned here works as in v1 (`concept.md` §2).
 
-### 2.1 The grid (v2: unbounded)
+### 2.1 Board and land (v2, as implemented in Phase 1)
 
-- Cells are integer coordinates relative to the Core at **(0, 0)**. There are
-  no bounds and no grid expansion.
-- The **Core is fixed** at (0, 0): it cannot be moved or scrapped. Every other
-  group can be moved freely in the shop.
-- One cell = 32×32 world pixels (unchanged). The city never rotates.
-- The city's world position is the Core's centre (v1 used the grid centre).
-- Implementation: a sparse map keyed by cell (no fixed-size arrays), so a
-  scattered city costs only its tile count.
+- Cells are integer coordinates; the **Core is fixed at (0, 0)**: it cannot
+  be moved or scrapped. Every other group can be moved freely in a build
+  pause. Coordinates may be negative; there is no grid size.
+- The **board** is the set of buildable cells. It starts as a 6×6 square
+  with the Core where v1 had it (cells −3…2 on both axes, 36 cells).
+  Pieces may only be placed on board cells.
+- **Land:** the level-ups at levels **8, 15, 22, 29, 36** (`LAND.atLevels`)
+  first offer **3 land shapes of 12 cells** each, drawn at random from block
+  3×4, strip 2×6, big L, big T, plus, U and thick Z. You pick one (click or
+  1–3), rotate it (R / right-click) and place it anywhere where **no cell is
+  already board and at least one cell shares an edge with the board**; the
+  whole shape shows red where it can't go. Then the normal piece pick
+  follows in the same pause. Board 36 → 96 cells over a run.
+- Pacing: the balance sim's bots reach those levels at about 2:10, 3:30,
+  5:35, 7:20 and 9:05 (they collect every gem, so players are later). The
+  first try (levels 5/9/13) put all land in the first three minutes and was
+  too fast early, too rare late (user, 2026-10-21).
+- There are no timed grid expansions any more.
+- One cell = 32×32 world pixels (unchanged). The city never rotates. The
+  city's world position is the centre of the Core's cell (v1 used the grid
+  centre).
+- Implementation: sparse maps keyed by cell (no fixed-size arrays), so a
+  spread-out city costs only its tile count.
 
-**Spike B: change (user, 2026-10-21).** The user tested free infinite
-growth and did not like it, but wants builds with more creative shapes.
-Decided direction (details to plan in Spike B2, §11):
+As implemented (Phase 1): `CityState.board` is a `Set` of `cellId`s
+(`src/sim/grid.ts`; ids stay below 2^30 so they are small integers in V8,
+coordinates limited to ±16383); placement problems are `off_board` /
+`overlap`. Land in `src/config/land.ts` and `src/sim/land.ts` (`rollLand`,
+`landCells` centres the rotated shape's bounding box on the pointer cell,
+`landProblems`, `addLand`); `World.pendingLand` counts land level-ups,
+queued by `addXp`. In a build session (`src/sim/build.ts`) `land` /
+`heldLand` hold the land step; `pickLand`, `landPreviewAt`, `placeLandAt`,
+`offerLand` (debug); while land is pending, offers, upgrades, Repair Core,
+reroll and moving groups are refused and confirm is blocked (`'land'`).
+The Core can't be picked up. The run cache (`World.cache.cells`) and
+synergies are sparse maps; chains are found by walking each line from its
+first tile. The world origin is the Core's cell centre.
 
-- The board is a set of buildable cells (a mask) instead of a square.
-- **Classes:** different starting board shapes, e.g. triangle, hexagon,
-  circle, long box (approximated on the square grid).
-- **Paid expansions:** pay currency to add one row or column strip in a
-  direction of your choice. Expansion is its own option, separate from
-  buying pieces: **expansion buttons sit at the edges of the board shape.**
-- Rejected: buying land plots shaped like pieces (§13).
-
-**Superseded the same day (user, with the Spike A drop):** no currency, so
-the grid grows at **set levels**: at an expansion level you choose one of
-several **land shapes** (same cell count, big enough to matter) and place
-it anywhere it touches the board. Edge expansion buttons and classes are
-set aside until land shapes are judged.
-
-**Spike B2: kept (user, 2026-10-21).** The user likes land shapes.
-Feedback: land came too fast early and too rarely late, which hurt the
-puzzle; the level-up screen panned the view because WASD was still held
-from driving. Changed on the spike branch (commit after df99dc8): land at
-levels **8, 15, 22, 29, 36** (was 5, 9, 13; the balance sim's bots reach
-them at about 2:10, 3:30, 5:35, 7:20, 9:05, while 5/9/13 all came between
-1:40 and 3:00), board 36 → 96 cells; pan keys only pan after a fresh
-press in the build screen (a phase must keep this rule).
-
-Spike B2 as first built (draft agreed with the user, numbers Claude's
-guesses): board = set of
-buildable cells, starting as v1's 6×6 around the Core (36 cells); land at
-levels **5, 9, 13** (`LAND.atLevels`): the level-up first offers **3 land
-shapes of 12 cells** (block 3×4, strip 2×6, big L, big T, plus, U, thick
-Z; `src/config/land.ts`); click/1–3 picks, R/right-click rotates, click
-places; valid when no cell overlaps the board and at least one shares an
-edge with it (whole shape shown red otherwise); then the normal piece pick
-in the same pause. Pieces must lie on the board. Board 36 → 48 → 60 → 72.
-Build screen: board cells filled with a strong outline, faint lines
-outside; fit covers the whole board. Spike B's pan/zoom, camera framing
-and removed filled rows carry over. Debug: F2 = level-up with land (run) /
-offer land (build screen), F3 fills the board.
-
-What Spike B did, kept as reference: How the spike does it: the Core starts at (0, 0) and cells may
-be negative; the run cache keys cells by a number (`cellNum`), synergies
-scan the city's bounding box; the world position is the centre of cell
-(0, 0). Placement only checks overlaps. Combat camera: follows the Core,
-zoom = city bounding box ≤ 35% of the view's width and height, clamped to
-0.4–1 (`CAMERA.cityFrame`, `CAMERA.minZoom`). Build screen: the city has
-its own camera in the middle of the screen (pan WASD / arrows /
-middle-drag at 700 px/s, wheel zoom ×1.15 per step toward the pointer,
-0.3–3, F/Home fits with 3 empty cells of margin, also on every pause).
-The HUD and build screen show tile count and speed, for the "slow blob"
-question. Still v1 levels; filled rows/columns are gone (their HP bonus
-too). Debug F3 fills the city's bounding box plus one ring.
+How the spikes got here: free infinite growth (Spike B) was disliked: no
+reason to grow one way rather than another. Class starting shapes and paid
+edge expansions were discussed, then replaced by land shapes at set levels
+(Spike B2, kept 2026-10-21). Class starting shapes and edge buttons are
+parked in §13.
 
 ### 2.2 Pieces and tiles
 
-Unchanged from v1. Pieces now also have a **price** (§2.8).
+Unchanged from v1.
 
-### 2.3 Placement and rearranging (v2: in the shop)
+### 2.3 Placement and rearranging (build pause)
 
-- All building happens in the **shop**, between waves (§2.8). The game is
-  paused there.
-- Placement rules from v1 apply, without the bounds check: cells must be empty,
-  rotation in 90° steps, no mirroring. The confirm rule ("Next wave" only when
-  every tile is connected to the Core) stays.
-- **Bought pieces** are owned: until placed, they show as "owned, unplaced"
-  in their shop slot and block confirm. They must be placed or scrapped.
-- **Scrap** refunds **50% of the price paid** for that piece (rounded down).
-  A split part refunds its share by cell count. The free starter piece
-  refunds nothing.
-- Offline tiles at shop start must be reconnected or scrapped (unchanged).
+As v1 (`concept.md` §2.3), except:
+
+- Cells must be on the board (instead of inside the grid bounds) and empty.
+- A land level-up pause starts with the land step (§2.1); offers, upgrades,
+  Repair Core and reroll appear once the land is placed. Confirm is blocked
+  until then ("Place the new land first").
 - Editing tools: §3.1.
 
-### 2.4 Connectivity
+### 2.4 Connectivity (as implemented in Phase 1)
 
 - Rules unchanged from v1 (flood fill from the Core, offline tiles).
-- **Bridge detection must be linear time** (Tarjan articulation points)
-  instead of v1's brute force: endless cities can reach hundreds of tiles, and
-  Sappers recompute bridges on every city change.
+- **Bridge detection is linear time:** Tarjan articulation points with an
+  iterative DFS rooted at the Core (`findBridges`), instead of v1's brute
+  force; a property test checks it against the brute force on 200 random
+  cities, another a 3000-tile snake.
 
 ### 2.5 Movement
 
 Unchanged from v1 (150 px/s, −2% per tile above 10, floor 55%, Engines +12%
-each). The 55% floor now matters much more because cities can get big; watch
-it in Spike B. Engine chains (§2.7) are the counterweight.
+each). Engine chains (§2.7) are the counterweight to big cities.
 
 ### 2.6 Combat
 
-Unchanged from v1, except:
-
-- **Win:** kill the boss in wave 16. If it is still alive 120 s after it
-  arrives, it enrages (×2 damage), the same as v1's 14:00.
-- **Lose:** the Core is destroyed (unchanged), also in endless.
+Unchanged from v1 (win: kill the Colossus; enrage at 14:00). Lose: the Core
+is destroyed, also in endless.
 
 ### 2.7 Synergies (v2)
 
@@ -240,92 +218,17 @@ Unchanged from v1, except:
      speed.
    - Drawn like weapon chains (link line through the centres), in the
      support tile's colour.
-4. **Filled rows/columns: removed** (decided 2026-10-21; with no grid edges
-   there is no "full row"). This also removes their max HP bonus. Max HP now
-   only comes from levels and Hull L3.
+4. **Filled rows/columns: removed** (decided 2026-10-21; an irregular board
+   has no clear "full row"). This also removes their max HP bonus. Max HP
+   now only comes from levels and Hull L3.
 
 How bonuses combine (v1 formula without the filled-line term): weapon damage =
 base × level multiplier × (1 + chain bonus + Generator L3 bonus).
 
-### 2.8 Coins, waves and the shop (v2, replaces XP and levels)
+### 2.8 XP, levels and offers
 
-**Coins**
-
-- Killed enemies drop **coins** instead of XP gems: Swarmer 1, Runner 1,
-  Spitter 2, Sapper 2, Brute 5, Bomber 0, elites = their group's value, Elite
-  Brute 40 (Claude's calls for the types not discussed).
-- Pickup: a coin is collected when it comes within 24 px of **any** tile
-  (unchanged). Magnets no longer change this radius (§2.9).
-- **Wave end:** coins still on the ground are collected at **50%** (rounded
-  down) (decided 2026-10-21).
-- Live coin cap and merging work like v1's 400-gem cap.
-
-**Waves**
-
-- 15 waves, then the boss wave 16 (decided 2026-10-21). Wave *n* lasts
-  **25 + 2.5 × (n − 1) s** (25 s → 60 s, ~10:38 in total).
-- Inside a wave the v1 spawner runs on **combat time** (time spent in waves,
-  shop time excluded): budget curve, groups and the +6%/min enemy HP growth
-  are unchanged.
-- New enemy types enter at: Runners wave 2, Brutes wave 4 (with the v1
-  mini-wave spike at its start), Spitters wave 6, Sappers wave 8, Bombers
-  wave 10 (plus the Elite Brute at its start), "final escalation"
-  (spawn rate ×1.5) waves 13–15. Pentomino pieces appear in the shop from
-  wave 6.
-- **Wave end:** when the timer runs out, all remaining enemies and enemy
-  shots fade out (no coins), leftover coins are collected at 50%, a
-  "WAVE n CLEARED" banner shows for 1 s, then the shop opens.
-- **Boss wave:** no timer; regular spawns are off (Colossus summons only).
-  Unchanged Colossus (`concept.md` §4.3), 50000 HP. Killing it opens the win
-  screen (§2.11).
-
-**Shop** (opens after every wave; this is also the build screen)
-
-- **4 piece slots** rolled from the v1 pool with v1 weights and rules (never
-  three cards of the same tile type).
-- **2 upgrade slots:** random tile types the city owns that are below
-  level 5 (Core excluded). Buying one gives that type +1 level with v1's
-  per-level gains and L3/L5 perks (`concept.md` §2.8; Magnet perks change,
-  §2.9).
-- **Repair Core:** heals 35% of max HP, disabled at full HP (as v1).
-- **Reroll:** rerolls the piece and upgrade slots that are not locked.
-- **Lock:** each slot can be locked to keep it for the next shop visit.
-- Several items can be bought per visit, as long as there are coins.
-- **"Next wave"** (Enter) closes the shop when the confirm rule holds.
-
-**Prices** (all × the wave's **inflation** = 1 + 0.2 × (wave − 1), rounded;
-all Claude's calls, to be calibrated in Spike A):
-
-| Item | Base price |
-|---|---|
-| Piece | 1 per Hull/Plating cell + 3 per other tile (domino Hull 2 … five-function pentomino 15) |
-| Upgrade | 8 × the level bought (L2 = 16, L5 = 40) |
-| Repair Core | 10 |
-| Reroll | 2, +1 per reroll within the same visit |
-
-**Spike A (built 2026-10-21, `v2-spike-a-shop`, awaiting the user's
-verdict).** How the spike does it, for the user to judge (Claude's calls):
-
-- The v1 spawner runs on a remapped "v1 clock": wave starts 1, 2, 4, 6, 8,
-  10, 13, 16 map to v1 times 0, 60, 150, 240, 330, 420, 600, 720 s
-  (interpolated in between). That puts every new enemy type, the 40-Swarmer
-  spike (wave 4), the Elite Brute (wave 10, 40 coins), pentominoes and the
-  final escalation at the waves above, with v1's budget curve and group
-  weights. Enemy HP growth stays on combat time.
-- Shop: slot click buys and puts the piece in the hand; a bought, unplaced
-  piece stays in its slot ("Owned") and Esc puts it back there; placing it
-  empties the slot. Reroll refills every unlocked slot that is not owned
-  (sold ones too). Repair Core can be bought repeatedly until full HP.
-  Upgrades can be bought while holding a piece.
-- Scrap refunds are tracked per tile (`paid` = price / cells), so split
-  parts and damaged-away tiles refund their share automatically.
-- Grid expansions happen in the shops after waves 6 and 10 (spike only).
-- Debug: G +50 coins, T ends the wave, J jumps to the shop before the boss.
-  `?sandbox=1` opens a shop with 9999 coins before wave 1.
-- All prices and coin values are the table's guesses, untouched.
-
-**Start of a run:** Core plus a free starter piece (domino: Gatling facing up
-+ Hull), 0 coins. The first shop opens after wave 1.
+Unchanged from v1 (`concept.md` §2.8), plus the land step at land levels
+(§2.1). (The v2 coins/waves/shop design was dropped after Spike A; §13.)
 
 ### 2.9 Tile catalogue
 
@@ -333,27 +236,29 @@ Unchanged from v1 (`concept.md` §2.9), except:
 
 | Tile | v2 change |
 |---|---|
-| **Magnet** | Function: **pulse.** Every 8 s, each online Magnet pulls every coin within 300 px of **its own tile** to the city (coins fly at 600 px/s). Magnets far apart cover more ground than Magnets side by side. A visible ring expands from the Magnet on each pulse. Each Magnet keeps its own timer (starting at a random 0–8 s offset), so pulses don't line up. Level gain: +20% radius per level. **L3:** pulse every 6 s. **L5:** base radius 450 px. (Decided "pulse" 2026-10-21; numbers and perks are Claude's drafts.) |
+| **Magnet** | Function: **pulse.** Every 8 s, each online Magnet pulls every XP gem within 300 px of **its own tile** to the city (gems fly at 600 px/s). Magnets far apart cover more ground than Magnets side by side. A visible ring expands from the Magnet on each pulse. Each Magnet keeps its own timer (starting at a random 0–8 s offset), so pulses don't line up. Level gain: +20% radius per level. **L3:** pulse every 6 s. **L5:** base radius 450 px. (Decided "pulse" 2026-10-21; numbers and perks are Claude's drafts.) |
 | **Generator / Engine** | Can form chains (§2.7). |
+| **Saw** (rework requested, not yet planned) | The user finds Saws underwhelming (2026-10-21): instead of only damaging enemies they touch, a Saw should be the origin of a **blade that rotates around it** with a larger hitbox, to make melee builds fun and viable. Details and the phase to do it in: to plan with the user (§11, §12). |
 
 ### 2.10 Firing arcs
 
 Unchanged from v1 (`concept.md` §2.10).
 
-### 2.11 Endless (v2)
+### 2.11 Endless (v2, draft for Phase 4)
 
 - The win screen after the boss offers **"Keep going"** and **"End run"**
   (decided 2026-10-21).
-- Keep going: the shop opens, then waves continue from wave 17. Every
-  endless wave lasts 60 s and uses the v1 12:00 spawn budget; enemy HP and
-  contact/shot damage are **× 1.12^(wave − 16)** (compounding, on top of the
-  v1 per-minute HP growth, which stops at wave 16).
-- **The Colossus returns** at waves 21, 26, 31, … (every 5 waves), with
-  HP × 1.5 per return, alongside the normal spawns.
+- Keep going (Claude's draft, to confirm in Phase 4, user agreed the
+  outline 2026-10-21): spawns resume at the v1 12:00 budget; enemy HP and
+  contact/shot damage grow **×1.12 per minute** past the boss kill
+  (compounding, on top of v1's +6%/min HP growth); **the Colossus returns**
+  every 5 minutes with HP ×1.5 per return, alongside the normal spawns.
+- **Land keeps coming** every 7 levels after level 36 (43, 50, …), so the
+  board can grow without limit in endless (user agreed 2026-10-21).
 - Elite conversion above 600 live enemies is unchanged; elites become the main
   way the late game gets harder.
-- The run ends when the Core is destroyed. The end screen reports waves
-  survived, "Boss defeated" if it was, kills and coins earned.
+- The run ends when the Core is destroyed. The end screen reports time
+  survived, "Boss defeated", level and kills.
 
 ---
 
@@ -361,67 +266,73 @@ Unchanged from v1 (`concept.md` §2.10).
 
 **Combat:** unchanged from v1 (WASD/arrows, Esc/P pause, M mute, F1 debug).
 
-**Shop / build screen (v2):**
+**Build pause (v2 additions to v1's keys):**
 
 | Action | Input |
 |---|---|
-| Buy piece | Click the card, or 1/2/3/4 (the piece goes to the hand) |
-| Buy upgrade | Click, or Shift+1/Shift+2 |
-| Repair Core / Reroll | Click, or 5 / 6 (v1 used 5 / 4; changed to fit 4 slots) |
-| Lock slot | Click its lock icon, or L while hovering it |
-| Select a group | Click a tile |
-| Add/remove a group from the selection | Shift+click |
-| Box select | Drag on empty space (selects every group that has a tile in the box) |
-| Select all (except Core) | Ctrl+A |
+| Land: pick / rotate / place | Click a land card or 1/2/3; R or right-click; click on the board view |
+| Select a group | Click a tile (Phase 2) |
+| Add/remove a group from the selection | Shift+click (Phase 2) |
+| Box select | Drag on empty space (selects every group that has a tile in the box) (Phase 2) |
+| Select all (except Core) | Ctrl+A (Phase 2) |
 | Move selection | Drag any selected tile; or click once to carry it, click again to drop (as v1) |
 | Rotate held selection | R or right-click, 90° around the grabbed cell |
-| Scrap selection | X or Delete, or drop on the scrap zone (shows total refund) |
-| Undo / redo | Ctrl+Z / Ctrl+Shift+Z (also Ctrl+Y) |
+| Scrap selection | X or Delete, or drop on the scrap zone |
+| Undo / redo | Ctrl+Z / Ctrl+Shift+Z (also Ctrl+Y) (Phase 2) |
 | Clear selection / put held back | Esc |
-| Pan | WASD / arrows, or middle-drag |
+| Pan | WASD / arrows, or middle-drag. A key only pans after a fresh press in the pause, so keys still held from driving don't scroll (user feedback 2026-10-21). |
 | Zoom | Mouse wheel (toward the pointer) |
-| Fit city to view | F or Home |
+| Fit board to view | F or Home |
 | Bridges / all arcs | B / V (unchanged) |
-| Rules legend | ? or H |
-| Next wave | Enter / button |
+| Rules legend | ? or H (Phase 3) |
+| Confirm | Enter / button |
 
-### 3.1 Editing rules (v2)
+### 3.1 Editing rules (v2, Phase 2)
 
 - A **selection** is a set of groups. Moving a selection keeps the relative
-  positions of its groups; a drop is valid only if every cell is empty
-  (outside the selection) and none is the Core's cell. An invalid drop keeps
-  the selection in hand, as in v1.
+  positions of its groups; a drop is valid only if every cell is on the
+  board and empty (outside the selection). An invalid drop keeps the
+  selection in hand, as in v1. The Core is never part of a selection.
 - Selected groups get a bright outline; the held selection floats with a
   shadow.
-- **Undo** (Claude's addition, accepted with the plan) covers everything in
-  the current shop visit: purchases (undo refunds in full), placements, moves,
-  rotations, scraps, rerolls (undo restores the previous slots and the
-  reroll price), locks and Repair Core. History is cleared when the wave
-  starts.
+- **Undo** covers everything in the current build pause: land placement,
+  taking an offer or upgrade, Repair Core, placements, moves, rotations,
+  scraps and rerolls. History is cleared when the pause closes.
 
-### 3.2 Camera (v2)
+### 3.2 Camera (v2, as implemented in Phase 1)
 
 - **Combat:** follows the Core with light smoothing; zoom changes smoothly
-  (over ~1 s) so the city's bounding box takes up at most **35%** of the
-  view's height and width. Zoom floor 0.4 (below that, enemies stop being
-  readable; see §12). The spawn ring and "far behind" checks must use the
-  current view size, not a fixed one.
-- **Shop:** opens fitted to the city with ~3 empty cells of margin;
-  pan/zoom freely; F refits.
+  so the city's bounding box takes up at most **35%** of the view's height
+  and width, between zoom 0.4 and 1 (below 0.4 enemies stop being readable;
+  see §12). The spawn ring and "far behind" checks use the current view
+  size (as v1 already does).
+- **Build pause:** the board has its own view between the side panels;
+  opens fitted to the board with ~3 empty cells of margin; pan/zoom freely
+  (zoom 0.3–3); F refits.
+- As implemented: combat camera in `RunScene.targetZoom` (`CAMERA.cityFrame`
+  0.35, `minZoom` 0.4, `maxZoom` 1), following the Core. Build screen:
+  the main camera is the board view (viewport x 300–995, y 70–720), a
+  second full-screen camera draws the UI; board and UI objects live in two
+  layers, each ignored by the other camera. Pan 700 px/s, wheel ×1.15 per
+  step toward the pointer, fit margin 3 cells (`BUILD_VIEW`). A pan key
+  only pans after a fresh (non-repeat) press during the pause. Line widths
+  in the board view stay constant on screen.
 
-### 3.3 Readability (v2 additions; v1 rules still apply)
+### 3.3 Readability (v2 additions; v1 rules still apply; Phase 3)
 
+- **Board:** board cells are filled and outlined strongly; cells off the
+  board show only faint lines (Phase 1).
 - **Piece outlines:** a thick (3 px) dark border wherever a tile meets a
   tile of another group or empty space; a thin (1 px) seam between tiles of
   the same group. You can then see at a glance where a piece starts and
-  ends. In the shop and in combat.
+  ends. In the build pause and in combat.
 - **Buff pips:** every tile shows one small pip per support type currently
   buffing it (Generator, Shield Emitter, Repair Bay), in that support tile's
-  colour, in a fixed corner order. In the shop and in combat.
-- **Hover a support tile** (shop): the tiles it affects get a tinted overlay
-  and a short arrow from the source. **Hover any tile:** the tooltip lists
-  what it receives, with numbers ("Generator +25% fire rate (×2)",
-  "Chain ×3 +50% damage").
+  colour, in a fixed corner order. In the build pause and in combat.
+- **Hover a support tile** (build pause): the tiles it affects get a tinted
+  overlay and a short arrow from the source. **Hover any tile:** the
+  tooltip lists what it receives, with numbers ("Generator +25% fire rate
+  (×2)", "Chain ×3 +50% damage").
 - **Chain preview:** while holding pieces, cells that would form or extend a
   chain show the link line live (as v1) **plus a floating label** with the
   result ("Chain 3: +50% damage").
@@ -438,52 +349,47 @@ Unchanged from v1 (`concept.md` §2.10).
 
 ### 4.1 Run structure (v2)
 
-See §2.8 (waves) and §2.11 (endless). No grid expansions.
+v1's 12:00 timeline (`concept.md` §4.1) without the grid expansions at
+4:00 and 8:00: the board grows by land at levels instead (§2.1). Endless:
+§2.11.
 
 ### 4.2 Piece pool
 
-Unchanged from v1 (21 pieces), with prices from §2.8 and pentominoes from
-wave 6.
+Unchanged from v1 (21 pieces, pentominoes from 4:00).
 
 ### 4.3 Enemies
 
-Unchanged from v1 (`concept.md` §4.3), except coin values (§2.8) and endless
-scaling (§2.11).
+Unchanged from v1 (`concept.md` §4.3), except endless scaling (§2.11).
 
 ---
 
 ## 5. Story, Tone & Text
 
-Unchanged from v1. New draft text (user's to rewrite): "WAVE n CLEARED",
-"Keep going", "End run", the chain hint in §3.3, the end screen line
-"Survived n waves".
+Unchanged from v1. New draft text (user's to rewrite): "New land!", "Place
+the new land first", "Keep going", "End run", the chain hint in §3.3.
 
 ## 6. Look
 
-Unchanged from v1 (`concept.md` §6), plus the readability additions in
-§3.3 and the Magnet pulse ring. Coins replace cyan XP diamonds: use a gold
-coin (a circle with a darker rim) so coins stay in their own colour family.
+Unchanged from v1 (`concept.md` §6), plus the board drawing, the
+readability additions in §3.3 and the Magnet pulse ring.
 
 ## 7. Audio
 
-Unchanged from v1. New events reuse existing sounds: purchase (pick-up
-sound), wave cleared (level-up sound), Magnet pulse (a quiet existing sound,
-rate-limited). Claude's call.
+Unchanged from v1. New events reuse existing sounds: land placed (the grid
+expansion sound), Magnet pulse (a quiet existing sound, rate-limited).
+Claude's call.
 
 ## 8. UI, Progress & Saving
 
-- **HUD:** "Wave n/15" (or "Wave n" in endless) and wave countdown (top
-  centre), coins, Core HP bar, kills; boss bar as v1. No XP bar, level or
-  grid size.
-- **Shop screen:** the city centred and pannable; a side panel with coins,
-  4 piece cards (price, lock), 2 upgrade cards, Repair Core, Reroll (price),
-  scrap zone, "Next wave" with the reason when it is disabled.
-- **End screen:** as v1, with waves survived and coins earned instead of
-  level.
+- **HUD:** as v1, with "Board n · Tiles n · Speed n%" instead of the grid
+  size; no "GRID EXPANDED" banner.
+- **Build pause:** the board view in the middle (pan/zoom), cards and
+  options at the side as v1; land cards first at land levels.
+- **End screen:** as v1; the final city is drawn on its board.
 - **Saving:** none (unchanged). Settings key unchanged.
-- **Debug** (v1 keys, changes): `G` +50 coins (was +1 level); `T` ends the
-  current wave; `F2` removed (no expansion); `J` jumps to wave 16 (boss)
-  with the shop first. `?sandbox=1` opens the shop with a large coin balance.
+- **Debug** (v1 keys, changes): `F2` = level-up with land (was: grow the
+  grid); in the build screen `F2` offers land; `F3` fills every empty board
+  cell with Gatlings. `?sandbox=1` opens the build screen alone.
 
 ---
 
@@ -496,16 +402,14 @@ asking.
 
 Expected changes to the code structure (rebuilt in phases, not in spikes):
 
-- `sim/grid.ts`: sparse unbounded grid; no bounds, no expansion.
+- `sim/grid.ts`: sparse open-ended grid with a board; no bounds, no
+  expansion.
+- `sim/land.ts` + `config/land.ts`: land shapes, offers, placement rules.
 - `sim/connectivity.ts`: Tarjan bridges.
-- `sim/progression.ts` → `sim/economy.ts` (coins, prices, inflation) and
-  `sim/shop.ts` (slots, locks, reroll, purchases).
-- `sim/waves.ts`: wave clock, wave end, boss wave, endless scaling.
-- `sim/build.ts`: selection, group move/rotate, undo history.
-- `sim/synergies.ts`: no filled lines, support chains.
-- `config/economy.ts`: coin values, prices, inflation; `config/waves.ts`
-  gains the wave table and endless numbers.
-- `bench/balance.sim.ts`: bots that shop instead of levelling (Phase 5).
+- `sim/build.ts`: land step; later selection, group move/rotate, undo.
+- `sim/synergies.ts`: no filled lines; support chains (Phase 3).
+- `bench/balance.sim.ts`: bots place land (Phase 1: simple; Phase 4: as
+  part of balance).
 
 ---
 
@@ -562,17 +466,18 @@ these v2 changes:
 
 | Step | Content | Done when |
 |---|---|---|
-| **Spike A — shop loop** (riskiest) | On v1's code and bounded grid: waves (§2.8) replacing the 12:00 timeline; coins instead of XP; shop after each wave with 4 piece slots, 2 upgrade slots, Repair, Reroll, lock, prices with inflation; scrap refund 50%; leftover coins at 50%; boss wave. Grid expansions move to the shops after waves 6 and 10. No endless, no new editing tools. | **User answers: does the wave/shop rhythm feel better than level-ups?** Keep / change / drop, plus first price feedback. |
-| **Spike B — unbounded grid** | On `v2` (v1 levels, not Spike A): Core fixed at (0, 0), no bounds or expansions, build screen pan/zoom/fit, combat camera zoom (§3.2), filled rows removed. | **User answers: does free growth feel good, or does the city sprawl into a slow blob?** Keep / change / drop. |
-| **Spike B2 — land shapes** (built and **kept** 2026-10-21) | Board mask; at set levels choose one of 3 equal-size land shapes and place it touching the board (§2.1). Reuses Spike B's coordinates, pan/zoom and camera. (Replaced the earlier plan of class shapes + paid edge expansions.) | User answers: do land shapes lead to more creative builds? |
-| **Phase 1 — unbounded grid** | Sparse grid, Core fixed, Tarjan bridges, camera zoom and spawn ring from view size, filled rows removed (tests updated to the new rules). | Kept Spike B behaviour, rebuilt properly; all tests pass. |
-| **Phase 2 — waves and shop** | `waves.ts`, `economy.ts`, `shop.ts` with tests; shop scene; HUD and end screen changes; coin visuals. | A full normal run with the shop. |
-| **Phase 3 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo, pan/zoom polish (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
-| **Phase 4 — readability and synergies** | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse (§2.9). | The user can tell at a glance what affects what. |
-| **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling and returning Colossus (§2.11); `npm run sim` with shopping bots; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
-| **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
+| **Spike A — shop loop** (built, **dropped** 2026-10-21) | Waves, coins and a shop instead of level-ups, on v1's code. | Dropped: the user did not like the loop much (§13). |
+| **Spike B — unbounded grid** (built, **changed** 2026-10-21) | Core fixed at (0, 0), no bounds or expansions, pan/zoom/fit, combat camera framing, filled rows removed. | Free growth disliked; became Spike B2. |
+| **Spike B2 — land shapes** (built, **kept** 2026-10-21) | Board mask; land shapes at set levels, placed touching the board (§2.1). | Kept; pacing retuned to levels 8/15/22/29/36. |
+| **Phase 1 — board and land** | Rebuild Spikes B + B2 properly with tests: Core fixed at (0, 0), sparse open-ended grid, board of buildable cells, land shapes at levels 8/15/22/29/36 (12 cells, 3 offered), Tarjan bridges, filled rows removed, combat camera framing, build screen pan/zoom/fit with the fresh-key rule; old tests updated to the new rules; balance bots place land. | Plays like Spike B2; all tests pass. |
+| **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
+| **Phase 3 — readability and synergies** | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
+| **Phase 4 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
+| **Phase 5 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
+| **Tile reworks** (to schedule with the user) | First: Saw with a rotating blade (§2.9). | — |
 
-If a spike is dropped, its phase is removed or rewritten with the user, and
+Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
+"waves and shop" is gone). If a spike is dropped, its phase is removed or rewritten with the user, and
 the reason is recorded. Phases 3 and 4 don't depend on the spikes and may
 start early if the user asks.
 
@@ -582,11 +487,11 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- Spike A: **dropped** 2026-10-21 (XP and level-ups stay). Spike B:
-  **change** 2026-10-21 → Spike B2 (land shapes at set levels), **kept**
-  2026-10-21. Open: rewrite §11 (Phase 1 with board mask and land; Phase 2
-  and the endless plan without waves); final land levels, size and shape
-  set (Claude's guesses: levels 8/15/22/29/36, 12 cells, 7 shapes).
+- Saw rework (§2.9): how the blade works (size, speed, damage, levels,
+  perks) and which phase does it.
+- Endless details (§2.11): scaling numbers, Colossus returns (Phase 4).
+- Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
+  7 shapes). Parked: class starting shapes (§13).
 - v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
   on GitHub Pages (the workflow would build both branches into one Pages
   artifact), or v2 replaces v1 on `main`.
@@ -596,37 +501,41 @@ start early if the user asks.
 - Carried over from v1: final title, code licence, piece mirroring,
   meta-progression.
 
-**Claude's calls to check** (made while writing this concept):
+**Claude's calls to check**
 
-- All prices, inflation (+20% per wave), coin values for Spitter/Sapper/
-  Bomber/Elite Brute, the starter piece, Magnet pulse numbers and the new
-  Magnet perks, endless numbers (×1.12 per wave, Colossus every 5 waves at
-  ×1.5 HP), wave-to-enemy mapping, zoom floor 0.4 and the 35% framing.
+- Land: 12 cells, 3 offers, the 7 shapes, land placed before the piece pick
+  in the same pause, land must not overlap the board (no partial overlap).
+- Magnet pulse numbers and the new Magnet perks, endless numbers (×1.12 per
+  minute, Colossus every 5 minutes at ×1.5 HP), zoom floor 0.4 and the 35%
+  framing, build view zoom 0.3–3.
 - Support chains multiply the chained tile's own effect; the receiving
   tile's Generator cap stays +75%. If chains then feel pointless, raise the
   cap for chain-buffed tiles.
-- Reroll/Repair keys changed to 6/5; undo covers purchases with a full
-  refund.
-- Leftover coins and enemy fade-out at wave end give no coins for the
-  faded enemies.
 
 **Risks**
 
-- **Shop pauses break the flow** (15+ stops per run). *Check:* Spike A;
-  measure average shop time (target < 20 s).
-- **Unbounded growth makes cities slow and blobby**, and the 55% speed floor
-  makes size free after a point. *Check:* Spike B; levers are the floor, the
-  per-tile penalty and Engine chains.
+- **Board shapes make cities slow:** a long or spread board means more
+  tiles, and the 55% speed floor makes size free after a point. Levers: the
+  floor, the per-tile penalty, Engine chains.
 - **Readability at low zoom** with big cities and 600 enemies. *Check:*
-  Spike B / Phase 1.
+  Phase 1 / Phase 3.
 - **Performance in endless:** many tiles (enemy→nearest tile queries,
-  synergy and bridge recompute) plus elites. *Check:* Phase 5 bench with
+  synergy and bridge recompute) plus elites. *Check:* Phase 4 bench with
   ~200 tiles; tiles may need their own spatial hash.
-- **Economy snowball:** income grows faster than prices, so late shops buy
-  everything. *Check:* Spike A, then the Phase 5 sim.
 
 **Known issues**
 
+- **Intermittent bench spike (Phase 1):** in `npm run bench`, when the
+  stress city is worn down to the Core alone (≈ tick 410–450), one tick of
+  `updateEnemies` sometimes takes 100–320 ms (2 of 3 runs, then 0 of 3 with
+  a GC observer attached; not seen in 4 runs on `v2` before Phase 1).
+  Averages are fine (~6.9 ms/step, as before). Not found yet; the scenario
+  (600 enemies on one tile) can't happen in a real run without losing.
+  Look again in the Phase 4 performance check.
+- **`npm run bench` times out on this machine** (Vitest's 5 s test
+  timeout; the run takes ~7 s) on `v2` as well as on Phase 1: the check
+  never reports a pass here. Raise the bench's timeout in Phase 4, or run
+  on a faster machine.
 - v1 known issues (`concept.md` §12) carry over until the code involved is
   rebuilt.
 
@@ -637,14 +546,16 @@ start early if the user asks.
 - **Dropped 2026-10-21 (Spike A):** waves with a shop between them and
   coins instead of XP. Reason (user): did not like the loop much after a
   test run. Branch `v2-spike-a-shop` kept as a record.
+- **Parked 2026-10-21:** class starting board shapes (triangle, hexagon,
+  circle, long box) and paid edge expansion buttons (Spike B discussion),
+  set aside for land shapes; classes may return as a variety option.
 - Trading posts in the world you drive to (the shop-timing alternative,
   2026-10-21).
 - Magnet as interest on saved coins (alternative to the pulse).
 - **Rejected 2026-10-21:** buying land plots shaped like pieces. Reason
   (user): you already fit shapes together inside the grid; building the
   grid itself must not become a second puzzle.
-- Merging duplicates by placing a tile next to the same type (alternative to
-  upgrade slots).
+- Merging duplicates by placing a tile next to the same type.
 - Solid 3×3 blocks bonus or long-line bonus (alternatives to dropping
   filled rows).
 - Separate endless mode on the title screen.
@@ -656,6 +567,45 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Phase 1: board and land
+- Done (branch `v2-phase-1-board`, one commit per step, all checks green
+  at each): concept rewrite; filled rows/columns removed; open-ended grid
+  with a board, Core fixed at (0, 0), no timed expansions, combat camera
+  framing; Tarjan bridges; land shapes in the sim with tests; build screen
+  board view with pan/zoom/fit and the fresh-key rule; land step in the
+  build screen and runs (F2 debug); balance bots place land; small-integer
+  cell ids. Version `2.0.0-alpha.1`.
+- Tests: 124 pass (old tests moved to the new coordinates; expansion and
+  filled-row tests replaced by board, land and "no filled-row bonus"
+  tests; the Bomber test uses Plating, as Hull only survived through the
+  filled-row HP bonus).
+- Checked in a headless browser: build screen with board, pan/zoom/fit,
+  held piece over the scrap zone, land offer at a land level-up with WASD
+  still held (no panning), red overlap preview; no console errors.
+- Balance sim (seed 1, bots collect all XP): Gatling, Cannon, Mortar and
+  mixed builds win at level 47 with 71–93 tiles on 96-cell boards; the Saw
+  wall dies to the boss with one tile left (fits the user's Saw feedback;
+  not compared against v1 here).
+- Problems: the intermittent bench spike and the bench timeout (§12 Known
+  issues). Diagnosed with temporary logging (not committed): the spike is
+  inside `updateEnemies`, only once the city is down to the Core; large
+  cell ids were measured to cost ~7% (fixed), but were not the spike.
+  Stopped there instead of guessing further.
+- Next: the user tries Phase 1; merge into `v2`; Phase 2; schedule the
+  Saw rework.
+
+### 2026-10-21 — Plan rewritten, Phase 1 started
+- Decisions (user): the rewritten plan (§11): Phase 1 board and land,
+  Phase 2 editing UX, Phase 3 readability and synergies, Phase 4 endless
+  and balance (endless keeps giving land every 7 levels, so the board can
+  grow without limit there), Phase 5 polish and hosting. Pacing at levels
+  8/15/22/29/36 feels better. New request: rework the Saw into a tile with
+  a rotating blade around it, larger hitbox, to make melee builds fun
+  (§2.9; to schedule).
+- Done: concept §1–§9, §11–§13 rewritten for the decided design (XP and
+  levels, board and land; the shop design moved to §13).
+- Next: Phase 1 steps on `v2-phase-1-board`.
 
 ### 2026-10-21 — Spike B2 verdict
 - Decisions (user): Spike B2 **kept**. Feedback: land too fast early and

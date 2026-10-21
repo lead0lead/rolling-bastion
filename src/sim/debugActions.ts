@@ -2,6 +2,7 @@ import { ENEMIES, type EnemyType } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
 import { addXp, xpToNext } from './progression';
 import { spawnRing } from './spawner';
+import { cellFromId, cellId } from './grid';
 import { cityChanged, type World } from './world';
 
 /** Debug tooling (concept.md §8). Pure world mutations, bound to keys by the run scene. */
@@ -32,19 +33,20 @@ export function debugKillAll(w: World): void {
 
 export function debugLayoutJson(w: World): string {
   return JSON.stringify({
-    gridSize: w.city.gridSize,
+    board: [...w.city.board].map(cellFromId),
     tiles: w.city.tiles.map(({ type, gx, gy, hp, groupId }) => ({ type, gx, gy, hp, groupId })),
   });
 }
 
-/** Stress test: fills every empty cell with tiles of `type` (one new group). */
+/** Stress test: fills every empty board cell with tiles of `type` (one new group). */
 export function debugFillGrid(w: World, type: TileType): void {
   const city = w.city;
   const groupId = city.nextGroupId++;
-  const taken = new Set(city.tiles.map((t) => `${t.gx},${t.gy}`));
-  for (let gy = 0; gy < city.gridSize; gy++) {
-    for (let gx = 0; gx < city.gridSize; gx++) {
-      if (taken.has(`${gx},${gy}`)) continue;
+  const taken = new Set(city.tiles.map((t) => cellId(t.gx, t.gy)));
+  for (const id of city.board) {
+    if (taken.has(id)) continue;
+    const { x: gx, y: gy } = cellFromId(id);
+    {
       city.tiles.push({
         id: city.nextTileId++,
         type,

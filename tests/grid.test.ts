@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { PieceDef } from '../src/config/pieces';
 import {
+  cellFromId,
+  cellId,
   createCity,
+  onBoard,
   destroyTile,
   dropGroup,
-  expandGrid,
   heldFromPiece,
   liftGroup,
   placementProblems,
@@ -25,10 +27,31 @@ const L_PIECE: PieceDef = {
 };
 
 describe('createCity', () => {
-  it('starts with only the Core at the grid centre', () => {
+  it('starts with only the Core, fixed at (0, 0), on a 6×6 board around it', () => {
     const city = createCity(6);
     expect(city.tiles).toHaveLength(1);
-    expect(city.tiles[0]).toMatchObject({ type: 'core', gx: 3, gy: 3, hp: 250 });
+    expect(city.tiles[0]).toMatchObject({ type: 'core', gx: 0, gy: 0, hp: 250 });
+    expect(city.board.size).toBe(36);
+    expect(onBoard(city, -3, -3)).toBe(true);
+    expect(onBoard(city, 2, 2)).toBe(true);
+    expect(onBoard(city, 3, 0)).toBe(false);
+    expect(onBoard(city, 0, -4)).toBe(false);
+  });
+});
+
+describe('cellId', () => {
+  it('gives every cell its own id, negative coordinates included, and maps back', () => {
+    const cells = [
+      { x: 0, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: -1 },
+      { x: -5, y: 7 },
+      { x: 7, y: -5 },
+      { x: 1000, y: -1000 },
+    ];
+    const ids = cells.map((c) => cellId(c.x, c.y));
+    expect(new Set(ids).size).toBe(cells.length);
+    expect(ids.map(cellFromId)).toEqual(cells);
   });
 });
 
@@ -64,18 +87,18 @@ describe('rotateCells', () => {
 });
 
 describe('placementProblems', () => {
-  it('reports out-of-bounds and overlapping cells', () => {
-    const city = createCity(6); // core at 3,3
+  it('reports cells off the board and overlapping cells', () => {
+    const city = createCity(6); // Core at 0,0; board −3…2
     const problems = placementProblems(city, [
-      { x: 3, y: 3 },
-      { x: 6, y: 0 },
-      { x: -1, y: 2 },
-      { x: 2, y: 2 },
+      { x: 0, y: 0 },
+      { x: 3, y: 0 },
+      { x: -4, y: 2 },
+      { x: -1, y: -1 },
     ]);
-    expect(problems.get('3,3')).toBe('overlap');
-    expect(problems.get('6,0')).toBe('out_of_bounds');
-    expect(problems.get('-1,2')).toBe('out_of_bounds');
-    expect(problems.has('2,2')).toBe(false);
+    expect(problems.get('0,0')).toBe('overlap');
+    expect(problems.get('3,0')).toBe('off_board');
+    expect(problems.get('-4,2')).toBe('off_board');
+    expect(problems.has('-1,-1')).toBe(false);
   });
 });
 
@@ -83,28 +106,28 @@ describe('held groups', () => {
   it('places a fresh piece with full HP and a new group id', () => {
     const city = createCity(6);
     const held = heldFromPiece(city, L_PIECE);
-    expect(dropGroup(city, held, 0, 0)).toBe(true);
-    expect(tileAt(city, 0, 0)).toMatchObject({ type: 'gatling', hp: 35, groupId: held.groupId });
-    expect(tileAt(city, 1, 1)?.type).toBe('cannon');
-    expect(held.groupId).not.toBe(tileAt(city, 3, 3)?.groupId);
+    expect(dropGroup(city, held, -3, -3)).toBe(true);
+    expect(tileAt(city, -3, -3)).toMatchObject({ type: 'gatling', hp: 35, groupId: held.groupId });
+    expect(tileAt(city, -2, -2)?.type).toBe('cannon');
+    expect(held.groupId).not.toBe(tileAt(city, 0, 0)?.groupId);
   });
 
   it('refuses an invalid drop without changing the city', () => {
     const city = createCity(6);
     const held = heldFromPiece(city, L_PIECE);
-    expect(dropGroup(city, held, 5, 5)).toBe(false);
-    expect(dropGroup(city, held, 3, 2)).toBe(false); // hull would land on the core
+    expect(dropGroup(city, held, 2, 2)).toBe(false); // partly off the board
+    expect(dropGroup(city, held, 0, -1)).toBe(false); // hull would land on the core
     expect(city.tiles).toHaveLength(1);
   });
 
   it('lifts a group keeping ids and HP, and anchors it at the grabbed cell', () => {
     const city = createCity(6);
     const fresh = heldFromPiece(city, L_PIECE);
-    dropGroup(city, fresh, 1, 1);
-    const cannon = tileAt(city, 2, 2);
+    dropGroup(city, fresh, -2, -2);
+    const cannon = tileAt(city, -1, -1);
     if (!cannon) throw new Error('missing cannon');
     cannon.hp = 7;
-    const lifted = liftGroup(city, fresh.groupId, { x: 2, y: 2 });
+    const lifted = liftGroup(city, fresh.groupId, { x: -1, y: -1 });
     expect(city.tiles).toHaveLength(1);
     expect(lifted?.anchor).toEqual({ x: 1, y: 1 });
     expect(lifted?.tiles.find((t) => t.type === 'cannon')).toMatchObject({ id: cannon.id, hp: 7 });
@@ -116,20 +139,6 @@ describe('held groups', () => {
     const r = rotateHeld(held, 1);
     const cannon = r.tiles.find((t) => t.type === 'cannon');
     expect({ x: cannon?.gx, y: cannon?.gy }).toEqual(r.anchor);
-  });
-});
-
-describe('expandGrid', () => {
-  it('adds a ring and keeps the layout centred', () => {
-    const city = createCity(6);
-    expect(expandGrid(city)).toBe(true);
-    expect(city.gridSize).toBe(8);
-    expect(tileAt(city, 4, 4)?.type).toBe('core');
-    expandGrid(city);
-    expect(city.gridSize).toBe(10);
-    expect(tileAt(city, 5, 5)?.type).toBe('core');
-    expect(expandGrid(city)).toBe(false);
-    expect(city.gridSize).toBe(10);
   });
 });
 

@@ -3,8 +3,9 @@ import type { PieceDef } from '../config/pieces';
 import type { TileType } from '../config/tiles';
 import { coreTile } from './grid';
 import type { Rng } from './rng';
+import { isLandLevel } from './land';
 import { applyUpgrade, upgradeType } from './upgrades';
-import { cityCentre, cityChanged, gridTopLeft, tileAtCell, type World } from './world';
+import { cityCentre, cityChanged, cellOrigin, tileAtCell, type World } from './world';
 
 /** Weighted random pick of `count` distinct pieces from the pool. */
 export function rollOffers(rng: Rng, pool: readonly PieceDef[], count: number): PieceDef[] {
@@ -59,6 +60,7 @@ export function addXp(w: World, amount: number): void {
     w.xp -= need;
     w.level++;
     w.pendingLevelUps++;
+    if (isLandLevel(w.level)) w.pendingLand++;
     w.events.push({ kind: 'levelUp', level: w.level });
     need = xpToNext(w.level);
   }
@@ -84,7 +86,7 @@ export function collectGems(w: World, dt = 0): void {
   const radius = XP.pickupRadius * syn.pickupFactor;
   const drift = syn.gemDrift ? radius * syn.gemDrift.radiusFactor : radius;
   const reach = Math.ceil(drift / cell);
-  const { left, top } = gridTopLeft(w);
+  const { left, top } = cellOrigin(w);
   const centre = cityCentre(w);
 
   if (syn.gemPull) {

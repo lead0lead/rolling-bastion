@@ -210,24 +210,11 @@ describe('weapon chains', () => {
   });
 });
 
-describe('filled rows and columns', () => {
-  it('a full row of online tiles gives damage and max HP; row and column stack', () => {
+describe('filled rows and columns (removed in v2)', () => {
+  it('a full row or column of online tiles gives no bonus', () => {
     const w = worldOf(['Chh', 'h..', 'h..']);
-    const corner = tile(w, 0, 0);
-    expect(w.cache.syn.filledRows).toEqual([0]);
-    expect(w.cache.syn.filledCols).toEqual([0]);
-    expect(modsOf(w, corner).fills).toBe(2);
-    expect(corner.maxHp).toBeCloseTo(TILES.core.maxHp * (1 + 2 * LINES.fillBonus));
-    const end = tile(w, 2, 0);
-    expect(end.maxHp).toBeCloseTo(TILES.hull.maxHp * (1 + LINES.fillBonus));
-  });
-
-  it('losing a tile breaks the line and clamps HP to the lower max', () => {
-    const w = worldOf(['Chh', '...', '...']);
-    const end = tile(w, 2, 0);
-    damageTile(w, tile(w, 1, 0), 1000);
-    expect(w.cache.syn.filledRows).toEqual([]);
-    expect(end.maxHp).toBe(TILES.hull.maxHp);
-    expect(end.hp).toBe(TILES.hull.maxHp);
+    expect(tile(w, 0, 0).maxHp).toBe(TILES.core.maxHp);
+    expect(tile(w, 2, 0).maxHp).toBe(TILES.hull.maxHp);
+    expect(modsOf(w, tile(w, 0, 0)).damage).toBe(1);
   });
 });

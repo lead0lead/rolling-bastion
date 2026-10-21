@@ -4,12 +4,12 @@ import { ENEMIES } from '../src/config/enemies';
 import { TILES } from '../src/config/tiles';
 import { damageTile, removeDead, updateProjectiles, updateWeapons } from '../src/sim/combat';
 import { updateEnemies } from '../src/sim/enemies';
-import { coreTile, tileAt } from '../src/sim/grid';
+import { cellId, coreTile, tileAt, type PlacedTile } from '../src/sim/grid';
 import { addXp, applyBuildResult, collectGems, xpToNext } from '../src/sim/progression';
 import { budgetRate, spawnEnemy } from '../src/sim/spawner';
 import { SpatialHash } from '../src/sim/spatialHash';
-import { moveCity, step, updateTimeline } from '../src/sim/step';
-import { cityChanged, createWorld, tileCentre, type World } from '../src/sim/world';
+import { moveCity, step } from '../src/sim/step';
+import { cityChanged, createWorld, tileAtCell, tileCentre, type World } from '../src/sim/world';
 import { cityFrom } from './helpers';
 
 const DT = 1 / 60;
@@ -217,24 +217,21 @@ describe('SpatialHash', () => {
   });
 });
 
-describe('timed grid expansion', () => {
-  it('grows the grid at the configured times, each with a free build pause', () => {
+describe('open-ended grid', () => {
+  it('places the world origin on the Core and finds tiles at negative cells', () => {
     const w = createWorld(1);
-    const [first, second] = GRID.expandAt;
-    w.time = first - 1;
-    updateTimeline(w);
-    expect(w.city.gridSize).toBe(GRID.startSize);
-    w.time = first;
-    updateTimeline(w);
-    expect(w.city.gridSize).toBe(GRID.startSize + GRID.expansionGrowth);
-    expect(w.pendingExpansions).toBe(1);
-    w.time = second;
-    updateTimeline(w);
-    updateTimeline(w);
-    expect(w.city.gridSize).toBe(GRID.maxSize);
-    expect(w.pendingExpansions).toBe(2);
-    w.time = 10_000;
-    updateTimeline(w);
-    expect(w.pendingExpansions).toBe(2);
+    const core = coreTile(w.city);
+    if (!core) throw new Error('missing core');
+    expect(tileCentre(w, core)).toEqual({ x: w.x, y: w.y });
+    w.city.board.add(cellId(-7, -2));
+    w.city.tiles.push({ ...core, id: 99, type: 'hull', gx: -7, gy: -2, groupId: 99 });
+    cityChanged(w);
+    const far = tileAtCell(w, -7, -2);
+    expect(far?.id).toBe(99);
+    expect(tileCentre(w, far as PlacedTile)).toEqual({
+      x: w.x - 7 * GRID.cellPx,
+      y: w.y - 2 * GRID.cellPx,
+    });
+    expect(tileAtCell(w, -7, -3)).toBeUndefined();
   });
 });

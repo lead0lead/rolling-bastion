@@ -1,17 +1,9 @@
-/** Grid and build-screen tuning (concept.md §2.1, §2.3, §2.8). Starting values. */
+/** Grid tuning (concept-v2.md §2.1). Starting values. */
 export const GRID = {
-  /** Side length of the starting grid. */
+  /** Side length of the square starting board around the Core. */
   startSize: 6,
-  /** Each expansion adds one ring of cells: side length grows by 2. */
-  expansionGrowth: 2,
-  /** Largest grid side length. */
-  maxSize: 10,
   /** World pixels per cell. */
   cellPx: 32,
-  /** Game times (s) at which the grid grows by one ring, with a free build pause. */
-  expandAt: [240, 480],
-  /** How long the "GRID EXPANDED" banner stays after the pause (s). */
-  bannerSec: 2.5,
 } as const;
 
 export const OFFERS = {
@@ -33,11 +25,24 @@ export const MOVE = {
   ease: 0.08,
 } as const;
 
-/** Camera (concept.md §3). */
+/** The build screen's board view (concept-v2.md §3.2). */
+export const BUILD_VIEW = {
+  minZoom: 0.3,
+  maxZoom: 3,
+  /** Zoom factor per mouse wheel step. */
+  wheelStep: 1.15,
+  /** Keyboard pan speed in screen px/s. */
+  panPxPerSec: 700,
+  /** Empty cells kept around the board when fitting it into the view. */
+  fitMarginCells: 3,
+} as const;
+
+/** Combat camera (concept-v2.md §3.2). */
 export const CAMERA = {
-  /** World px kept visible around the city on every side. */
-  marginPx: 400,
-  /** Never zoom in beyond 1:1. */
+  /** The city's bounding box takes at most this share of the view's width and height. */
+  cityFrame: 0.35,
+  /** Never zoom out beyond this (enemies stop being readable), nor in beyond 1:1. */
+  minZoom: 0.4,
   maxZoom: 1,
   /** Follow smoothing rate (1/s). */
   followRate: 8,
@@ -115,7 +120,7 @@ export const UPGRADES = {
   maxLevel: 5,
 } as const;
 
-/** Weapon chains and filled rows/columns (concept.md §2.7). */
+/** Weapon chains (concept.md §2.7; filled rows/columns removed in v2). */
 export const LINES = {
   /** Identical weapons in a straight line needed for a chain. */
   chainMin: 3,
@@ -123,8 +128,4 @@ export const LINES = {
   chainBonusStep: 0.5,
   /** …up to this bonus (5+ tiles). */
   chainMaxBonus: 1.5,
-  /** Damage and max HP bonus per filled row or column a tile is in. */
-  fillBonus: 0.15,
-  /** A tile counts at most this many filled lines (its row and its column). */
-  maxFills: 2,
 } as const;

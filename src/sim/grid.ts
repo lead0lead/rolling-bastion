@@ -22,7 +22,8 @@ export interface PlacedTile {
 }
 
 export interface CityState {
-  gridSize: number;
+  /** Buildable cells, by `cellId` (concept-v2.md §2.1). Grows by land shapes. */
+  board: Set<number>;
   tiles: PlacedTile[];
   typeLevels: Record<TileType, number>;
   nextTileId: number;
@@ -40,25 +41,56 @@ export interface HeldGroup {
   anchor: Cell;
 }
 
-export type CellProblem = 'out_of_bounds' | 'overlap';
+export type CellProblem = 'off_board' | 'overlap';
 
 const ALL_TILE_TYPES = Object.keys(TILES) as TileType[];
 
-export function createCity(gridSize: number = GRID.startSize): CityState {
+/**
+ * Coordinates must stay within ±COORD_LIMIT − 1 for `cellId` to be unique.
+ * This limit keeps every id below 2^30, a small integer for V8: map lookups
+ * on the hot path then allocate nothing (larger ids measurably slowed the
+ * bench).
+ */
+const COORD_LIMIT = 16384;
+
+/** A number key per cell, for sparse maps and sets on the open-ended grid. */
+export function cellId(x: number, y: number): number {
+  return (x + COORD_LIMIT) * 2 * COORD_LIMIT + (y + COORD_LIMIT);
+}
+
+export function cellFromId(id: number): Cell {
+  const span = 2 * COORD_LIMIT;
+  return { x: Math.floor(id / span) - COORD_LIMIT, y: (id % span) - COORD_LIMIT };
+}
+
+/** A size×size square of board cells with (0, 0) where v1's grid centre was. */
+export function squareBoard(size: number): Set<number> {
+  const board = new Set<number>();
+  const off = Math.floor(size / 2);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) board.add(cellId(x - off, y - off));
+  }
+  return board;
+}
+
+/**
+ * A new city: the Core fixed at (0, 0) on a square starting board
+ * (concept-v2.md §2.1).
+ */
+export function createCity(boardSize: number = GRID.startSize): CityState {
   const typeLevels = Object.fromEntries(ALL_TILE_TYPES.map((t) => [t, 0])) as Record<
     TileType,
     number
   >;
   typeLevels.core = 1;
-  const centre = Math.floor(gridSize / 2);
   return {
-    gridSize,
+    board: squareBoard(boardSize),
     tiles: [
       {
         id: 1,
         type: 'core',
-        gx: centre,
-        gy: centre,
+        gx: 0,
+        gy: 0,
         hp: TILES.core.maxHp,
         maxHp: TILES.core.maxHp,
         groupId: 1,
@@ -72,8 +104,8 @@ export function createCity(gridSize: number = GRID.startSize): CityState {
   };
 }
 
-export function inBounds(city: CityState, x: number, y: number): boolean {
-  return x >= 0 && y >= 0 && x < city.gridSize && y < city.gridSize;
+export function onBoard(city: CityState, x: number, y: number): boolean {
+  return city.board.has(cellId(x, y));
 }
 
 export function tileAt(city: CityState, x: number, y: number): PlacedTile | undefined {
@@ -106,7 +138,7 @@ export function placementProblems(
   const problems = new Map<string, CellProblem>();
   for (const c of cells) {
     const key = cellKey(c.x, c.y);
-    if (!inBounds(city, c.x, c.y)) problems.set(key, 'out_of_bounds');
+    if (!onBoard(city, c.x, c.y)) problems.set(key, 'off_board');
     else if (tileAt(city, c.x, c.y)) problems.set(key, 'overlap');
   }
   return problems;
@@ -190,18 +222,6 @@ export function facingAngle(f: Facing): number {
 /** Removes a placed group for good. */
 export function scrapGroup(city: CityState, groupId: number): void {
   city.tiles = city.tiles.filter((t) => t.groupId !== groupId);
-}
-
-/** Adds one ring of cells around the grid; the layout stays centred. */
-export function expandGrid(city: CityState): boolean {
-  if (city.gridSize >= GRID.maxSize) return false;
-  const shift = GRID.expansionGrowth / 2;
-  city.gridSize += GRID.expansionGrowth;
-  for (const t of city.tiles) {
-    t.gx += shift;
-    t.gy += shift;
-  }
-  return true;
 }
 
 /**
