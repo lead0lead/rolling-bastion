@@ -62,14 +62,14 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Both spikes built and handed to the user: Spike A on `v2-spike-a-shop` (2.0.0-spike.a), Spike B on `v2-spike-b-grid` (2.0.0-spike.b). `v2` itself still has no v2 code. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Both spikes decided (2026-10-21): Spike A **dropped** (stay with XP and level-ups), Spike B **change**. Planning Spike B2 (land shapes at set levels) with the user. |
-| **Next step** | Agree the Spike B2 details, then build it on `v2-spike-b2-land` from `v2`. Phases 1–2 need rewriting with the user afterwards (§11). |
+| **Current step** | Spike A **dropped**, Spike B **change** (2026-10-21). Spike B2 (land shapes at set levels) **built** on `v2-spike-b2-land` (2.0.0-spike.b2), waiting for the user's keep / change / drop. |
+| **Next step** | Spike B2 verdict; then rewrite the build plan (§11: Phases 1–2, endless without waves) with the user before any phase. |
 | **Decision milestone** | **Keep-or-drop after Spike A and after Spike B.** No v2 phase starts before both are decided. Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | Spikes: `2.0.0-spike.a`, `2.0.0-spike.b` (on their branches only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | Spikes: `2.0.0-spike.a`, `2.0.0-spike.b`, `2.0.0-spike.b2` (on their branches only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-21 (both spikes built, awaiting decisions) |
+| **Last updated** | 2026-10-21 (Spike B2 built, awaiting decision) |
 
 ---
 
@@ -142,7 +142,27 @@ Decided direction (details to plan in Spike B2, §11):
   buying pieces: **expansion buttons sit at the edges of the board shape.**
 - Rejected: buying land plots shaped like pieces (§13).
 
-What the spike did, kept as reference: How the spike does it: the Core starts at (0, 0) and cells may
+**Superseded the same day (user, with the Spike A drop):** no currency, so
+the grid grows at **set levels**: at an expansion level you choose one of
+several **land shapes** (same cell count, big enough to matter) and place
+it anywhere it touches the board. Edge expansion buttons and classes are
+set aside until land shapes are judged.
+
+**Spike B2 (built 2026-10-21, `v2-spike-b2-land`, awaiting the user's
+verdict).** Agreed draft, all numbers Claude's guesses: board = set of
+buildable cells, starting as v1's 6×6 around the Core (36 cells); land at
+levels **5, 9, 13** (`LAND.atLevels`): the level-up first offers **3 land
+shapes of 12 cells** (block 3×4, strip 2×6, big L, big T, plus, U, thick
+Z; `src/config/land.ts`); click/1–3 picks, R/right-click rotates, click
+places; valid when no cell overlaps the board and at least one shares an
+edge with it (whole shape shown red otherwise); then the normal piece pick
+in the same pause. Pieces must lie on the board. Board 36 → 48 → 60 → 72.
+Build screen: board cells filled with a strong outline, faint lines
+outside; fit covers the whole board. Spike B's pan/zoom, camera framing
+and removed filled rows carry over. Debug: F2 = level-up with land (run) /
+offer land (build screen), F3 fills the board.
+
+What Spike B did, kept as reference: How the spike does it: the Core starts at (0, 0) and cells may
 be negative; the run cache keys cells by a number (`cellNum`), synergies
 scan the city's bounding box; the world position is the centre of cell
 (0, 0). Placement only checks overlaps. Combat camera: follows the Core,
@@ -535,7 +555,7 @@ these v2 changes:
 |---|---|---|
 | **Spike A — shop loop** (riskiest) | On v1's code and bounded grid: waves (§2.8) replacing the 12:00 timeline; coins instead of XP; shop after each wave with 4 piece slots, 2 upgrade slots, Repair, Reroll, lock, prices with inflation; scrap refund 50%; leftover coins at 50%; boss wave. Grid expansions move to the shops after waves 6 and 10. No endless, no new editing tools. | **User answers: does the wave/shop rhythm feel better than level-ups?** Keep / change / drop, plus first price feedback. |
 | **Spike B — unbounded grid** | On `v2` (v1 levels, not Spike A): Core fixed at (0, 0), no bounds or expansions, build screen pan/zoom/fit, combat camera zoom (§3.2), filled rows removed. | **User answers: does free growth feel good, or does the city sprawl into a slow blob?** Keep / change / drop. |
-| **Spike B2 — board shapes** (planned) | Board mask with class starting shapes, expansion buttons at the board edges that add one row/column strip for currency. Reuses Spike B's coordinates, pan/zoom and camera. Details with the user after the Spike A verdict. | User answers: do shapes and directional expansions lead to more creative builds? |
+| **Spike B2 — land shapes** (built 2026-10-21) | Board mask; at set levels choose one of 3 equal-size land shapes and place it touching the board (§2.1). Reuses Spike B's coordinates, pan/zoom and camera. (Replaced the earlier plan of class shapes + paid edge expansions.) | User answers: do land shapes lead to more creative builds? |
 | **Phase 1 — unbounded grid** | Sparse grid, Core fixed, Tarjan bridges, camera zoom and spawn ring from view size, filled rows removed (tests updated to the new rules). | Kept Spike B behaviour, rebuilt properly; all tests pass. |
 | **Phase 2 — waves and shop** | `waves.ts`, `economy.ts`, `shop.ts` with tests; shop scene; HUD and end screen changes; coin visuals. | A full normal run with the shop. |
 | **Phase 3 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo, pan/zoom polish (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
@@ -625,6 +645,18 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Spike B2: land shapes
+- Done: Spike B2 on `v2-spike-b2-land` from `v2` (commit df99dc8, built on
+  a cherry-pick of Spike B's code; not merged, by the spike rules): board
+  mask, land shapes at levels 5/9/13 as agreed (§2.1). Version label
+  `2.0.0-spike.b2`.
+- Checked in a headless browser: land offer, invalid (overlap) preview,
+  rotation, valid placement (board 36 → 48), piece pick afterwards. No
+  console errors. Build, type check and lint pass.
+- Failing tests on purpose (16): the 14 from Spike B plus two build tests
+  that place pieces at v1 coordinates now off the board.
+- Next: user verdict on Spike B2.
 
 ### 2026-10-21 — Spike A verdict
 - Decisions (user): Spike A **dropped**: after a test run the user did
