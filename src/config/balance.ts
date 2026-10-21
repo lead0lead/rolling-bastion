@@ -25,6 +25,18 @@ export const MOVE = {
   ease: 0.08,
 } as const;
 
+/** The build screen's board view (concept-v2.md §3.2). */
+export const BUILD_VIEW = {
+  minZoom: 0.3,
+  maxZoom: 3,
+  /** Zoom factor per mouse wheel step. */
+  wheelStep: 1.15,
+  /** Keyboard pan speed in screen px/s. */
+  panPxPerSec: 700,
+  /** Empty cells kept around the board when fitting it into the view. */
+  fitMarginCells: 3,
+} as const;
+
 /** Combat camera (concept-v2.md §3.2). */
 export const CAMERA = {
   /** The city's bounding box takes at most this share of the view's width and height. */

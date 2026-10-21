@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
-import { OFFERS, UPGRADES } from '../config/balance';
+import { BUILD_VIEW, GRID, OFFERS, UPGRADES } from '../config/balance';
 import { FX } from '../config/fx';
 import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
@@ -32,6 +32,7 @@ import {
 import { findBridges } from '../sim/connectivity';
 import {
   cellFromId,
+  cellId,
   cellKey,
   createCity,
   facingAngle,
@@ -61,9 +62,22 @@ export interface BuildSceneData {
 }
 
 // Screen layout (1280×720).
-const GRID_CENTRE = { x: 620, y: 390 };
-const GRID_MAX_PX = 540;
-const GRID_MAX_CELL = 64;
+const TITLE_X = 620;
+/** The board view between the side panels: its own camera pans and zooms (concept-v2.md §3.2). */
+const VIEW = { x: 300, y: 70, w: 695, h: 650 };
+/** World px per cell in the board view (the zoom scales it). */
+const CELL = GRID.cellPx;
+/** Key codes of the pan keys, by name. */
+const PAN_KEYS = {
+  up: 'ArrowUp',
+  down: 'ArrowDown',
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
+  w: 'KeyW',
+  a: 'KeyA',
+  s: 'KeyS',
+  d: 'KeyD',
+} as const;
 const CARDS = {
   x: 1010,
   y: 80,
@@ -121,9 +135,34 @@ export class BuildScene extends Phaser.Scene {
   private city!: CityState;
   private session!: BuildSession;
   private rerollsLeft = 0;
+  /**
+   * The board view is drawn by `boardCam` (main camera, limited to VIEW,
+   * panned and zoomed) from `boardLayer`; everything else by a full-screen
+   * UI camera from `uiLayer`. Each camera ignores the other's layer.
+   */
+  private boardLayer!: Phaser.GameObjects.Layer;
+  private uiLayer!: Phaser.GameObjects.Layer;
+  private boardCam!: Phaser.Cameras.Scene2D.Camera;
+  /** UI graphics: cards, buttons, panels. */
   private g!: Phaser.GameObjects.Graphics;
-  /** Overlay graphics (outlines, arcs, frames) above the tile sprites. */
+  /** UI overlay: the scrap zone frame. */
+  private uiFg!: Phaser.GameObjects.Graphics;
+  /** Board view: cells and the board outline. */
+  private boardG!: Phaser.GameObjects.Graphics;
+  /** Board view overlay (outlines, frames) above the tile sprites. */
   private fg!: Phaser.GameObjects.Graphics;
+  /** Tile images on the cards and of a held group outside the board view. */
+  private cardImgs!: SpritePool;
+  private cardCrackImgs!: SpritePool;
+  private cardBarrelImgs!: SpritePool;
+  private panKeys: Partial<Record<keyof typeof PAN_KEYS, Phaser.Input.Keyboard.Key>> = {};
+  /**
+   * Keys pressed fresh (not auto-repeat) during this pause. A pan key still
+   * held from driving only sends repeats, so it doesn't pan until pressed
+   * again (user feedback, 2026-10-21).
+   */
+  private freshKeys = new Set<string>();
+  private midDrag: { x: number; y: number; scrollX: number; scrollY: number } | null = null;
   /** Arc wedges, between the grid and the tile sprites so tiles stay readable. */
   private arcs!: Phaser.GameObjects.Graphics;
   /** Chain links, between tile bodies and barrels. */
@@ -165,20 +204,44 @@ export class BuildScene extends Phaser.Scene {
     this.flash = null;
     this.cardTexts = [];
     this.upgradeTexts = [];
+    this.midDrag = null;
     const { width, height } = this.scale;
-    this.add.rectangle(0, 0, width, height, COLORS.background, this.run ? 0.94 : 1).setOrigin(0);
+    this.boardLayer = this.add.layer();
+    this.uiLayer = this.add.layer().setDepth(1);
+    this.boardCam = this.cameras.main
+      .setViewport(VIEW.x, VIEW.y, VIEW.w, VIEW.h)
+      .setBackgroundColor(COLORS.background);
+    const uiCam = this.cameras.add(0, 0, width, height);
+    this.boardCam.ignore(this.uiLayer);
+    uiCam.ignore(this.boardLayer);
     createTextures(this);
-    this.g = this.add.graphics();
-    this.tileImgs = new SpritePool(this, 1);
-    this.crackImgs = new SpritePool(this, 1.1);
-    this.barrelImgs = new SpritePool(this, 1.2);
+    // Background around the board view (the view has its own camera background).
+    const bgAlpha = this.run ? 0.94 : 1;
+    for (const [x, y, w, h] of [
+      [0, 0, width, VIEW.y],
+      [0, VIEW.y + VIEW.h, width, height - VIEW.y - VIEW.h],
+      [0, VIEW.y, VIEW.x, VIEW.h],
+      [VIEW.x + VIEW.w, VIEW.y, width - VIEW.x - VIEW.w, VIEW.h],
+    ] as const) {
+      this.ui(this.add.rectangle(x, y, w, h, COLORS.background, bgAlpha).setOrigin(0).setDepth(-1));
+    }
+    this.g = this.ui(this.add.graphics());
+    this.uiFg = this.ui(this.add.graphics().setDepth(3));
+    this.cardImgs = new SpritePool(this, 1, this.uiLayer);
+    this.cardCrackImgs = new SpritePool(this, 1.1, this.uiLayer);
+    this.cardBarrelImgs = new SpritePool(this, 1.2, this.uiLayer);
+    this.boardG = this.add.graphics();
+    this.tileImgs = new SpritePool(this, 1, this.boardLayer);
+    this.crackImgs = new SpritePool(this, 1.1, this.boardLayer);
+    this.barrelImgs = new SpritePool(this, 1.2, this.boardLayer);
     this.fg = this.add.graphics().setDepth(3);
     this.arcs = this.add.graphics().setDepth(0.5);
     this.lines = this.add.graphics().setDepth(1.15);
+    this.boardLayer.add([this.boardG, this.arcs, this.lines, this.fg]);
     const text = { fontFamily: FONT.family, fontStyle: FONT.weight, color: COLORS.text };
 
     this.add
-      .text(GRID_CENTRE.x, 28, this.run?.title ?? 'Salvage!', {
+      .text(TITLE_X, 28, this.run?.title ?? 'Salvage!', {
         ...text,
         fontStyle: FONT.bold,
         fontSize: '28px',
@@ -196,6 +259,8 @@ export class BuildScene extends Phaser.Scene {
           'Put back: Esc',
           'Scrap: drag onto SCRAP, or hover + X',
           'Bridges: B · Arcs: V',
+          'Pan: WASD / arrows / middle-drag',
+          'Zoom: wheel · Fit: F or Home',
           'Confirm: Enter',
           ...(DEBUG ? ['', 'Debug:', 'Del destroy hovered tile'] : []),
         ].join('\n'),
@@ -251,13 +316,28 @@ export class BuildScene extends Phaser.Scene {
       })
       .setOrigin(1, 0);
 
+    this.adoptUi();
     this.newPause(this.run?.offers ?? rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
     this.bindInput();
+  }
+
+  /** Puts a UI object into the UI layer (drawn by the UI camera only). */
+  private ui<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.uiLayer.add(obj);
+    return obj;
+  }
+
+  /** Moves every object created directly on the scene into the UI layer. */
+  private adoptUi(): void {
+    for (const obj of [...this.children.list]) {
+      if (obj !== (this.boardLayer as unknown) && obj !== (this.uiLayer as unknown)) this.ui(obj);
+    }
   }
 
   private newPause(offers: PieceDef[]): void {
     this.session = startBuild(this.city, offers);
     this.pauseStartedAt = this.time.now;
+    this.fitView();
     this.showOffers();
   }
 
@@ -290,6 +370,7 @@ export class BuildScene extends Phaser.Scene {
         .setDepth(2)
         .setVisible(!!type);
     });
+    this.adoptUi();
   }
 
   /** Run-only options are shown when the pause has offers (not for a grid expansion). */
@@ -299,43 +380,62 @@ export class BuildScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- layout
 
-  /** The board's bounding box in cells. */
-  private boardBounds(): { minX: number; minY: number; w: number; h: number } {
-    const cells = [...this.city.board].map(cellFromId);
-    const minX = Math.min(...cells.map((c) => c.x));
-    const minY = Math.min(...cells.map((c) => c.y));
-    const w = Math.max(...cells.map((c) => c.x)) + 1 - minX;
-    const h = Math.max(...cells.map((c) => c.y)) + 1 - minY;
-    return { minX, minY, w, h };
+  // The board view's transform is computed here rather than read from the
+  // camera matrix, which only updates when the camera renders.
+
+  /** World point under a screen point, through the board camera. */
+  private toWorld(x: number, y: number): { x: number; y: number } {
+    const c = this.boardCam;
+    return {
+      x: c.scrollX + VIEW.w / 2 + (x - VIEW.x - VIEW.w / 2) / c.zoom,
+      y: c.scrollY + VIEW.h / 2 + (y - VIEW.y - VIEW.h / 2) / c.zoom,
+    };
   }
 
-  private cellPx(): number {
-    const b = this.boardBounds();
-    return Math.min(GRID_MAX_CELL, Math.floor(GRID_MAX_PX / Math.max(b.w, b.h)));
+  private inView(x: number, y: number): boolean {
+    return inRect(VIEW, x, y);
   }
 
-  /** Screen rect of the board's bounding box. */
-  private gridRect(): Rect {
-    const b = this.boardBounds();
-    const cs = this.cellPx();
-    const w = b.w * cs;
-    const h = b.h * cs;
-    return { x: GRID_CENTRE.x - w / 2, y: GRID_CENTRE.y - h / 2, w, h };
-  }
-
-  /** Screen position of the top-left corner of cell (0, 0). */
-  private origin(): { x: number; y: number } {
-    const b = this.boardBounds();
-    const r = this.gridRect();
-    const cs = this.cellPx();
-    return { x: r.x - b.minX * cs, y: r.y - b.minY * cs };
-  }
-
-  /** Grid cell under a screen point (may be off the board). */
+  /** Grid cell under a screen point; NaN outside the board view. */
   private cellAt(x: number, y: number): { x: number; y: number } {
-    const o = this.origin();
-    const cs = this.cellPx();
-    return { x: Math.floor((x - o.x) / cs), y: Math.floor((y - o.y) / cs) };
+    if (!this.inView(x, y)) return { x: NaN, y: NaN };
+    const p = this.toWorld(x, y);
+    return { x: Math.floor(p.x / CELL), y: Math.floor(p.y / CELL) };
+  }
+
+  /** Zooms the board view by `factor`, keeping the world point under (x, y) in place. */
+  private zoomAt(x: number, y: number, factor: number): void {
+    const c = this.boardCam;
+    const before = this.toWorld(x, y);
+    c.setZoom(Phaser.Math.Clamp(c.zoom * factor, BUILD_VIEW.minZoom, BUILD_VIEW.maxZoom));
+    const after = this.toWorld(x, y);
+    c.setScroll(c.scrollX + before.x - after.x, c.scrollY + before.y - after.y);
+  }
+
+  /** Fits the whole board, plus a margin of empty cells, into the view. */
+  private fitView(): void {
+    const cells = [...this.city.board].map(cellFromId);
+    const m = BUILD_VIEW.fitMarginCells;
+    const minX = Math.min(...cells.map((c) => c.x)) - m;
+    const minY = Math.min(...cells.map((c) => c.y)) - m;
+    const maxX = Math.max(...cells.map((c) => c.x)) + 1 + m;
+    const maxY = Math.max(...cells.map((c) => c.y)) + 1 + m;
+    const c = this.boardCam;
+    const fit = Math.min(VIEW.w / ((maxX - minX) * CELL), VIEW.h / ((maxY - minY) * CELL));
+    c.setZoom(Phaser.Math.Clamp(fit, BUILD_VIEW.minZoom, BUILD_VIEW.maxZoom));
+    c.setScroll(((minX + maxX) / 2) * CELL - VIEW.w / 2, ((minY + maxY) / 2) * CELL - VIEW.h / 2);
+  }
+
+  /** WASD / arrows pan the board view, once pressed fresh in this pause. */
+  private updatePan(dt: number): void {
+    const down = (name: keyof typeof PAN_KEYS) =>
+      !!this.panKeys[name]?.isDown && this.freshKeys.has(PAN_KEYS[name]);
+    const dx = (down('right') || down('d') ? 1 : 0) - (down('left') || down('a') ? 1 : 0);
+    const dy = (down('down') || down('s') ? 1 : 0) - (down('up') || down('w') ? 1 : 0);
+    if (!dx && !dy) return;
+    const c = this.boardCam;
+    const step = (BUILD_VIEW.panPxPerSec * dt) / c.zoom;
+    c.setScroll(c.scrollX + dx * step, c.scrollY + dy * step);
   }
 
   /** Index of the offer whose (available) upgrade strip is under the point, or -1. */
@@ -356,13 +456,48 @@ export class BuildScene extends Phaser.Scene {
 
   private bindInput(): void {
     this.input.mouse?.disableContextMenu();
+    const kb = this.input.keyboard;
+    this.freshKeys = new Set();
+    this.panKeys = {};
+    for (const [name, code] of Object.entries(PAN_KEYS) as [keyof typeof PAN_KEYS, string][]) {
+      const key = kb?.addKey(
+        code
+          .replace(/^Key/, '')
+          .replace(/^Arrow/, '')
+          .toUpperCase(),
+      );
+      if (key) this.panKeys[name] = key;
+    }
+    kb?.on('keydown', (e: KeyboardEvent) => {
+      if (!e.repeat) this.freshKeys.add(e.code);
+    });
+    kb?.on('keyup', (e: KeyboardEvent) => this.freshKeys.delete(e.code));
+
+    this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (this.inView(p.x, p.y) && dy !== 0) {
+        this.zoomAt(p.x, p.y, dy < 0 ? BUILD_VIEW.wheelStep : 1 / BUILD_VIEW.wheelStep);
+      }
+    });
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
+      const drag = this.midDrag;
+      if (drag) {
+        const z = this.boardCam.zoom;
+        this.boardCam.setScroll(
+          drag.scrollX - (p.x - drag.x) / z,
+          drag.scrollY - (p.y - drag.y) / z,
+        );
+      }
     });
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
+      if (p.middleButtonDown()) {
+        const c = this.boardCam;
+        this.midDrag = { x: p.x, y: p.y, scrollX: c.scrollX, scrollY: c.scrollY };
+        return;
+      }
       if (p.rightButtonDown()) {
         this.rotateHeld();
         return;
@@ -397,6 +532,10 @@ export class BuildScene extends Phaser.Scene {
     });
 
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (this.midDrag && !p.middleButtonDown()) {
+        this.midDrag = null;
+        return;
+      }
       const press = this.press;
       this.press = null;
       if (!press || !this.session.held || p.rightButtonReleased()) return;
@@ -420,7 +559,7 @@ export class BuildScene extends Phaser.Scene {
       }
       return;
     }
-    if (inRect(this.gridRect(), x, y)) {
+    if (this.inView(x, y)) {
       const cell = this.cellAt(x, y);
       const groupId = s.held?.groupId;
       if (!dropAt(s, cell.x, cell.y)) {
@@ -458,6 +597,10 @@ export class BuildScene extends Phaser.Scene {
         break;
       case 'KeyR':
         this.rotateHeld();
+        break;
+      case 'KeyF':
+      case 'Home':
+        this.fitView();
         break;
       case 'Escape':
         cancelHeld(s);
@@ -544,23 +687,32 @@ export class BuildScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- render
 
-  override update(): void {
-    this.g.clear();
-    this.fg.clear();
-    this.arcs.clear();
-    this.lines.clear();
+  override update(_time: number, delta: number): void {
+    this.updatePan(delta / 1000);
+    for (const g of [this.g, this.uiFg, this.boardG, this.fg, this.arcs, this.lines]) g.clear();
     this.syn = computeSynergies(this.city);
-    for (const pool of [this.tileImgs, this.crackImgs, this.barrelImgs]) pool.begin();
+    const pools = [
+      this.tileImgs,
+      this.crackImgs,
+      this.barrelImgs,
+      this.cardImgs,
+      this.cardCrackImgs,
+      this.cardBarrelImgs,
+    ];
+    for (const pool of pools) pool.begin();
     this.drawGrid();
     this.drawCards();
     this.drawPanels();
     this.drawHeld();
-    for (const pool of [this.tileImgs, this.crackImgs, this.barrelImgs]) pool.end();
+    for (const pool of pools) pool.end();
     this.updateTooltip();
     this.updateStatus();
   }
 
-  /** One tile from the shared textures: body + icon, cracks, barrel along its facing. */
+  /**
+   * One tile from the shared textures: body + icon, cracks, barrel along its
+   * facing. In the board view (world coordinates) or, with `ui`, on screen.
+   */
   private drawTileImage(
     x: number,
     y: number,
@@ -568,19 +720,23 @@ export class BuildScene extends Phaser.Scene {
     t: Pick<PlacedTile, 'type' | 'facing' | 'online'> & { hp?: number; maxHp?: number },
     alpha = 1,
     scale = 1,
+    ui = false,
   ): void {
+    const [tileImgs, crackImgs, barrelImgs] = ui
+      ? [this.cardImgs, this.cardCrackImgs, this.cardBarrelImgs]
+      : [this.tileImgs, this.crackImgs, this.barrelImgs];
     const hpFrac = t.hp !== undefined && t.maxHp ? t.hp / t.maxHp : 1;
     const a = alpha * damageAlpha(hpFrac, this.time.now);
     const cx = x + cs / 2;
     const cy = y + cs / 2;
     const ds = cs * scale;
-    this.tileImgs.add(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(ds, ds).setAlpha(a);
+    tileImgs.add(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(ds, ds).setAlpha(a);
     if (showsCracks(hpFrac)) {
-      this.crackImgs.add(cx, cy, TEX.cracks).setDisplaySize(ds, ds).setAlpha(a);
+      crackImgs.add(cx, cy, TEX.cracks).setDisplaySize(ds, ds).setAlpha(a);
     }
     const barrel = barrelFor(t.type);
     if (barrel) {
-      const img = this.barrelImgs
+      const img = barrelImgs
         .add(cx, cy, TEX.barrel(barrel))
         .setDisplaySize(ds, ds)
         .setRotation(facingAngle(t.facing))
@@ -609,24 +765,60 @@ export class BuildScene extends Phaser.Scene {
     g.fillStyle(TILES[t.type].color, ARC_FILL_ALPHA);
     g.slice(cx, cy, r, mid - half, mid + half, false);
     g.fillPath();
-    g.lineStyle(2, TILES[t.type].color, ARC_LINE_ALPHA);
+    g.lineStyle(2 * this.px(), TILES[t.type].color, ARC_LINE_ALPHA);
     g.slice(cx, cy, r, mid - half, mid + half, false);
     g.strokePath();
   }
 
-  private drawGrid(): void {
-    const g = this.g;
-    const fg = this.fg;
-    const r = this.origin();
-    const cs = this.cellPx();
-    const city = this.city;
-    for (const id of city.board) {
+  /** One screen pixel in board-view world units (line widths stay constant on screen). */
+  private px(): number {
+    return 1 / this.boardCam.zoom;
+  }
+
+  /**
+   * The board (filled cells, strong outline) over faint lines across the
+   * visible area, then the tiles (concept-v2.md §3.3).
+   */
+  private drawBoard(): void {
+    const g = this.boardG;
+    const cs = CELL;
+    const px = this.px();
+    const tl = this.toWorld(VIEW.x, VIEW.y);
+    const br = this.toWorld(VIEW.x + VIEW.w, VIEW.y + VIEW.h);
+    const x0 = Math.floor(tl.x / cs);
+    const y0 = Math.floor(tl.y / cs);
+    const x1 = Math.ceil(br.x / cs);
+    const y1 = Math.ceil(br.y / cs);
+    g.lineStyle(px, COLORS.bgGridLine, 1);
+    for (let x = x0; x <= x1; x++) g.lineBetween(x * cs, y0 * cs, x * cs, y1 * cs);
+    for (let y = y0; y <= y1; y++) g.lineBetween(x0 * cs, y * cs, x1 * cs, y * cs);
+    const board = this.city.board;
+    g.fillStyle(COLORS.gridCell, 1);
+    g.lineStyle(px, COLORS.gridLine, 1);
+    for (const id of board) {
       const { x, y } = cellFromId(id);
-      g.fillStyle(COLORS.gridCell, 1);
-      g.fillRect(r.x + x * cs, r.y + y * cs, cs, cs);
-      g.lineStyle(1, COLORS.gridLine, 1);
-      g.strokeRect(r.x + x * cs, r.y + y * cs, cs, cs);
+      if (x < x0 - 1 || x > x1 || y < y0 - 1 || y > y1) continue;
+      g.fillRect(x * cs, y * cs, cs, cs);
+      g.strokeRect(x * cs, y * cs, cs, cs);
     }
+    g.lineStyle(3 * px, COLORS.boardEdge, 1);
+    for (const id of board) {
+      const { x, y } = cellFromId(id);
+      const off = (dx: number, dy: number) => !board.has(cellId(x + dx, y + dy));
+      if (off(0, -1)) g.lineBetween(x * cs, y * cs, (x + 1) * cs, y * cs);
+      if (off(0, 1)) g.lineBetween(x * cs, (y + 1) * cs, (x + 1) * cs, (y + 1) * cs);
+      if (off(-1, 0)) g.lineBetween(x * cs, y * cs, x * cs, (y + 1) * cs);
+      if (off(1, 0)) g.lineBetween((x + 1) * cs, y * cs, (x + 1) * cs, (y + 1) * cs);
+    }
+  }
+
+  private drawGrid(): void {
+    const fg = this.fg;
+    const r = { x: 0, y: 0 };
+    const cs = CELL;
+    const px = this.px();
+    const city = this.city;
+    this.drawBoard();
 
     // Hovered group: what a click would pick up; its arcs are shown too.
     let hoveredGroup = -1;
@@ -637,25 +829,25 @@ export class BuildScene extends Phaser.Scene {
 
     const bridges = this.showBridges ? findBridges(city) : new Set<number>();
     for (const t of city.tiles) {
-      const px = r.x + t.gx * cs;
-      const py = r.y + t.gy * cs;
-      this.drawTileImage(px, py, cs, t, 1, this.bounceScale(t.groupId));
+      const tx = r.x + t.gx * cs;
+      const ty = r.y + t.gy * cs;
+      this.drawTileImage(tx, ty, cs, t, 1, this.bounceScale(t.groupId));
       if (this.showArcs || t.groupId === hoveredGroup)
-        this.drawArc(px + cs / 2, py + cs / 2, cs, t);
+        this.drawArc(tx + cs / 2, ty + cs / 2, cs, t);
       if (!t.online) {
-        fg.lineStyle(2, COLORS.invalid, 1);
-        fg.strokeRect(px + 1, py + 1, cs - 2, cs - 2);
+        fg.lineStyle(2 * px, COLORS.invalid, 1);
+        fg.strokeRect(tx + px, ty + px, cs - 2 * px, cs - 2 * px);
       }
       if (bridges.has(t.id)) {
-        fg.lineStyle(3, COLORS.bridge, 1);
-        fg.strokeCircle(px + cs / 2, py + cs / 2, cs * 0.34);
+        fg.lineStyle(3 * px, COLORS.bridge, 1);
+        fg.strokeCircle(tx + cs / 2, ty + cs / 2, cs * 0.34);
       }
     }
     drawSynergyLines(this.lines, this.syn, cs, r.x, r.y);
-    this.drawGroupOutlines(city.tiles, r.x, r.y, cs, COLORS.groupOutline, 0.45);
+    this.drawGroupOutlines(city.tiles, r.x, r.y, cs, COLORS.groupOutline, 0.45, 2 * px);
     if (hoveredGroup >= 0) {
       const group = city.tiles.filter((t) => t.groupId === hoveredGroup);
-      this.drawGroupOutlines(group, r.x, r.y, cs, COLORS.hover, 1, 3);
+      this.drawGroupOutlines(group, r.x, r.y, cs, COLORS.hover, 1, 3 * px);
     }
   }
 
@@ -688,40 +880,46 @@ export class BuildScene extends Phaser.Scene {
     const s = this.session;
     if (!s.held) return;
     const fg = this.fg;
-    const r = this.origin();
-    const cs = this.cellPx();
+    const cs = CELL;
+    const w = this.px();
     const { x: px, y: py } = this.pointer;
 
-    if (inRect(this.gridRect(), px, py)) {
+    if (this.inView(px, py)) {
       const c = this.cellAt(px, py);
       const preview = previewAt(s, c.x, c.y);
       if (!preview) return;
       s.held.tiles.forEach((t, i) => {
         const cell = preview.cells[i];
         if (!cell) return;
-        const x = r.x + cell.x * cs;
-        const y = r.y + cell.y * cs;
+        const x = cell.x * cs;
+        const y = cell.y * cs;
         this.drawTileImage(x, y, cs, { ...t, online: true }, 0.75);
         this.drawArc(x + cs / 2, y + cs / 2, cs, t);
         const bad = preview.problems.has(cellKey(cell.x, cell.y));
-        fg.lineStyle(3, bad ? COLORS.invalid : COLORS.valid, 1);
-        fg.strokeRect(x + 2, y + 2, cs - 4, cs - 4);
+        fg.lineStyle(3 * w, bad ? COLORS.invalid : COLORS.valid, 1);
+        fg.strokeRect(x + 2 * w, y + 2 * w, cs - 4 * w, cs - 4 * w);
       });
       return;
     }
 
-    // Off-grid: follow the pointer freely.
-    const ox = px - (s.held.anchor.x + 0.5) * cs;
-    const oy = py - (s.held.anchor.y + 0.5) * cs;
+    // Outside the board view: follow the pointer on screen, at the view's scale.
+    const ucs = cs * this.boardCam.zoom;
+    const ox = px - (s.held.anchor.x + 0.5) * ucs;
+    const oy = py - (s.held.anchor.y + 0.5) * ucs;
     for (const t of s.held.tiles) {
-      const x = ox + t.gx * cs;
-      const y = oy + t.gy * cs;
-      this.drawTileImage(x, y, cs, { ...t, online: true }, 0.6);
-      this.drawArc(x + cs / 2, y + cs / 2, cs, t);
+      this.drawTileImage(
+        ox + t.gx * ucs,
+        oy + t.gy * ucs,
+        ucs,
+        { ...t, online: true },
+        0.6,
+        1,
+        true,
+      );
     }
     if (inRect(SCRAP, px, py)) {
-      fg.lineStyle(3, COLORS.invalid, 1);
-      fg.strokeRect(SCRAP.x, SCRAP.y, SCRAP.w, SCRAP.h);
+      this.uiFg.lineStyle(3, COLORS.invalid, 1);
+      this.uiFg.strokeRect(SCRAP.x, SCRAP.y, SCRAP.w, SCRAP.h);
     }
   }
 
@@ -757,6 +955,8 @@ export class BuildScene extends Phaser.Scene {
           cs,
           { ...c, type: c.tile, online: true },
           alpha,
+          1,
+          true,
         );
       }
 
@@ -836,7 +1036,7 @@ export class BuildScene extends Phaser.Scene {
     const d = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
     const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
     const lines = [
-      `Board ${city.board.size} cells  ·  ${city.tiles.length} tiles`,
+      `Board ${city.board.size} cells  ·  ${city.tiles.length} tiles  ·  speed ${Math.round(this.syn.speedFactor * 100)}%`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
       levelSummary(city),
       `Chains: ${this.syn.chains.length}`,
