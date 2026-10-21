@@ -4,7 +4,6 @@ import { updateOnline } from './connectivity';
 import {
   destroyTile,
   dropGroup,
-  expandGrid,
   heldCellsAt,
   heldFromPiece,
   liftGroup,
@@ -73,11 +72,11 @@ export function pickOffer(s: BuildSession, index: number): boolean {
   return true;
 }
 
-/** Lifts the group under the given cell, held by that cell. */
+/** Lifts the group under the given cell, held by that cell. The Core is fixed (concept-v2.md §2.1). */
 export function pickUpAt(s: BuildSession, x: number, y: number): boolean {
   if (s.held) return false;
   const tile = tileAt(s.city, x, y);
-  if (!tile) return false;
+  if (!tile || tile.type === 'core') return false;
   const snapshot = s.city.tiles.filter((t) => t.groupId === tile.groupId).map((t) => ({ ...t }));
   const held = liftGroup(s.city, tile.groupId, { x, y });
   if (!held) return false;
@@ -223,12 +222,4 @@ export function debugDestroyAt(s: BuildSession, x: number, y: number): boolean {
   destroyTile(s.city, tile.id);
   updateOnline(s.city);
   return true;
-}
-
-/** Grid expansion. Not allowed while a group is held (its old cells would shift). */
-export function expand(s: BuildSession): boolean {
-  if (s.held) return false;
-  const grown = expandGrid(s.city);
-  if (grown) updateOnline(s.city);
-  return grown;
 }

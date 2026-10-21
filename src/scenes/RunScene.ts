@@ -24,17 +24,10 @@ import {
   debugSpawn,
 } from '../sim/debugActions';
 import { chargePath } from '../sim/boss';
-import { expandGrid, facingAngle } from '../sim/grid';
+import { facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
 import { step, type MoveInput } from '../sim/step';
-import {
-  bossEnraged,
-  cityChanged,
-  createWorld,
-  type CityCache,
-  type Enemy,
-  type World,
-} from '../sim/world';
+import { bossEnraged, createWorld, type CityCache, type Enemy, type World } from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
 
@@ -188,8 +181,8 @@ export class RunScene extends Phaser.Scene {
     while (this.acc >= SIM.dt) {
       step(w, input, SIM.dt);
       this.acc -= SIM.dt;
-      // Stop at a level-up or expansion so the build pause opens on this exact tick.
-      if (w.pendingLevelUps > 0 || w.pendingExpansions > 0 || w.over) {
+      // Stop at a level-up so the build pause opens on this exact tick.
+      if (w.pendingLevelUps > 0 || w.over) {
         this.acc = 0;
         break;
       }
@@ -200,8 +193,7 @@ export class RunScene extends Phaser.Scene {
     this.ui.simMs += (t1 - t0 - this.ui.simMs) * TIMING_SMOOTHING;
     this.ui.drawMs += (t2 - t1 - this.ui.drawMs) * TIMING_SMOOTHING;
     if (w.over) return;
-    if (w.pendingExpansions > 0) this.openBuild('expand');
-    else if (w.pendingLevelUps > 0) this.openBuild('level');
+    if (w.pendingLevelUps > 0) this.openBuild();
   }
 
   private moveInput(): MoveInput {
@@ -214,16 +206,15 @@ export class RunScene extends Phaser.Scene {
 
   // ------------------------------------------------------------ build pause
 
-  private openBuild(kind: 'level' | 'expand'): void {
+  private openBuild(): void {
     if (this.buildOpen) return;
     this.buildOpen = true;
-    if (kind === 'level') playSfx(this, 'level-up');
+    playSfx(this, 'level-up');
     const w = this.world;
     const data: BuildSceneData = {
       city: w.city,
-      offers: kind === 'level' ? rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time) : [],
-      title:
-        kind === 'level' ? `Salvage!  Level ${w.level - w.pendingLevelUps + 1}` : 'GRID EXPANDED',
+      offers: rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time),
+      title: `Salvage!  Level ${w.level - w.pendingLevelUps + 1}`,
       coreHeal: repairCoreAmount(w),
       rerollsLeft: w.rerolls,
       refundPerScrap: scrapRefund(w),
@@ -233,8 +224,7 @@ export class RunScene extends Phaser.Scene {
         return rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time);
       },
       done: (result) => {
-        if (kind === 'level') w.pendingLevelUps--;
-        else w.pendingExpansions = Math.max(0, w.pendingExpansions - 1);
+        w.pendingLevelUps--;
         applyBuildResult(w, result);
         this.scene.stop('Build');
         this.input.keyboard?.resetKeys();
@@ -263,7 +253,7 @@ export class RunScene extends Phaser.Scene {
       kills: w.kills,
       level: w.level,
       won: w.won,
-      gridSize: w.city.gridSize,
+      board: [...w.city.board],
       tiles: w.city.tiles.map((t) => ({ ...t })),
       coreLostAt: w.coreLostAt,
       damageBy: { ...w.damageBy },
@@ -281,14 +271,6 @@ export class RunScene extends Phaser.Scene {
       case 'F1':
         e.preventDefault();
         this.ui.debugOverlay = !this.ui.debugOverlay;
-        break;
-      case 'F2':
-        e.preventDefault();
-        if (expandGrid(w.city)) {
-          cityChanged(w);
-          w.pendingExpansions++;
-          w.expandedAt = w.time;
-        }
         break;
       case 'F3':
         e.preventDefault();
@@ -346,9 +328,16 @@ export class RunScene extends Phaser.Scene {
     return next;
   }
 
+  /** The city's bounding box takes at most CAMERA.cityFrame of the view (concept-v2.md §3.2). */
   private targetZoom(): number {
-    const citySpan = this.world.city.gridSize * GRID.cellPx + 2 * CAMERA.marginPx;
-    return Math.min(CAMERA.maxZoom, this.scale.height / citySpan);
+    const c = this.world.cache;
+    const w = c.maxRx - c.minRx + GRID.cellPx;
+    const h = c.maxRy - c.minRy + GRID.cellPx;
+    const fit = Math.min(
+      (this.scale.width * CAMERA.cityFrame) / w,
+      (this.scale.height * CAMERA.cityFrame) / h,
+    );
+    return Phaser.Math.Clamp(fit, CAMERA.minZoom, CAMERA.maxZoom);
   }
 
   private render(alpha: number, frameDt: number): void {
@@ -357,10 +346,9 @@ export class RunScene extends Phaser.Scene {
     const ox = lerp(w.px, w.x);
     const oy = lerp(w.py, w.y);
 
-    // Camera: follow the city centre with light smoothing; zoom out with the grid.
-    const c = w.cache;
-    const tx = ox + (c.minRx + c.maxRx) / 2;
-    const ty = oy + (c.minRy + c.maxRy) / 2;
+    // Camera: follow the Core with light smoothing; zoom to frame the city.
+    const tx = ox;
+    const ty = oy;
     const follow = 1 - Math.exp(-CAMERA.followRate * frameDt);
     const zoomK = 1 - Math.exp(-CAMERA.zoomRate * frameDt);
     this.cam.x += (tx - this.cam.x) * follow;
@@ -379,8 +367,9 @@ export class RunScene extends Phaser.Scene {
 
     // City tiles: pre-rendered textures as pooled sprites.
     const cell = GRID.cellPx;
-    const left = ox - (w.city.gridSize * cell) / 2;
-    const top = oy - (w.city.gridSize * cell) / 2;
+    // (ox, oy) is the centre of cell (0, 0).
+    const left = ox - cell / 2;
+    const top = oy - cell / 2;
     const coreScale =
       1 + motion() * FX.corePulse.amount * Math.sin(this.time.now * 0.001 * FX.corePulse.speed);
     const pulse = (t: { type: string; online: boolean }) =>
@@ -507,8 +496,6 @@ export class RunScene extends Phaser.Scene {
       } else if (ev.kind === 'bossPhase') {
         if (motion()) camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
         playSfx(this, 'boss-phase');
-      } else if (ev.kind === 'gridExpanded') {
-        playSfx(this, 'grid-expand');
       }
     }
     w.events.length = 0;
@@ -546,8 +533,9 @@ export class RunScene extends Phaser.Scene {
     const p = FX.generatorPulse;
     const f = (this.pulseClock % p.period) / p.period;
     const cell = GRID.cellPx;
-    const left = ox - (w.city.gridSize * cell) / 2;
-    const top = oy - (w.city.gridSize * cell) / 2;
+    // (ox, oy) is the centre of cell (0, 0).
+    const left = ox - cell / 2;
+    const top = oy - cell / 2;
     g.lineStyle(3, TILES.generator.color, p.alpha * (1 - f));
     for (const t of w.city.tiles) {
       if (t.type !== 'generator' || !t.online) continue;

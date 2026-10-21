@@ -1,6 +1,6 @@
 import { LINES, MOVE } from '../config/balance';
 import { TILES, type TileType, type WeaponDef } from '../config/tiles';
-import type { CityState, PlacedTile } from './grid';
+import { cellId, type CityState, type PlacedTile } from './grid';
 import { levelDamage, levelEffect, levelHpBonus, perk } from './upgrades';
 
 /** Per-tile result of levels, adjacency buffs and chains (concept-v2.md §2.7). */
@@ -87,11 +87,9 @@ interface Acc {
  * every city change (≤100 tiles). Only online tiles give buffs.
  */
 export function computeSynergies(city: CityState): Synergies {
-  const n = city.gridSize;
-  const grid: (PlacedTile | undefined)[] = new Array(n * n);
-  for (const t of city.tiles) grid[t.gy * n + t.gx] = t;
-  const at = (x: number, y: number) =>
-    x < 0 || y < 0 || x >= n || y >= n ? undefined : grid[y * n + x];
+  const grid = new Map<number, PlacedTile>();
+  for (const t of city.tiles) grid.set(cellId(t.gx, t.gy), t);
+  const at = (x: number, y: number) => grid.get(cellId(x, y));
 
   const acc = new Map<number, Acc>();
   for (const t of city.tiles) {
@@ -229,7 +227,6 @@ function findChains(
   city: CityState,
   at: (x: number, y: number) => PlacedTile | undefined,
 ): { chains: Chain[]; chainBonus: Map<number, number> } {
-  const n = city.gridSize;
   const chains: Chain[] = [];
   const chainBonus = new Map<number, number>();
   const links = (a: PlacedTile | undefined, b: PlacedTile | undefined) =>
@@ -237,38 +234,49 @@ function findChains(
   const chainable = (t: PlacedTile | undefined) =>
     !!t && t.online && TILES[t.type].family === 'weapon';
 
-  for (const horizontal of [true, false]) {
-    for (let line = 0; line < n; line++) {
-      const cell = (i: number) => (horizontal ? at(i, line) : at(line, i));
-      let start = 0;
-      while (start < n) {
-        const first = cell(start);
-        if (!chainable(first)) {
-          start++;
-          continue;
-        }
-        let end = start;
-        while (end + 1 < n && links(cell(end), cell(end + 1))) end++;
-        const length = end - start + 1;
-        if (length >= LINES.chainMin && first) {
-          const bonus = Math.min(
-            LINES.chainMaxBonus,
-            LINES.chainBonusStep * (length - LINES.chainMin + 1),
-          );
-          for (let i = start; i <= end; i++) {
-            const t = cell(i) as PlacedTile;
-            chainBonus.set(t.id, Math.max(chainBonus.get(t.id) ?? 0, bonus));
-          }
-          chains.push(
-            horizontal
-              ? { type: first.type, x0: start, y0: line, x1: end, y1: line, length }
-              : { type: first.type, x0: line, y0: start, x1: line, y1: end, length },
-          );
-        }
-        start = end + 1;
+  // The grid is open-ended: walk each run from its first tile (one whose
+  // predecessor in the line doesn't link to it).
+  for (const [dx, dy] of [
+    [1, 0],
+    [0, 1],
+  ] as const) {
+    for (const first of city.tiles) {
+      if (!chainable(first)) continue;
+      const prev = at(first.gx - dx, first.gy - dy);
+      if (chainable(prev) && links(prev, first)) continue;
+      const run = [first];
+      let next = at(first.gx + dx, first.gy + dy);
+      while (links(run[run.length - 1], next)) {
+        run.push(next as PlacedTile);
+        next = at(first.gx + dx * run.length, first.gy + dy * run.length);
       }
+      const length = run.length;
+      if (length < LINES.chainMin) continue;
+      const bonus = Math.min(
+        LINES.chainMaxBonus,
+        LINES.chainBonusStep * (length - LINES.chainMin + 1),
+      );
+      for (const t of run) chainBonus.set(t.id, Math.max(chainBonus.get(t.id) ?? 0, bonus));
+      const last = run[length - 1] as PlacedTile;
+      chains.push({
+        type: first.type,
+        x0: first.gx,
+        y0: first.gy,
+        x1: last.gx,
+        y1: last.gy,
+        length,
+      });
     }
   }
+  // Stable order: horizontal chains by row then column, then vertical ones by column then row.
+  const vertical = (c: Chain) => (c.x0 === c.x1 && c.y0 !== c.y1 ? 1 : 0);
+  chains.sort((a, b) =>
+    vertical(a) !== vertical(b)
+      ? vertical(a) - vertical(b)
+      : vertical(a)
+        ? a.x0 - b.x0 || a.y0 - b.y0
+        : a.y0 - b.y0 || a.x0 - b.x0,
+  );
   return { chains, chainBonus };
 }
 

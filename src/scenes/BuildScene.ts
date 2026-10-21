@@ -16,7 +16,6 @@ import {
   confirmStatus,
   debugDestroyAt,
   dropAt,
-  expand,
   pickOffer,
   pickUpAt,
   previewAt,
@@ -32,6 +31,7 @@ import {
 } from '../sim/build';
 import { findBridges } from '../sim/connectivity';
 import {
+  cellFromId,
   cellKey,
   createCity,
   facingAngle,
@@ -197,7 +197,7 @@ export class BuildScene extends Phaser.Scene {
           'Scrap: drag onto SCRAP, or hover + X',
           'Bridges: B · Arcs: V',
           'Confirm: Enter',
-          ...(DEBUG ? ['', 'Debug:', 'F2  expand grid', 'Del destroy hovered tile'] : []),
+          ...(DEBUG ? ['', 'Debug:', 'Del destroy hovered tile'] : []),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
       )
@@ -299,20 +299,43 @@ export class BuildScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- layout
 
+  /** The board's bounding box in cells. */
+  private boardBounds(): { minX: number; minY: number; w: number; h: number } {
+    const cells = [...this.city.board].map(cellFromId);
+    const minX = Math.min(...cells.map((c) => c.x));
+    const minY = Math.min(...cells.map((c) => c.y));
+    const w = Math.max(...cells.map((c) => c.x)) + 1 - minX;
+    const h = Math.max(...cells.map((c) => c.y)) + 1 - minY;
+    return { minX, minY, w, h };
+  }
+
   private cellPx(): number {
-    return Math.min(GRID_MAX_CELL, Math.floor(GRID_MAX_PX / this.city.gridSize));
+    const b = this.boardBounds();
+    return Math.min(GRID_MAX_CELL, Math.floor(GRID_MAX_PX / Math.max(b.w, b.h)));
   }
 
+  /** Screen rect of the board's bounding box. */
   private gridRect(): Rect {
-    const size = this.cellPx() * this.city.gridSize;
-    return { x: GRID_CENTRE.x - size / 2, y: GRID_CENTRE.y - size / 2, w: size, h: size };
+    const b = this.boardBounds();
+    const cs = this.cellPx();
+    const w = b.w * cs;
+    const h = b.h * cs;
+    return { x: GRID_CENTRE.x - w / 2, y: GRID_CENTRE.y - h / 2, w, h };
   }
 
-  /** Grid cell under a screen point (may be outside the grid). */
-  private cellAt(x: number, y: number): { x: number; y: number } {
+  /** Screen position of the top-left corner of cell (0, 0). */
+  private origin(): { x: number; y: number } {
+    const b = this.boardBounds();
     const r = this.gridRect();
     const cs = this.cellPx();
-    return { x: Math.floor((x - r.x) / cs), y: Math.floor((y - r.y) / cs) };
+    return { x: r.x - b.minX * cs, y: r.y - b.minY * cs };
+  }
+
+  /** Grid cell under a screen point (may be off the board). */
+  private cellAt(x: number, y: number): { x: number; y: number } {
+    const o = this.origin();
+    const cs = this.cellPx();
+    return { x: Math.floor((x - o.x) / cs), y: Math.floor((y - o.y) / cs) };
   }
 
   /** Index of the offer whose (available) upgrade strip is under the point, or -1. */
@@ -458,12 +481,6 @@ export class BuildScene extends Phaser.Scene {
       case 'NumpadEnter':
         this.tryConfirm();
         break;
-      case 'F2':
-        if (!DEBUG) break;
-        e.preventDefault();
-        if (expand(s)) this.showFlash('GRID EXPANDED');
-        else this.showFlash(s.held ? 'Put the held piece down first' : 'Grid is at max size');
-        break;
       case 'Delete':
         if (DEBUG) debugDestroyAt(s, cell.x, cell.y);
         break;
@@ -600,21 +617,20 @@ export class BuildScene extends Phaser.Scene {
   private drawGrid(): void {
     const g = this.g;
     const fg = this.fg;
-    const r = this.gridRect();
+    const r = this.origin();
     const cs = this.cellPx();
     const city = this.city;
-    for (let y = 0; y < city.gridSize; y++) {
-      for (let x = 0; x < city.gridSize; x++) {
-        g.fillStyle(COLORS.gridCell, 1);
-        g.fillRect(r.x + x * cs, r.y + y * cs, cs, cs);
-        g.lineStyle(1, COLORS.gridLine, 1);
-        g.strokeRect(r.x + x * cs, r.y + y * cs, cs, cs);
-      }
+    for (const id of city.board) {
+      const { x, y } = cellFromId(id);
+      g.fillStyle(COLORS.gridCell, 1);
+      g.fillRect(r.x + x * cs, r.y + y * cs, cs, cs);
+      g.lineStyle(1, COLORS.gridLine, 1);
+      g.strokeRect(r.x + x * cs, r.y + y * cs, cs, cs);
     }
 
     // Hovered group: what a click would pick up; its arcs are shown too.
     let hoveredGroup = -1;
-    if (!this.session.held && inRect(r, this.pointer.x, this.pointer.y)) {
+    if (!this.session.held) {
       const c = this.cellAt(this.pointer.x, this.pointer.y);
       hoveredGroup = tileAt(city, c.x, c.y)?.groupId ?? -1;
     }
@@ -672,11 +688,11 @@ export class BuildScene extends Phaser.Scene {
     const s = this.session;
     if (!s.held) return;
     const fg = this.fg;
-    const r = this.gridRect();
+    const r = this.origin();
     const cs = this.cellPx();
     const { x: px, y: py } = this.pointer;
 
-    if (inRect(r, px, py)) {
+    if (inRect(this.gridRect(), px, py)) {
       const c = this.cellAt(px, py);
       const preview = previewAt(s, c.x, c.y);
       if (!preview) return;
@@ -820,7 +836,7 @@ export class BuildScene extends Phaser.Scene {
     const d = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
     const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
     const lines = [
-      `Grid ${city.gridSize}×${city.gridSize}  ·  ${city.tiles.length} tiles`,
+      `Board ${city.board.size} cells  ·  ${city.tiles.length} tiles`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
       levelSummary(city),
       `Chains: ${this.syn.chains.length}`,

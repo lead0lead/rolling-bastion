@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRID, SPAWN } from '../src/config/balance';
+import { SPAWN } from '../src/config/balance';
 import { ELITE, ENEMIES } from '../src/config/enemies';
 import { SPAWN_GROUPS, SPIKES, WAVES } from '../src/config/waves';
 import { TILES, type TileType } from '../src/config/tiles';
@@ -149,6 +149,5 @@ describe('wave table', () => {
     expect(firstAt('spitter')).toBe(240);
     expect(firstAt('sapper')).toBe(330);
     expect(firstAt('bomber')).toBe(420);
-    expect(GRID.expandAt).toEqual([240, 480]);
   });
 });

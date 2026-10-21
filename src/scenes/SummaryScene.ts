@@ -5,7 +5,7 @@ import { barrelFor } from '../render/icons';
 import { COLORS, FONT } from '../render/palette';
 import { createTextures, TEX } from '../render/textures';
 import { outlineOf, showsCracks } from '../render/tiles';
-import { facingAngle, type PlacedTile } from '../sim/grid';
+import { cellFromId, facingAngle, type PlacedTile } from '../sim/grid';
 
 export interface SummaryData {
   time: number;
@@ -13,8 +13,8 @@ export interface SummaryData {
   level: number;
   /** The boss was defeated. */
   won: boolean;
-  /** The city as the run ended. */
-  gridSize: number;
+  /** The city as the run ended: its board (cell ids) and tiles. */
+  board: readonly number[];
   tiles: readonly PlacedTile[];
   /** Where the Core stood when it was destroyed (loss), else null. */
   coreLostAt: { gx: number; gy: number } | null;
@@ -78,16 +78,22 @@ export class SummaryScene extends Phaser.Scene {
     g.fillRoundedRect(box.x - 16, box.y - 16, box.size + 32, box.size + 32, 18);
     g.lineStyle(4, COLORS.panelBorder, 1);
     g.strokeRoundedRect(box.x - 16, box.y - 16, box.size + 32, box.size + 32, 18);
-    const cs = box.size / data.gridSize;
-    for (let y = 0; y < data.gridSize; y++) {
-      for (let x = 0; x < data.gridSize; x++) {
-        g.lineStyle(1, COLORS.gridLine, 1);
-        g.strokeRect(box.x + x * cs, box.y + y * cs, cs, cs);
-      }
+    // Fit the board's bounding box into the box, centred.
+    const cells = data.board.map(cellFromId);
+    const minX = Math.min(...cells.map((c) => c.x));
+    const minY = Math.min(...cells.map((c) => c.y));
+    const spanX = Math.max(...cells.map((c) => c.x)) + 1 - minX;
+    const spanY = Math.max(...cells.map((c) => c.y)) + 1 - minY;
+    const cs = box.size / Math.max(spanX, spanY);
+    const ox = box.x + (box.size - spanX * cs) / 2 - minX * cs;
+    const oy = box.y + (box.size - spanY * cs) / 2 - minY * cs;
+    for (const c of cells) {
+      g.lineStyle(1, COLORS.gridLine, 1);
+      g.strokeRect(ox + c.x * cs, oy + c.y * cs, cs, cs);
     }
     for (const t of data.tiles) {
-      const cx = box.x + (t.gx + 0.5) * cs;
-      const cy = box.y + (t.gy + 0.5) * cs;
+      const cx = ox + (t.gx + 0.5) * cs;
+      const cy = oy + (t.gy + 0.5) * cs;
       this.add.image(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(cs, cs);
       if (showsCracks(t.hp / t.maxHp)) this.add.image(cx, cy, TEX.cracks).setDisplaySize(cs, cs);
       const barrel = barrelFor(t.type);
@@ -103,8 +109,8 @@ export class SummaryScene extends Phaser.Scene {
       const inset = cs * 0.1;
       g.lineStyle(Math.max(2, cs * 0.08), COLORS.invalid, 1);
       g.strokeRoundedRect(
-        box.x + gx * cs + inset,
-        box.y + gy * cs + inset,
+        ox + gx * cs + inset,
+        oy + gy * cs + inset,
         cs - 2 * inset,
         cs - 2 * inset,
         cs * 0.2,

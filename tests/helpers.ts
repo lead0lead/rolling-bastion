@@ -1,12 +1,20 @@
 import { TILES, type TileType } from '../src/config/tiles';
-import { createCity, type CityState } from '../src/sim/grid';
+import { cellFromId, cellId, createCity, type CityState } from '../src/sim/grid';
+
+/** A board covering every cell of an ASCII picture, from (0, 0). */
+function pictureBoard(rows: string[]): Set<number> {
+  const board = new Set<number>();
+  rows.forEach((row, y) => [...row].forEach((_, x) => board.add(cellId(x, y))));
+  return board;
+}
 
 /**
  * Builds a city from an ASCII picture. 'C' is the Core, '.' empty, and every
  * other character is a Hull tile whose group is named by that character.
  */
 export function cityFrom(rows: string[]): CityState {
-  const city = createCity(rows.length);
+  const city = createCity();
+  city.board = pictureBoard(rows);
   city.tiles = [];
   const groups = new Map<string, number>();
   rows.forEach((row, gy) => {
@@ -38,9 +46,10 @@ export function cityFrom(rows: string[]): CityState {
 export function groupPicture(city: CityState): string[] {
   const names = new Map<number, string>();
   const letters = 'abcdefghijklmnopqrstuvwxyz';
-  const rows: string[][] = Array.from({ length: city.gridSize }, () =>
-    Array<string>(city.gridSize).fill('.'),
-  );
+  const cells = [...city.board].map(cellFromId);
+  const width = Math.max(...cells.map((c) => c.x)) + 1;
+  const height = Math.max(...cells.map((c) => c.y)) + 1;
+  const rows: string[][] = Array.from({ length: height }, () => Array<string>(width).fill('.'));
   for (const t of [...city.tiles].sort((a, b) => a.gy - b.gy || a.gx - b.gx)) {
     let name = t.type === 'core' ? 'C' : names.get(t.groupId);
     if (!name) {
@@ -57,7 +66,8 @@ export function groupPicture(city: CityState): string[] {
  * (`legend`); every tile is its own group, facing up. '.' is empty.
  */
 export function typedCity(rows: string[], legend: Record<string, TileType>): CityState {
-  const city = createCity(rows.length);
+  const city = createCity();
+  city.board = pictureBoard(rows);
   city.tiles = [];
   rows.forEach((row, gy) => {
     [...row].forEach((ch, gx) => {

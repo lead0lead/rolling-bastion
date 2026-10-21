@@ -1,17 +1,9 @@
-/** Grid and build-screen tuning (concept.md §2.1, §2.3, §2.8). Starting values. */
+/** Grid tuning (concept-v2.md §2.1). Starting values. */
 export const GRID = {
-  /** Side length of the starting grid. */
+  /** Side length of the square starting board around the Core. */
   startSize: 6,
-  /** Each expansion adds one ring of cells: side length grows by 2. */
-  expansionGrowth: 2,
-  /** Largest grid side length. */
-  maxSize: 10,
   /** World pixels per cell. */
   cellPx: 32,
-  /** Game times (s) at which the grid grows by one ring, with a free build pause. */
-  expandAt: [240, 480],
-  /** How long the "GRID EXPANDED" banner stays after the pause (s). */
-  bannerSec: 2.5,
 } as const;
 
 export const OFFERS = {
@@ -33,11 +25,12 @@ export const MOVE = {
   ease: 0.08,
 } as const;
 
-/** Camera (concept.md §3). */
+/** Combat camera (concept-v2.md §3.2). */
 export const CAMERA = {
-  /** World px kept visible around the city on every side. */
-  marginPx: 400,
-  /** Never zoom in beyond 1:1. */
+  /** The city's bounding box takes at most this share of the view's width and height. */
+  cityFrame: 0.35,
+  /** Never zoom out beyond this (enemies stop being readable), nor in beyond 1:1. */
+  minZoom: 0.4,
   maxZoom: 1,
   /** Follow smoothing rate (1/s). */
   followRate: 8,

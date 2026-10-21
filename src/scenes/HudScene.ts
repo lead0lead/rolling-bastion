@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { GRID } from '../config/balance';
 import { BOSS, ENEMIES } from '../config/enemies';
 import { COLORS, FONT } from '../render/palette';
 import { budgetRate } from '../sim/spawner';
@@ -23,7 +22,6 @@ export class HudScene extends Phaser.Scene {
   private coreText!: Phaser.GameObjects.Text;
   private debug!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
-  private bannerMode = 'GRID EXPANDED';
   private fps!: Phaser.GameObjects.Text;
   private fpsAt = 0;
   private bossText!: Phaser.GameObjects.Text;
@@ -59,11 +57,11 @@ export class HudScene extends Phaser.Scene {
       .text(12, 44, '', { ...text, fontSize: '14px', color: COLORS.textDim })
       .setVisible(false);
     this.banner = this.add
-      .text(640, 120, 'GRID EXPANDED', {
+      .text(640, 120, '', {
         ...text,
         fontStyle: FONT.bold,
         fontSize: '32px',
-        color: COLORS.textInfo,
+        color: COLORS.textBoss,
       })
       .setOrigin(0.5)
       .setVisible(false);
@@ -94,7 +92,7 @@ export class HudScene extends Phaser.Scene {
     this.timer.setText(`${mins}:${secs.toString().padStart(2, '0')}`);
     this.level.setText(`Lv ${w.level}`);
     this.info.setText(
-      `Grid ${w.city.gridSize}×${w.city.gridSize}\nRerolls ${w.rerolls}\nKills ${w.kills}`,
+      `Board ${w.city.board.size}  ·  Tiles ${w.city.tiles.length}  ·  Speed ${Math.round(w.cache.syn.speedFactor * 100)}%\nRerolls ${w.rerolls}\nKills ${w.kills}`,
     );
 
     const core = coreTile(w.city);
@@ -118,23 +116,13 @@ export class HudScene extends Phaser.Scene {
       this.bossText.setText(`${ENEMIES[boss.type].name}${enraged ? '  —  ENRAGED' : ''}`);
     }
 
-    // Grid expansion banner (once the free build pause has closed), or the boss phase banner.
-    const gridAge = w.time - w.expandedAt;
+    // Boss phase banner.
     const phaseAge = w.time - w.bossState.phaseAt;
     const phaseBanner = phaseAge < BOSS.bannerSec;
-    const mode = phaseBanner ? `PHASE ${w.bossState.phase}` : 'GRID EXPANDED';
-    if (mode !== this.bannerMode) {
-      // Text style changes re-render the texture, so only change them when needed.
-      this.bannerMode = mode;
-      this.banner.setText(mode).setColor(phaseBanner ? COLORS.textBoss : COLORS.textInfo);
-    }
-    if (phaseBanner) {
-      this.banner.setVisible(true).setAlpha(Math.min(1, (BOSS.bannerSec - phaseAge) / 0.5));
-    } else {
-      this.banner
-        .setVisible(gridAge < GRID.bannerSec && w.pendingExpansions === 0)
-        .setAlpha(Math.min(1, (GRID.bannerSec - gridAge) / 0.5));
-    }
+    this.banner
+      .setVisible(phaseBanner)
+      .setText(`PHASE ${w.bossState.phase}`)
+      .setAlpha(Math.min(1, (BOSS.bannerSec - phaseAge) / 0.5));
 
     // Settings → Show FPS (concept.md §8); refreshed a few times a second.
     const showFps = settings().showFps && !ui.debugOverlay;
@@ -154,7 +142,7 @@ export class HudScene extends Phaser.Scene {
           `E spawns: ${ui.debugEnemy}  ([ / ] to change)`,
           `god mode ${w.godMode ? 'ON' : 'off'} (I)`,
           'G level · T +60 s · K kill all · H hurt boss 35% · L layout',
-          'F2 grow grid · F3 fill grid with Gatlings',
+          'F3 fill the board with Gatlings',
         ].join('\n'),
       );
     }

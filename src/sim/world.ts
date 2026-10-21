@@ -3,7 +3,7 @@ import { BOSS, type EnemyType } from '../config/enemies';
 import { TILES, type TileType } from '../config/tiles';
 import type { SpawnGroupId } from '../config/waves';
 import { findBridges, updateOnline } from './connectivity';
-import { createCity, type CityState, type PlacedTile } from './grid';
+import { cellId, createCity, type CityState, type PlacedTile } from './grid';
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatialHash';
 import { applyMaxHp, computeSynergies, type Synergies, type TileMods } from './synergies';
@@ -91,14 +91,13 @@ export type WorldEvent =
   | { kind: 'enemyKilled'; x: number; y: number; type: EnemyType }
   | { kind: 'blast'; x: number; y: number; radius: number; bomb: boolean }
   | { kind: 'levelUp'; level: number }
-  | { kind: 'gridExpanded'; size: number }
   | { kind: 'bossPhase'; phase: number };
 
 /** City-derived data, recomputed only when the city changes (concept.md §9). */
 export interface CityCache {
-  /** Tile per cell, row-major, `gridSize²` entries. */
-  cells: (PlacedTile | undefined)[];
-  /** Tile centres relative to the city origin (grid centre). */
+  /** Tile per cell, by `cellId` (sparse: the grid is open-ended). */
+  cells: Map<number, PlacedTile>;
+  /** Tile centres relative to the city origin (the centre of cell (0, 0), the Core's). */
   centres: { tile: PlacedTile; rx: number; ry: number }[];
   /** Bounding box of tile centres, relative to the origin. */
   minRx: number;
@@ -119,7 +118,7 @@ export interface World {
   rng: Rng;
   city: CityState;
   cache: CityCache;
-  /** World position of the grid centre, and its velocity. */
+  /** World position of the centre of cell (0, 0) (the Core's cell), and its velocity. */
   x: number;
   y: number;
   px: number;
@@ -142,11 +141,6 @@ export interface World {
   xp: number;
   level: number;
   pendingLevelUps: number;
-  /** Timed grid expansions done so far, and free build pauses still to open for them. */
-  expansions: number;
-  pendingExpansions: number;
-  /** Game time of the last grid expansion (for the banner). */
-  expandedAt: number;
   /** The live boss, if any; checked outside the spatial hash (it is too big for it). */
   boss: Enemy | null;
   bossSpawned: boolean;
@@ -201,9 +195,6 @@ export function createWorld(seed: number): World {
     xp: 0,
     level: 1,
     pendingLevelUps: 0,
-    expansions: 0,
-    pendingExpansions: 0,
-    expandedAt: -Infinity,
     boss: null,
     bossSpawned: false,
     bossState: newBossState(),
@@ -281,8 +272,7 @@ const NEUTRAL_MODS: TileMods = {
 
 function buildCache(city: CityState): CityCache {
   const cell = GRID.cellPx;
-  const half = (city.gridSize * cell) / 2;
-  const cells: (PlacedTile | undefined)[] = new Array(city.gridSize * city.gridSize);
+  const cells = new Map<number, PlacedTile>();
   const centres: CityCache['centres'] = [];
   const weapons: PlacedTile[] = [];
   let minRx = Infinity;
@@ -294,9 +284,9 @@ function buildCache(city: CityState): CityCache {
   const bridges = findBridges(city);
   const bridgeCentres: CityCache['bridgeCentres'] = [];
   for (const t of city.tiles) {
-    cells[t.gy * city.gridSize + t.gx] = t;
-    const rx = (t.gx + 0.5) * cell - half;
-    const ry = (t.gy + 0.5) * cell - half;
+    cells.set(cellId(t.gx, t.gy), t);
+    const rx = t.gx * cell;
+    const ry = t.gy * cell;
     centres.push({ tile: t, rx, ry });
     minRx = Math.min(minRx, rx);
     maxRx = Math.max(maxRx, rx);
@@ -310,21 +300,18 @@ function buildCache(city: CityState): CityCache {
   return { cells, centres, minRx, maxRx, minRy, maxRy, weapons, bridges, bridgeCentres, syn };
 }
 
-/** World x of the grid's left edge and y of its top edge. */
-export function gridTopLeft(w: World): { left: number; top: number } {
-  const half = (w.city.gridSize * GRID.cellPx) / 2;
+/** World x of the left edge and y of the top edge of cell (0, 0); cell (gx, gy) starts gx/gy cells further. */
+export function cellOrigin(w: World): { left: number; top: number } {
+  const half = GRID.cellPx / 2;
   return { left: w.x - half, top: w.y - half };
 }
 
 export function tileAtCell(w: World, gx: number, gy: number): PlacedTile | undefined {
-  const n = w.city.gridSize;
-  if (gx < 0 || gy < 0 || gx >= n || gy >= n) return undefined;
-  return w.cache.cells[gy * n + gx];
+  return w.cache.cells.get(cellId(gx, gy));
 }
 
 export function tileCentre(w: World, t: PlacedTile): { x: number; y: number } {
-  const half = (w.city.gridSize * GRID.cellPx) / 2;
-  return { x: w.x + (t.gx + 0.5) * GRID.cellPx - half, y: w.y + (t.gy + 0.5) * GRID.cellPx - half };
+  return { x: w.x + t.gx * GRID.cellPx, y: w.y + t.gy * GRID.cellPx };
 }
 
 /** World position of the centre of the city's occupied area. */

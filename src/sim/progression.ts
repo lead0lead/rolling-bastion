@@ -4,7 +4,7 @@ import type { TileType } from '../config/tiles';
 import { coreTile } from './grid';
 import type { Rng } from './rng';
 import { applyUpgrade, upgradeType } from './upgrades';
-import { cityCentre, cityChanged, gridTopLeft, tileAtCell, type World } from './world';
+import { cityCentre, cityChanged, cellOrigin, tileAtCell, type World } from './world';
 
 /** Weighted random pick of `count` distinct pieces from the pool. */
 export function rollOffers(rng: Rng, pool: readonly PieceDef[], count: number): PieceDef[] {
@@ -84,7 +84,7 @@ export function collectGems(w: World, dt = 0): void {
   const radius = XP.pickupRadius * syn.pickupFactor;
   const drift = syn.gemDrift ? radius * syn.gemDrift.radiusFactor : radius;
   const reach = Math.ceil(drift / cell);
-  const { left, top } = gridTopLeft(w);
+  const { left, top } = cellOrigin(w);
   const centre = cityCentre(w);
 
   if (syn.gemPull) {

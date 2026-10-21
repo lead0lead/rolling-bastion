@@ -5,7 +5,6 @@ import {
   confirmStatus,
   debugDestroyAt,
   dropAt,
-  expand,
   pickOffer,
   pickUpAt,
   previewAt,
@@ -33,7 +32,7 @@ const MONO: PieceDef = {
 };
 
 function session() {
-  return startBuild(createCity(6), [DOMINO, MONO]); // core at 3,3
+  return startBuild(createCity(6), [DOMINO, MONO]); // Core at 0,0; board −3…2
 }
 
 describe('build session', () => {
@@ -42,14 +41,14 @@ describe('build session', () => {
     expect(confirmStatus(s)).toMatchObject({ ok: false, block: 'no_offer_taken' });
     pickOffer(s, 1);
     expect(confirmStatus(s)).toMatchObject({ ok: false, block: 'holding' });
-    expect(dropAt(s, 3, 2)).toBe(true);
+    expect(dropAt(s, 0, -1)).toBe(true);
     expect(confirmStatus(s)).toEqual({ ok: true });
   });
 
   it('allows only one offer per pause', () => {
     const s = session();
     pickOffer(s, 1);
-    dropAt(s, 3, 2);
+    dropAt(s, 0, -1);
     expect(pickOffer(s, 0)).toBe(false);
   });
 
@@ -64,48 +63,49 @@ describe('build session', () => {
   it('blocks confirm while tiles are disconnected', () => {
     const s = session();
     pickOffer(s, 1);
-    dropAt(s, 0, 0);
+    dropAt(s, -3, -3);
     expect(confirmStatus(s)).toEqual({ ok: false, block: 'disconnected', offline: 1 });
   });
 
   it('keeps the held piece when a drop is invalid, and previews the problem', () => {
     const s = session();
     pickOffer(s, 1);
-    expect(previewAt(s, 3, 3)?.problems.get('3,3')).toBe('overlap');
-    expect(dropAt(s, 3, 3)).toBe(false);
+    expect(previewAt(s, 0, 0)?.problems.get('0,0')).toBe('overlap');
+    expect(previewAt(s, 3, 0)?.problems.get('3,0')).toBe('off_board');
+    expect(dropAt(s, 0, 0)).toBe(false);
+    expect(dropAt(s, 3, 0)).toBe(false);
     expect(s.held).not.toBeNull();
   });
 
   it('moves and rotates a placed group, and cancel restores it', () => {
     const s = session();
     pickOffer(s, 0); // anchor on the gatling (0,0)
-    dropAt(s, 3, 2); // gatling 3,2 · hull 4,2
-    expect(pickUpAt(s, 3, 2)).toBe(true);
+    dropAt(s, 0, -1); // gatling 0,-1 · hull 1,-1
+    expect(pickUpAt(s, 0, -1)).toBe(true);
     rotate(s); // now vertical: gatling above hull
-    expect(dropAt(s, 2, 1)).toBe(true);
-    expect(tileAt(s.city, 2, 1)?.type).toBe('gatling');
-    expect(tileAt(s.city, 2, 2)?.type).toBe('hull');
+    expect(dropAt(s, -1, -2)).toBe(true);
+    expect(tileAt(s.city, -1, -2)?.type).toBe('gatling');
+    expect(tileAt(s.city, -1, -1)?.type).toBe('hull');
     expect(confirmStatus(s).block).toBe('disconnected');
 
-    pickUpAt(s, 2, 1);
+    pickUpAt(s, -1, -2);
     cancelHeld(s);
-    expect(tileAt(s.city, 2, 1)?.type).toBe('gatling');
+    expect(tileAt(s.city, -1, -2)?.type).toBe('gatling');
   });
 
-  it('lets the Core be moved but not scrapped', () => {
+  it('keeps the Core fixed: it can be neither moved nor scrapped', () => {
     const s = session();
-    expect(scrapAt(s, 3, 3)).toBe(false);
-    pickUpAt(s, 3, 3);
-    expect(scrapHeld(s)).toBe(false);
-    expect(dropAt(s, 0, 0)).toBe(true);
+    expect(scrapAt(s, 0, 0)).toBe(false);
+    expect(pickUpAt(s, 0, 0)).toBe(false);
+    expect(s.held).toBeNull();
     expect(tileAt(s.city, 0, 0)?.type).toBe('core');
   });
 
   it('scraps placed groups for good', () => {
     const s = session();
     pickOffer(s, 0);
-    dropAt(s, 3, 2);
-    expect(scrapAt(s, 4, 2)).toBe(true);
+    dropAt(s, 0, -1);
+    expect(scrapAt(s, 1, -1)).toBe(true);
     expect(s.city.tiles).toHaveLength(1);
   });
 
@@ -118,8 +118,6 @@ describe('build session', () => {
 
   it('turns tiles offline when a debug-destroyed bridge splits the city', () => {
     const s = startBuild(createCity(6), []);
-    pickUpAt(s, 3, 3);
-    dropAt(s, 0, 0);
     s.offers = [DOMINO];
     s.offerTaken = false;
     pickOffer(s, 0);
@@ -127,15 +125,6 @@ describe('build session', () => {
     expect(debugDestroyAt(s, 1, 0)).toBe(true);
     expect(tileAt(s.city, 2, 0)?.online).toBe(false);
     expect(confirmStatus(s)).toMatchObject({ block: 'disconnected', offline: 1 });
-  });
-
-  it('expands the grid only while nothing is held', () => {
-    const s = session();
-    pickOffer(s, 0);
-    expect(expand(s)).toBe(false);
-    cancelHeld(s);
-    expect(expand(s)).toBe(true);
-    expect(s.city.gridSize).toBe(8);
   });
 });
 
@@ -157,15 +146,15 @@ describe('build session: run options', () => {
     expect(s.offers).toEqual([MONO]);
     pickOffer(s, 0);
     expect(reroll(s, [DOMINO])).toBe(false);
-    dropAt(s, 3, 2);
+    dropAt(s, 0, -1);
     expect(reroll(s, [DOMINO])).toBe(false);
   });
 
   it('counts scrapped placed pieces but not scrapped fresh offers', () => {
     const s = session();
     pickOffer(s, 0);
-    dropAt(s, 3, 2);
-    scrapAt(s, 3, 2);
+    dropAt(s, 0, -1);
+    scrapAt(s, 0, -1);
     expect(s.scrapped).toBe(1);
     const t = startBuild(createCity(6), [MONO]);
     pickOffer(t, 0);
