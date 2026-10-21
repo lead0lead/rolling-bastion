@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Spikes done (A dropped, B changed into B2, B2 kept). Build plan rewritten with the user 2026-10-21 (§11). **Phase 1 — board and land in progress** on `v2-phase-1-board`. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 1, step 1: concept rewritten for the decided design (§1–§9, §11–§13). |
-| **Next step** | Phase 1, step 2: sparse grid with a board, Core fixed at (0, 0), no expansions. |
+| **Status** | Spikes done (A dropped, B changed into B2, B2 kept). **Phase 1 — board and land built** on `v2-phase-1-board` (2.0.0-alpha.1), handed to the user; not merged into `v2` yet. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 1 done, waiting for the user to try it. |
+| **Next step** | User tries Phase 1 → merge `v2-phase-1-board` into `v2`; then Phase 2 (editing UX) and scheduling the Saw rework with the user. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | Spikes: `2.0.0-spike.a`, `2.0.0-spike.b`, `2.0.0-spike.b2` (their branches only). Phase 1 will be `2.0.0-alpha.1`; `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.1` (Phase 1, on its branch). Spikes: `2.0.0-spike.a/.b/.b2` on theirs; `v2` says 0.8.0 until the merge. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-21 (Phase 1 started) |
+| **Last updated** | 2026-10-21 (Phase 1 built) |
 
 ---
 
@@ -124,7 +124,7 @@ v2 adds two:
 All numbers are **starting values to tune**, kept in `src/config/`. Anything
 not mentioned here works as in v1 (`concept.md` §2).
 
-### 2.1 Board and land (v2)
+### 2.1 Board and land (v2, as implemented in Phase 1)
 
 - Cells are integer coordinates; the **Core is fixed at (0, 0)**: it cannot
   be moved or scrapped. Every other group can be moved freely in a build
@@ -150,6 +150,20 @@ not mentioned here works as in v1 (`concept.md` §2).
 - Implementation: sparse maps keyed by cell (no fixed-size arrays), so a
   spread-out city costs only its tile count.
 
+As implemented (Phase 1): `CityState.board` is a `Set` of `cellId`s
+(`src/sim/grid.ts`; ids stay below 2^30 so they are small integers in V8,
+coordinates limited to ±16383); placement problems are `off_board` /
+`overlap`. Land in `src/config/land.ts` and `src/sim/land.ts` (`rollLand`,
+`landCells` centres the rotated shape's bounding box on the pointer cell,
+`landProblems`, `addLand`); `World.pendingLand` counts land level-ups,
+queued by `addXp`. In a build session (`src/sim/build.ts`) `land` /
+`heldLand` hold the land step; `pickLand`, `landPreviewAt`, `placeLandAt`,
+`offerLand` (debug); while land is pending, offers, upgrades, Repair Core,
+reroll and moving groups are refused and confirm is blocked (`'land'`).
+The Core can't be picked up. The run cache (`World.cache.cells`) and
+synergies are sparse maps; chains are found by walking each line from its
+first tile. The world origin is the Core's cell centre.
+
 How the spikes got here: free infinite growth (Spike B) was disliked: no
 reason to grow one way rather than another. Class starting shapes and paid
 edge expansions were discussed, then replaced by land shapes at set levels
@@ -170,12 +184,13 @@ As v1 (`concept.md` §2.3), except:
   until then ("Place the new land first").
 - Editing tools: §3.1.
 
-### 2.4 Connectivity
+### 2.4 Connectivity (as implemented in Phase 1)
 
 - Rules unchanged from v1 (flood fill from the Core, offline tiles).
-- **Bridge detection must be linear time** (Tarjan articulation points)
-  instead of v1's brute force: endless cities can reach hundreds of tiles, and
-  Sappers recompute bridges on every city change.
+- **Bridge detection is linear time:** Tarjan articulation points with an
+  iterative DFS rooted at the Core (`findBridges`), instead of v1's brute
+  force; a property test checks it against the brute force on 200 random
+  cities, another a 3000-tile snake.
 
 ### 2.5 Movement
 
@@ -284,7 +299,7 @@ Unchanged from v1 (`concept.md` §2.10).
   taking an offer or upgrade, Repair Core, placements, moves, rotations,
   scraps and rerolls. History is cleared when the pause closes.
 
-### 3.2 Camera (v2)
+### 3.2 Camera (v2, as implemented in Phase 1)
 
 - **Combat:** follows the Core with light smoothing; zoom changes smoothly
   so the city's bounding box takes up at most **35%** of the view's height
@@ -294,6 +309,14 @@ Unchanged from v1 (`concept.md` §2.10).
 - **Build pause:** the board has its own view between the side panels;
   opens fitted to the board with ~3 empty cells of margin; pan/zoom freely
   (zoom 0.3–3); F refits.
+- As implemented: combat camera in `RunScene.targetZoom` (`CAMERA.cityFrame`
+  0.35, `minZoom` 0.4, `maxZoom` 1), following the Core. Build screen:
+  the main camera is the board view (viewport x 300–995, y 70–720), a
+  second full-screen camera draws the UI; board and UI objects live in two
+  layers, each ignored by the other camera. Pan 700 px/s, wheel ×1.15 per
+  step toward the pointer, fit margin 3 cells (`BUILD_VIEW`). A pan key
+  only pans after a fresh (non-repeat) press during the pause. Line widths
+  in the board view stay constant on screen.
 
 ### 3.3 Readability (v2 additions; v1 rules still apply; Phase 3)
 
@@ -502,6 +525,17 @@ start early if the user asks.
 
 **Known issues**
 
+- **Intermittent bench spike (Phase 1):** in `npm run bench`, when the
+  stress city is worn down to the Core alone (≈ tick 410–450), one tick of
+  `updateEnemies` sometimes takes 100–320 ms (2 of 3 runs, then 0 of 3 with
+  a GC observer attached; not seen in 4 runs on `v2` before Phase 1).
+  Averages are fine (~6.9 ms/step, as before). Not found yet; the scenario
+  (600 enemies on one tile) can't happen in a real run without losing.
+  Look again in the Phase 4 performance check.
+- **`npm run bench` times out on this machine** (Vitest's 5 s test
+  timeout; the run takes ~7 s) on `v2` as well as on Phase 1: the check
+  never reports a pass here. Raise the bench's timeout in Phase 4, or run
+  on a faster machine.
 - v1 known issues (`concept.md` §12) carry over until the code involved is
   rebuilt.
 
@@ -533,6 +567,33 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Phase 1: board and land
+- Done (branch `v2-phase-1-board`, one commit per step, all checks green
+  at each): concept rewrite; filled rows/columns removed; open-ended grid
+  with a board, Core fixed at (0, 0), no timed expansions, combat camera
+  framing; Tarjan bridges; land shapes in the sim with tests; build screen
+  board view with pan/zoom/fit and the fresh-key rule; land step in the
+  build screen and runs (F2 debug); balance bots place land; small-integer
+  cell ids. Version `2.0.0-alpha.1`.
+- Tests: 124 pass (old tests moved to the new coordinates; expansion and
+  filled-row tests replaced by board, land and "no filled-row bonus"
+  tests; the Bomber test uses Plating, as Hull only survived through the
+  filled-row HP bonus).
+- Checked in a headless browser: build screen with board, pan/zoom/fit,
+  held piece over the scrap zone, land offer at a land level-up with WASD
+  still held (no panning), red overlap preview; no console errors.
+- Balance sim (seed 1, bots collect all XP): Gatling, Cannon, Mortar and
+  mixed builds win at level 47 with 71–93 tiles on 96-cell boards; the Saw
+  wall dies to the boss with one tile left (fits the user's Saw feedback;
+  not compared against v1 here).
+- Problems: the intermittent bench spike and the bench timeout (§12 Known
+  issues). Diagnosed with temporary logging (not committed): the spike is
+  inside `updateEnemies`, only once the city is down to the Core; large
+  cell ids were measured to cost ~7% (fixed), but were not the spike.
+  Stopped there instead of guessing further.
+- Next: the user tries Phase 1; merge into `v2`; Phase 2; schedule the
+  Saw rework.
 
 ### 2026-10-21 — Plan rewritten, Phase 1 started
 - Decisions (user): the rewritten plan (§11): Phase 1 board and land,
