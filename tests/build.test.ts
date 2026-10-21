@@ -2,20 +2,32 @@ import { describe, expect, it } from 'vitest';
 import type { PieceDef } from '../src/config/pieces';
 import {
   cancelHeld,
+  clearSelection,
   confirmStatus,
   debugDestroyAt,
   dropAt,
+  pickLand,
   pickOffer,
   pickUpAt,
+  placeLandAt,
   previewAt,
+  redo,
   reroll,
   rotate,
   scrapAt,
   scrapHeld,
+  scrapSelection,
+  selectAll,
+  selectBox,
+  selectedGroups,
   startBuild,
   toggleRepair,
+  toggleSelectAt,
+  undo,
 } from '../src/sim/build';
+import { LAND_SHAPES } from '../src/config/land';
 import { createCity, tileAt } from '../src/sim/grid';
+import { cityFrom } from './helpers';
 
 const DOMINO: PieceDef = {
   id: 'test-domino',
@@ -160,5 +172,162 @@ describe('build session: run options', () => {
     pickOffer(t, 0);
     scrapHeld(t);
     expect(t.scrapped).toBe(0);
+  });
+});
+
+describe('build session: selection', () => {
+  // Core at (2, 2); single-tile groups a (0,0), b (4,0), c (0,4), d (4,4).
+  function city() {
+    return cityFrom(['a...b', '.....', '..C..', '.....', 'c...d']);
+  }
+  const group = (s: ReturnType<typeof startBuild>, x: number, y: number) =>
+    tileAt(s.city, x, y)?.groupId as number;
+
+  it('Shift+click toggles groups but never the Core', () => {
+    const s = startBuild(city(), []);
+    expect(toggleSelectAt(s, 0, 0)).toBe(true);
+    expect(toggleSelectAt(s, 4, 0)).toBe(true);
+    expect(toggleSelectAt(s, 2, 2)).toBe(false);
+    expect(selectedGroups(s).sort()).toEqual([group(s, 0, 0), group(s, 4, 0)].sort());
+    toggleSelectAt(s, 0, 0);
+    expect(selectedGroups(s)).toEqual([group(s, 4, 0)]);
+  });
+
+  it('box select takes every group with a tile in the box, replacing or adding', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 2); // top half, Core included in the box but not selected
+    expect(selectedGroups(s).sort()).toEqual([group(s, 0, 0), group(s, 4, 0)].sort());
+    selectBox(s, 4, 4, 0, 3, true);
+    expect(selectedGroups(s)).toHaveLength(4);
+    selectBox(s, 0, 4, 0, 4);
+    expect(selectedGroups(s)).toEqual([group(s, 0, 4)]);
+    selectAll(s);
+    expect(selectedGroups(s)).toHaveLength(4);
+    clearSelection(s);
+    expect(selectedGroups(s)).toEqual([]);
+  });
+
+  it('picking up a selected tile lifts the whole selection; it stays selected after the drop', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 0); // a and b
+    expect(pickUpAt(s, 0, 0)).toBe(true);
+    expect(s.held?.tiles).toHaveLength(2);
+    expect(dropAt(s, 0, 1)).toBe(true); // a → (0,1), b → (4,1)
+    expect(tileAt(s.city, 0, 1)?.groupId).toBe(group(s, 0, 1));
+    expect(tileAt(s.city, 4, 1)).toBeDefined();
+    expect(tileAt(s.city, 0, 0)).toBeUndefined();
+    expect(selectedGroups(s)).toHaveLength(2);
+  });
+
+  it('picking up an unselected group lifts only it and clears the selection', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 0);
+    expect(pickUpAt(s, 0, 4)).toBe(true);
+    expect(s.held?.tiles).toHaveLength(1);
+    expect(selectedGroups(s)).toEqual([]);
+  });
+
+  it('cancel puts a held selection back; an invalid drop keeps it in hand', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 0);
+    pickUpAt(s, 4, 0); // held by b
+    expect(dropAt(s, 2, 2)).toBe(false); // b onto the Core
+    expect(s.held).not.toBeNull();
+    cancelHeld(s);
+    expect(tileAt(s.city, 0, 0)).toBeDefined();
+    expect(tileAt(s.city, 4, 0)).toBeDefined();
+  });
+
+  it('scraps a held selection or the selection in place, counting each piece', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 0);
+    pickUpAt(s, 0, 0);
+    expect(scrapHeld(s)).toBe(true);
+    expect(s.scrapped).toBe(2);
+    selectBox(s, 0, 4, 4, 4);
+    expect(scrapSelection(s)).toBe(2);
+    expect(s.scrapped).toBe(4);
+    expect(s.city.tiles).toHaveLength(1);
+    expect(selectedGroups(s)).toEqual([]);
+  });
+});
+
+describe('build session: undo and redo', () => {
+  it('undoes and redoes placing an offer, and the offer comes back', () => {
+    const s = session();
+    pickOffer(s, 1);
+    dropAt(s, 0, -1);
+    expect(undo(s)).toBe(true);
+    expect(tileAt(s.city, 0, -1)).toBeUndefined();
+    expect(s.offerTaken).toBe(false);
+    expect(pickOffer(s, 0)).toBe(true); // any offer can be taken again
+    cancelHeld(s);
+    expect(redo(s)).toBe(true);
+    expect(tileAt(s.city, 0, -1)?.type).toBe('hull');
+    expect(s.offerTaken).toBe(true);
+  });
+
+  it('undoes moves and scraps, restoring ids and HP', () => {
+    const s = session();
+    pickOffer(s, 0);
+    dropAt(s, 0, -1); // gatling 0,-1 · hull 1,-1
+    const gun = tileAt(s.city, 0, -1);
+    if (!gun) throw new Error('missing gatling');
+    gun.hp = 9;
+    pickUpAt(s, 0, -1);
+    dropAt(s, -2, -2);
+    scrapAt(s, -2, -2);
+    expect(s.scrapped).toBe(1);
+    undo(s); // the scrap
+    expect(s.scrapped).toBe(0);
+    expect(tileAt(s.city, -2, -2)).toMatchObject({ id: gun.id, hp: 9 });
+    undo(s); // the move
+    expect(tileAt(s.city, 0, -1)).toMatchObject({ id: gun.id, hp: 9 });
+    expect(tileAt(s.city, -2, -2)).toBeUndefined();
+  });
+
+  it('a new change clears the redo steps; with nothing to undo it does nothing', () => {
+    const s = session();
+    expect(undo(s)).toBe(false);
+    toggleRepair(s);
+    undo(s);
+    expect(s.repairChosen).toBe(false);
+    pickOffer(s, 1);
+    dropAt(s, 0, -1);
+    expect(redo(s)).toBe(false);
+  });
+
+  it('while something is held, undo only puts it back', () => {
+    const s = session();
+    pickOffer(s, 1);
+    dropAt(s, 0, -1);
+    pickUpAt(s, 0, -1);
+    expect(undo(s)).toBe(true);
+    expect(s.held).toBeNull();
+    expect(tileAt(s.city, 0, -1)?.type).toBe('hull'); // put back, not undone
+  });
+
+  it('undoes a reroll, giving it back, and an upgrade choice', () => {
+    const s = session();
+    reroll(s, [MONO]);
+    expect(s.rerollsUsed).toBe(1);
+    undo(s);
+    expect(s.rerollsUsed).toBe(0);
+    expect(s.offers).toEqual([DOMINO, MONO]);
+  });
+
+  it('undoes placing land, offering it again', () => {
+    const land = LAND_SHAPES.slice(0, 3); // block (4×3) first
+    const s = startBuild(createCity(6), [MONO], land);
+    pickLand(s, 0);
+    expect(placeLandAt(s, 5, 0)).toBe(true); // the 4×3 block at x 3…6, right of the board
+    expect(s.land).toBeNull();
+    const grown = s.city.board.size;
+    expect(grown).toBeGreaterThan(36);
+    undo(s);
+    expect(s.city.board.size).toBe(36);
+    expect(s.land).toEqual(land);
+    redo(s);
+    expect(s.city.board.size).toBe(grown);
   });
 });

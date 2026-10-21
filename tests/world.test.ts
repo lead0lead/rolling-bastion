@@ -235,3 +235,12 @@ describe('open-ended grid', () => {
     expect(tileAtCell(w, -7, -3)).toBeUndefined();
   });
 });
+
+describe('build results', () => {
+  it('charge the rerolls used in the pause', () => {
+    const w = createWorld(1);
+    const before = w.rerolls;
+    applyBuildResult(w, { repair: false, scrapped: 0, rerollsUsed: 1 });
+    expect(w.rerolls).toBe(before - 1);
+  });
+});

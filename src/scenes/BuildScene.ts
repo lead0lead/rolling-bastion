@@ -14,6 +14,7 @@ import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
   canReroll,
   cancelHeld,
+  clearSelection,
   confirmStatus,
   debugDestroyAt,
   dropAt,
@@ -24,14 +25,21 @@ import {
   pickOffer,
   pickUpAt,
   previewAt,
+  redo,
   reroll,
   rotate,
   scrapAt,
   scrapHeld,
+  scrapSelection,
+  selectAll,
+  selectBox,
+  selectedGroups,
   startBuild,
   chosenUpgrade,
   toggleRepair,
+  toggleSelectAt,
   toggleUpgrade,
+  undo,
   type BuildSession,
 } from '../sim/build';
 import { findBridges } from '../sim/connectivity';
@@ -39,6 +47,7 @@ import {
   cellFromId,
   cellId,
   cellKey,
+  heldGroupIds,
   createCity,
   facingAngle,
   tileAt,
@@ -64,8 +73,8 @@ export interface BuildSceneData {
   rerollsLeft: number;
   /** XP refunded per placed piece scrapped. */
   refundPerScrap: number;
-  /** New offers, spending one reroll; null if none left. */
-  reroll: () => PieceDef[] | null;
+  /** New offers for a reroll (the session counts rerolls used; the run charges them at the end). */
+  reroll: () => PieceDef[];
   done: (result: BuildResult) => void;
 }
 
@@ -171,6 +180,9 @@ export class BuildScene extends Phaser.Scene {
    */
   private freshKeys = new Set<string>();
   private midDrag: { x: number; y: number; scrollX: number; scrollY: number } | null = null;
+  /** Box select in progress: where the drag started (screen), and whether it adds (Shift). */
+  private box: { x: number; y: number; add: boolean } | null = null;
+  private scrapText!: Phaser.GameObjects.Text;
   /** Arc wedges, between the grid and the tile sprites so tiles stay readable. */
   private arcs!: Phaser.GameObjects.Graphics;
   /** Chain links, between tile bodies and barrels. */
@@ -213,6 +225,7 @@ export class BuildScene extends Phaser.Scene {
     this.cardTexts = [];
     this.upgradeTexts = [];
     this.midDrag = null;
+    this.box = null;
     const { width, height } = this.scale;
     this.boardLayer = this.add.layer();
     this.uiLayer = this.add.layer().setDepth(1);
@@ -264,14 +277,14 @@ export class BuildScene extends Phaser.Scene {
           'Pick a piece: click or 1/2/3',
           ...(this.run ? ['Repair Core: 4 · Reroll: 5', 'Upgrade instead: Shift+1/2/3'] : []),
           'Move: drag (or click, then click)',
-          'Rotate: R / right-click',
-          'Put back: Esc',
-          'Scrap: drag onto SCRAP, or hover + X',
-          'Bridges: B · Arcs: V',
+          'Select: Shift+click · drag on empty space · Ctrl+A',
+          'Undo / redo: Ctrl+Z / Ctrl+Shift+Z',
+          'Rotate: R / right-click · Put back: Esc',
+          'Scrap: drag onto SCRAP, or X (selection or hovered)',
+          'Bridges: B · Arcs: V · Confirm: Enter',
           'Pan: WASD / arrows / middle-drag',
           'Zoom: wheel · Fit: F or Home',
-          'Confirm: Enter',
-          ...(DEBUG ? ['Debug: Del destroys hovered tile · F2 offers land'] : []),
+          ...(DEBUG ? ['Debug: K destroys hovered tile · F2 offers land'] : []),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
       )
@@ -282,8 +295,12 @@ export class BuildScene extends Phaser.Scene {
       color: COLORS.textDim,
       lineSpacing: 6,
     });
-    this.add
-      .text(SCRAP.x + SCRAP.w / 2, SCRAP.y + SCRAP.h / 2, 'SCRAP', { ...text, fontSize: '20px' })
+    this.scrapText = this.add
+      .text(SCRAP.x + SCRAP.w / 2, SCRAP.y + SCRAP.h / 2, 'SCRAP', {
+        ...text,
+        fontSize: '20px',
+        align: 'center',
+      })
       .setOrigin(0.5);
     this.confirmText = this.add
       .text(CONFIRM.x + CONFIRM.w / 2, CONFIRM.y + CONFIRM.h / 2, 'CONFIRM', {
@@ -515,7 +532,8 @@ export class BuildScene extends Phaser.Scene {
       if (key) this.panKeys[name] = key;
     }
     kb?.on('keydown', (e: KeyboardEvent) => {
-      if (!e.repeat) this.freshKeys.add(e.code);
+      // Ctrl+A (select all) and other shortcuts must not start panning.
+      if (!e.repeat && !e.ctrlKey && !e.metaKey) this.freshKeys.add(e.code);
     });
     kb?.on('keyup', (e: KeyboardEvent) => this.freshKeys.delete(e.code));
 
@@ -575,6 +593,17 @@ export class BuildScene extends Phaser.Scene {
       }
       const card = this.cardAt(p.x, p.y);
       const cell = this.cellAt(p.x, p.y);
+      const tile = tileAt(this.city, cell.x, cell.y);
+      if (card < 0 && tile && p.event.shiftKey) {
+        // Shift+click adds the group to the selection or removes it.
+        if (toggleSelectAt(this.session, cell.x, cell.y)) playSfx(this, 'ui-toggle');
+        return;
+      }
+      if (card < 0 && !tile && this.inView(p.x, p.y)) {
+        // Empty board space: start a box select (a plain click clears the selection).
+        this.box = { x: p.x, y: p.y, add: p.event.shiftKey };
+        return;
+      }
       const picked =
         card >= 0 ? pickOffer(this.session, card) : pickUpAt(this.session, cell.x, cell.y);
       if (picked) playSfx(this, 'ui-pick');
@@ -584,6 +613,12 @@ export class BuildScene extends Phaser.Scene {
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (this.midDrag && !p.middleButtonDown()) {
         this.midDrag = null;
+        return;
+      }
+      const box = this.box;
+      this.box = null;
+      if (box) {
+        this.finishBox(box, p.x, p.y);
         return;
       }
       const press = this.press;
@@ -596,6 +631,26 @@ export class BuildScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => this.onKey(e));
+  }
+
+  /** Ends a box select: a drag selects the groups in the box, a plain click clears the selection. */
+  private finishBox(box: { x: number; y: number; add: boolean }, x: number, y: number): void {
+    const s = this.session;
+    if (Math.hypot(x - box.x, y - box.y) <= DRAG_THRESHOLD) {
+      if (!box.add) clearSelection(s);
+      return;
+    }
+    const a = this.boxCell(box.x, box.y);
+    const b = this.boxCell(x, y);
+    selectBox(s, a.x, a.y, b.x, b.y, box.add);
+    if (selectedGroups(s).length > 0) playSfx(this, 'ui-toggle');
+  }
+
+  /** The cell under a screen point for box select, clamped into the board view. */
+  private boxCell(x: number, y: number): { x: number; y: number } {
+    const cx = Phaser.Math.Clamp(x, VIEW.x, VIEW.x + VIEW.w - 1);
+    const cy = Phaser.Math.Clamp(y, VIEW.y, VIEW.y + VIEW.h - 1);
+    return this.cellAt(cx, cy);
   }
 
   private releaseHeld(x: number, y: number): void {
@@ -657,14 +712,26 @@ export class BuildScene extends Phaser.Scene {
         this.fitView();
         break;
       case 'Escape':
-        cancelHeld(s);
+        if (s.held || s.heldLand) cancelHeld(s);
+        else clearSelection(s);
+        break;
+      case 'KeyZ':
+      case 'KeyY':
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          this.undoRedo(e.code === 'KeyZ' && !e.shiftKey);
+        }
+        break;
+      case 'KeyA':
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          selectAll(s);
+          playSfx(this, 'ui-toggle');
+        }
         break;
       case 'KeyX':
-        if (s.held ? scrapHeld(s) : scrapAt(s, cell.x, cell.y)) {
-          playSfx(this, 'ui-scrap');
-        } else if (s.held || tileAt(this.city, cell.x, cell.y)) {
-          this.showFlash('The Core cannot be scrapped');
-        }
+      case 'Delete':
+        this.scrapKey();
         break;
       case 'KeyB':
         this.showBridges = !this.showBridges;
@@ -684,9 +751,37 @@ export class BuildScene extends Phaser.Scene {
         e.preventDefault();
         if (offerLand(s, rollLand(this.rng, LAND_SHAPES))) this.showOffers();
         break;
-      case 'Delete':
+      case 'KeyK':
+        // Debug: destroy the hovered tile, as if enemies had.
         if (DEBUG) debugDestroyAt(s, cell.x, cell.y);
         break;
+    }
+  }
+
+  /** Ctrl+Z undoes, Ctrl+Shift+Z / Ctrl+Y redoes a change of this pause (concept-v2.md §3.1). */
+  private undoRedo(isUndo: boolean): void {
+    const s = this.session;
+    if (!(isUndo ? undo(s) : redo(s))) {
+      this.showFlash(isUndo ? 'Nothing to undo' : 'Nothing to redo');
+      return;
+    }
+    playSfx(this, 'ui-toggle');
+    // Undo can bring back the land step or other offers.
+    this.showOffers();
+  }
+
+  /** X / Delete: scrap the held group, else the selection, else the hovered group. */
+  private scrapKey(): void {
+    const s = this.session;
+    const cell = this.cellAt(this.pointer.x, this.pointer.y);
+    const done = s.held
+      ? scrapHeld(s)
+      : selectedGroups(s).length > 0
+        ? scrapSelection(s) > 0
+        : scrapAt(s, cell.x, cell.y);
+    if (done) playSfx(this, 'ui-scrap');
+    else if (s.held || tileAt(this.city, cell.x, cell.y)) {
+      this.showFlash('The Core cannot be scrapped');
     }
   }
 
@@ -703,15 +798,18 @@ export class BuildScene extends Phaser.Scene {
     }
   }
 
+  /** Rerolls left in the run, minus those spent (and not undone) this pause. */
+  private rerollsLeftNow(): number {
+    return this.rerollsLeft - this.session.rerollsUsed;
+  }
+
   private tryReroll(): void {
     if (!this.run || !canReroll(this.session)) return;
-    const offers = this.run.reroll();
-    if (!offers) {
+    if (this.rerollsLeftNow() <= 0) {
       this.showFlash('No rerolls left');
       return;
     }
-    this.rerollsLeft--;
-    reroll(this.session, offers);
+    reroll(this.session, this.run.reroll());
     this.showOffers();
     playSfx(this, 'ui-toggle');
   }
@@ -733,7 +831,12 @@ export class BuildScene extends Phaser.Scene {
     durations.push((this.time.now - this.pauseStartedAt) / 1000);
     this.registry.set('pauseDurations', durations);
     if (this.run) {
-      this.run.done({ repair: s.repairChosen, scrapped: s.scrapped, upgrade: chosenUpgrade(s) });
+      this.run.done({
+        repair: s.repairChosen,
+        scrapped: s.scrapped,
+        upgrade: chosenUpgrade(s),
+        rerollsUsed: s.rerollsUsed,
+      });
       return;
     }
     this.newPause(rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
@@ -906,10 +1009,34 @@ export class BuildScene extends Phaser.Scene {
     }
     drawSynergyLines(this.lines, this.syn, cs, r.x, r.y);
     this.drawGroupOutlines(city.tiles, r.x, r.y, cs, COLORS.groupOutline, 0.45, 2 * px);
+    const selected = new Set(selectedGroups(this.session));
+    if (selected.size > 0) {
+      const tiles = city.tiles.filter((t) => selected.has(t.groupId));
+      this.drawGroupOutlines(tiles, r.x, r.y, cs, COLORS.selection, 1, 4 * px);
+    }
+    this.drawBox();
     if (hoveredGroup >= 0) {
       const group = city.tiles.filter((t) => t.groupId === hoveredGroup);
       this.drawGroupOutlines(group, r.x, r.y, cs, COLORS.hover, 1, 3 * px);
     }
+  }
+
+  /** The box select rectangle, while dragging on empty space. */
+  private drawBox(): void {
+    if (!this.box) return;
+    const a = this.toWorld(this.box.x, this.box.y);
+    const b = this.toWorld(
+      Phaser.Math.Clamp(this.pointer.x, VIEW.x, VIEW.x + VIEW.w),
+      Phaser.Math.Clamp(this.pointer.y, VIEW.y, VIEW.y + VIEW.h),
+    );
+    const x = Math.min(a.x, b.x);
+    const y = Math.min(a.y, b.y);
+    const w = Math.abs(a.x - b.x);
+    const h = Math.abs(a.y - b.y);
+    this.fg.fillStyle(COLORS.selection, 0.12);
+    this.fg.fillRect(x, y, w, h);
+    this.fg.lineStyle(2 * this.px(), COLORS.selection, 0.9);
+    this.fg.strokeRect(x, y, w, h);
   }
 
   /** Lines along every cell edge where the neighbour is not in the same group. */
@@ -949,6 +1076,11 @@ export class BuildScene extends Phaser.Scene {
       const c = this.cellAt(px, py);
       const preview = previewAt(s, c.x, c.y);
       if (!preview) return;
+      // A soft shadow under the held tiles, so they read as lifted.
+      this.boardG.fillStyle(COLORS.ink, 0.15);
+      for (const cell of preview.cells) {
+        this.boardG.fillRect(cell.x * cs + 4 * w, cell.y * cs + 4 * w, cs, cs);
+      }
       s.held.tiles.forEach((t, i) => {
         const cell = preview.cells[i];
         if (!cell) return;
@@ -1085,6 +1217,12 @@ export class BuildScene extends Phaser.Scene {
   private drawPanels(): void {
     const g = this.g;
     const s = this.session;
+    const scrapCount = s.held
+      ? s.heldOrigin?.kind === 'grid'
+        ? heldGroupIds(s.held).length
+        : 1
+      : selectedGroups(s).length;
+    this.scrapText.setText(scrapCount > 1 ? `SCRAP\n${scrapCount} pieces` : 'SCRAP');
     g.lineStyle(2, COLORS.panelBorder, 1);
     g.strokeRoundedRect(SCRAP.x, SCRAP.y, SCRAP.w, SCRAP.h, 8);
 
@@ -1093,13 +1231,15 @@ export class BuildScene extends Phaser.Scene {
     this.rerollText.setVisible(runOptions);
     if (runOptions && this.run) {
       const repairOn = (!s.offerTaken || s.repairChosen) && !s.held && this.canRepair();
-      const rerollOn = canReroll(s) && this.rerollsLeft > 0;
+      const rerollOn = canReroll(s) && this.rerollsLeftNow() > 0;
       this.drawButton(REPAIR, repairOn, s.repairChosen);
       this.drawButton(REROLL, rerollOn, false);
       this.repairText
         .setText(`4  Repair Core  +${Math.round(this.run.coreHeal)} HP`)
         .setAlpha(repairOn ? 1 : 0.4);
-      this.rerollText.setText(`5  Reroll  (${this.rerollsLeft} left)`).setAlpha(rerollOn ? 1 : 0.4);
+      this.rerollText
+        .setText(`5  Reroll  (${this.rerollsLeftNow()} left)`)
+        .setAlpha(rerollOn ? 1 : 0.4);
     }
 
     const status = confirmStatus(s);
@@ -1150,6 +1290,7 @@ export class BuildScene extends Phaser.Scene {
     const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
     const lines = [
       `Board ${city.board.size} cells  ·  ${city.tiles.length} tiles  ·  speed ${Math.round(this.syn.speedFactor * 100)}%`,
+      `Undo ${this.session.history.length} · Redo ${this.session.future.length}`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
       levelSummary(city),
       `Chains: ${this.syn.chains.length}`,

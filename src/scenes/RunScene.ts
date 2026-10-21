@@ -225,11 +225,7 @@ export class RunScene extends Phaser.Scene {
       coreHeal: repairCoreAmount(w),
       rerollsLeft: w.rerolls,
       refundPerScrap: scrapRefund(w),
-      reroll: () => {
-        if (w.rerolls <= 0) return null;
-        w.rerolls--;
-        return rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time);
-      },
+      reroll: () => rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time),
       done: (result) => {
         w.pendingLevelUps--;
         applyBuildResult(w, result);

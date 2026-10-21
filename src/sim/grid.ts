@@ -31,14 +31,21 @@ export interface CityState {
 }
 
 /**
- * A group lifted off the grid (or a fresh piece not yet placed). Tile gx/gy
- * are relative to the group's top-left, normalized so the minimum is 0.
- * `anchor` is the relative cell the pointer holds the group by.
+ * One or more groups lifted off the grid together (or a fresh piece not yet
+ * placed). Tile gx/gy are relative to the top-left of them all, normalized so
+ * the minimum is 0; each tile keeps its own `groupId`. `anchor` is the
+ * relative cell the pointer holds them by; `groupId` is the group of that
+ * cell (the grabbed one).
  */
 export interface HeldGroup {
   groupId: number;
   tiles: PlacedTile[];
   anchor: Cell;
+}
+
+/** The distinct groups in a held selection. */
+export function heldGroupIds(held: HeldGroup): number[] {
+  return [...new Set(held.tiles.map((t) => t.groupId))];
 }
 
 export type CellProblem = 'off_board' | 'overlap';
@@ -173,22 +180,35 @@ export function heldFromPiece(city: CityState, def: PieceDef): HeldGroup {
 
 /** Removes a group from the grid and returns it as held, anchored at `grab` (absolute). */
 export function liftGroup(city: CityState, groupId: number, grab?: Cell): HeldGroup | undefined {
-  const tiles = city.tiles.filter((t) => t.groupId === groupId);
+  return liftGroups(city, [groupId], grab);
+}
+
+/**
+ * Removes several groups from the grid and returns them as one held
+ * selection, keeping their relative positions, anchored at `grab` (absolute;
+ * its group becomes `groupId`).
+ */
+export function liftGroups(
+  city: CityState,
+  groupIds: readonly number[],
+  grab?: Cell,
+): HeldGroup | undefined {
+  const ids = new Set(groupIds);
+  const tiles = city.tiles.filter((t) => ids.has(t.groupId));
   if (tiles.length === 0) return undefined;
-  city.tiles = city.tiles.filter((t) => t.groupId !== groupId);
+  city.tiles = city.tiles.filter((t) => !ids.has(t.groupId));
   const minX = Math.min(...tiles.map((t) => t.gx));
   const minY = Math.min(...tiles.map((t) => t.gy));
   const rel = tiles.map((t) => ({ ...t, gx: t.gx - minX, gy: t.gy - minY }));
   const anchor = grab ? { x: grab.x - minX, y: grab.y - minY } : centralCell(rel);
-  return { groupId, tiles: rel, anchor };
+  const grabbed = rel.find((t) => t.gx === anchor.x && t.gy === anchor.y) ?? rel[0];
+  return { groupId: grabbed?.groupId ?? groupIds[0] ?? 0, tiles: rel, anchor };
 }
 
-/** Places a held group with its top-left at (ox, oy). Returns false (no change) if invalid. */
+/** Places a held selection with its top-left at (ox, oy). Returns false (no change) if invalid. */
 export function dropGroup(city: CityState, held: HeldGroup, ox: number, oy: number): boolean {
   if (placementProblems(city, heldCellsAt(held, ox, oy)).size > 0) return false;
-  for (const t of held.tiles) {
-    city.tiles.push({ ...t, gx: ox + t.gx, gy: oy + t.gy, groupId: held.groupId });
-  }
+  for (const t of held.tiles) city.tiles.push({ ...t, gx: ox + t.gx, gy: oy + t.gy });
   return true;
 }
 
