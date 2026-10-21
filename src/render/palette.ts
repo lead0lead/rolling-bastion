@@ -35,8 +35,6 @@ export const COLORS = {
   bossEnraged: 0xf0405a,
   /** Dark ink for icons details, barrels' outlines and cracks. */
   ink: 0x2b2f3a,
-  /** Filled rows/columns frame. */
-  fill: 0x3a86ff,
   /** Player shots, Mortar shells, enemy shots, gems (own colour families). */
   shot: 0xffd23f,
   shotBig: 0xff9f1c,

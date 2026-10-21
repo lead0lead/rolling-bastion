@@ -12,7 +12,7 @@ import { cityChanged, createWorld, tileCentre, type World } from '../src/sim/wor
 import { typedCity } from './helpers';
 
 const DT = 1 / 60;
-const LEGEND: Record<string, TileType> = { C: 'core', h: 'hull', d: 'shield' };
+const LEGEND: Record<string, TileType> = { C: 'core', h: 'hull', d: 'shield', p: 'plating' };
 
 function worldOf(rows: string[]): World {
   const w = createWorld(1);
@@ -85,7 +85,8 @@ describe('Spitter', () => {
 
 describe('Bomber', () => {
   it('damages every tile in a 3×3 square on contact, then dies without a gem', () => {
-    const w = worldOf(['hhhh', 'hChh', 'hhhh', 'hhhh']);
+    // Plating survives the blast (Hull has exactly the bomb's damage in HP).
+    const w = worldOf(['pppp', 'pCpp', 'pppp', 'pppp']);
     const centre = tile(w, 3, 1);
     const c = tileCentre(w, centre);
     spawnEnemy(w, 'bomber', c.x + 16 + ENEMIES.bomber.radius, c.y);

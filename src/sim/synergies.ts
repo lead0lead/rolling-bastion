@@ -3,7 +3,7 @@ import { TILES, type TileType, type WeaponDef } from '../config/tiles';
 import type { CityState, PlacedTile } from './grid';
 import { levelDamage, levelEffect, levelHpBonus, perk } from './upgrades';
 
-/** Per-tile result of levels, adjacency buffs, chains and filled lines (concept.md §2.7). */
+/** Per-tile result of levels, adjacency buffs and chains (concept-v2.md §2.7). */
 export interface TileMods {
   /** Weapon damage multiplier. */
   damage: number;
@@ -26,8 +26,6 @@ export interface TileMods {
   reflect: number;
   /** Damage bonus from the best weapon chain the tile is in (0 = none). */
   chainBonus: number;
-  /** Number of filled rows/columns the tile is in (0–2). */
-  fills: number;
 }
 
 /** A weapon chain: identical online weapons in a straight line, from (x0, y0) to (x1, y1). */
@@ -51,9 +49,6 @@ export interface WeaponStats extends WeaponDef {
 export interface Synergies {
   mods: Map<number, TileMods>;
   chains: Chain[];
-  /** Indexes of rows / columns completely filled with online tiles. */
-  filledRows: number[];
-  filledCols: number[];
   weapons: Partial<Record<TileType, WeaponStats>>;
   /** Movement speed as a fraction of base. */
   speedFactor: number;
@@ -158,31 +153,14 @@ export function computeSynergies(city: CityState): Synergies {
   const sawSlow = perk(city, 'saw', 'slowTouching')?.speedFactor ?? 1;
 
   const { chains, chainBonus } = findChains(city, at);
-  const filledRows: number[] = [];
-  const filledCols: number[] = [];
-  for (let i = 0; i < n; i++) {
-    let row = true;
-    let col = true;
-    for (let j = 0; j < n; j++) {
-      if (!at(j, i)?.online) row = false;
-      if (!at(i, j)?.online) col = false;
-    }
-    if (row) filledRows.push(i);
-    if (col) filledCols.push(i);
-  }
 
   const mods = new Map<number, TileMods>();
   for (const t of city.tiles) {
     const a = acc.get(t.id) as Acc;
     const def = TILES[t.type];
-    const fills = Math.min(
-      LINES.maxFills,
-      (filledRows.includes(t.gy) ? 1 : 0) + (filledCols.includes(t.gx) ? 1 : 0),
-    );
-    const fill = fills * LINES.fillBonus;
     const chain = chainBonus.get(t.id) ?? 0;
     const fireRate = 1 + Math.min(a.fire, fireCap);
-    const damage = levelDamage(city, t.type) * (1 + a.genDamage + chain + fill);
+    const damage = levelDamage(city, t.type) * (1 + a.genDamage + chain);
     let thorns = 0;
     let slow = 1;
     if (t.online && def.contactDps) {
@@ -197,12 +175,11 @@ export function computeSynergies(city: CityState): Synergies {
       contactTaken: perk(city, t.type, 'contactArmour')?.damageFactor ?? 1,
       heal: a.heal,
       regen: t.type === 'hull' ? regen : 0,
-      maxHp: def.maxHp * (1 + levelHpBonus(city, t.type) + a.hpBonus + fill),
+      maxHp: def.maxHp * (1 + levelHpBonus(city, t.type) + a.hpBonus),
       thorns,
       slow,
       reflect: a.reflect,
       chainBonus: chain,
-      fills,
     });
   }
 
@@ -228,8 +205,6 @@ export function computeSynergies(city: CityState): Synergies {
   return {
     mods,
     chains,
-    filledRows,
-    filledCols,
     weapons,
     speedFactor,
     pickupFactor: 1 + pickup,

@@ -89,7 +89,7 @@ export class RunScene extends Phaser.Scene {
   private tileSprites!: SpritePool;
   private crackSprites!: SpritePool;
   private barrelSprites!: SpritePool;
-  /** Chain links and filled lines, in grid-local coordinates; redrawn when the city changes. */
+  /** Chain links, in grid-local coordinates; redrawn when the city changes. */
   private linesGfx!: Phaser.GameObjects.Graphics;
   private linesFor: CityCache | null = null;
   /** Current drawn barrel angle per weapon tile id. */
@@ -419,7 +419,7 @@ export class RunScene extends Phaser.Scene {
     if (this.linesFor !== w.cache) {
       this.linesFor = w.cache;
       this.linesGfx.clear();
-      drawSynergyLines(this.linesGfx, w.cache.syn, w.city.gridSize, cell, 0, 0);
+      drawSynergyLines(this.linesGfx, w.cache.syn, cell, 0, 0);
     }
     this.linesGfx.setPosition(left, top);
 

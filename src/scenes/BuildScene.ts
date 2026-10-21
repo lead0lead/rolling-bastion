@@ -126,7 +126,7 @@ export class BuildScene extends Phaser.Scene {
   private fg!: Phaser.GameObjects.Graphics;
   /** Arc wedges, between the grid and the tile sprites so tiles stay readable. */
   private arcs!: Phaser.GameObjects.Graphics;
-  /** Chain links and filled lines, between tile bodies and barrels. */
+  /** Chain links, between tile bodies and barrels. */
   private lines!: Phaser.GameObjects.Graphics;
   private syn!: Synergies;
   private tileImgs!: SpritePool;
@@ -635,7 +635,7 @@ export class BuildScene extends Phaser.Scene {
         fg.strokeCircle(px + cs / 2, py + cs / 2, cs * 0.34);
       }
     }
-    drawSynergyLines(this.lines, this.syn, city.gridSize, cs, r.x, r.y);
+    drawSynergyLines(this.lines, this.syn, cs, r.x, r.y);
     this.drawGroupOutlines(city.tiles, r.x, r.y, cs, COLORS.groupOutline, 0.45);
     if (hoveredGroup >= 0) {
       const group = city.tiles.filter((t) => t.groupId === hoveredGroup);
@@ -823,7 +823,7 @@ export class BuildScene extends Phaser.Scene {
       `Grid ${city.gridSize}×${city.gridSize}  ·  ${city.tiles.length} tiles`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
       levelSummary(city),
-      `Chains: ${this.syn.chains.length}  ·  Filled lines: ${this.syn.filledRows.length + this.syn.filledCols.length}`,
+      `Chains: ${this.syn.chains.length}`,
       this.run && this.run.refundPerScrap > 0
         ? `Scrap refund: ${this.run.refundPerScrap} XP per piece` +
           (this.session.scrapped ? ` (${this.session.scrapped} scrapped)` : '')
