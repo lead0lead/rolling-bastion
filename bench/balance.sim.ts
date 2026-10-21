@@ -2,7 +2,9 @@ import { it } from 'vitest';
 import { SIM, UPGRADES } from '../src/config/balance';
 import { BOSS } from '../src/config/enemies';
 import { TILES, type Facing, type TileType } from '../src/config/tiles';
+import { LAND_SHAPES } from '../src/config/land';
 import { cellFromId, cellId, coreTile, type CityState } from '../src/sim/grid';
+import { addLand, landCells, landProblems, rollLand } from '../src/sim/land';
 import { addXp, applyBuildResult } from '../src/sim/progression';
 import { step } from '../src/sim/step';
 import { canUpgrade, typeLevel } from '../src/sim/upgrades';
@@ -103,6 +105,8 @@ type Layout = Map<string, { type: TileType; facing: Facing }>;
 const key = (x: number, y: number) => `${x},${y}`;
 /** Rings counted inward from the board edge stop here (deeper cells all count as interior). */
 const BOARD_DEPTH_LIMIT = 4;
+/** Land centres are tried this many cells around the board. */
+const LAND_REACH = 4;
 
 /**
  * The archetype's full layout for the city's board (concept-v2.md §2.1).
@@ -206,6 +210,43 @@ function grow(w: World, arch: Archetype, count: number): number {
   return added;
 }
 
+/**
+ * Land (concept-v2.md §2.1): of the offered shapes, rotations and spots
+ * touching the board, take the one sharing the most edges with it (a
+ * compact board), then the one closest to the Core. Simple on purpose;
+ * Phase 4 gives the bots real land plans.
+ */
+function placeLand(w: World): void {
+  const city = w.city;
+  const cells = [...city.board].map(cellFromId);
+  const minX = Math.min(...cells.map((c) => c.x)) - LAND_REACH;
+  const maxX = Math.max(...cells.map((c) => c.x)) + LAND_REACH;
+  const minY = Math.min(...cells.map((c) => c.y)) - LAND_REACH;
+  const maxY = Math.max(...cells.map((c) => c.y)) + LAND_REACH;
+  let best: { cells: { x: number; y: number }[]; score: number } | null = null;
+  for (const shape of rollLand(w.rng, LAND_SHAPES)) {
+    for (let turns = 0; turns < 4; turns++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const land = landCells(shape, turns, x, y);
+          if (landProblems(city, land).size > 0) continue;
+          let shared = 0;
+          let dist = 0;
+          for (const c of land) {
+            dist += Math.abs(c.x) + Math.abs(c.y);
+            for (const [dx, dy] of NEIGHBOURS) {
+              if (city.board.has(cellId(c.x + dx, c.y + dy))) shared++;
+            }
+          }
+          const score = shared * 1000 - dist;
+          if (!best || score > best.score) best = { cells: land, score };
+        }
+      }
+    }
+  }
+  if (best) addLand(city, best.cells);
+}
+
 function levelUp(w: World, arch: Archetype): void {
   // Offline tiles must be reconnected or scrapped; the bot scraps them (and may rebuild them later).
   w.city.tiles = w.city.tiles.filter((t) => t.online);
@@ -277,6 +318,10 @@ function play(arch: Archetype, seed: number, xpShare: number): Result {
     collectAll(w, xpShare);
     w.events.length = 0;
     while (w.pendingLevelUps > 0 && !w.over) {
+      if (w.pendingLand > 0) {
+        w.pendingLand--;
+        placeLand(w);
+      }
       w.pendingLevelUps--;
       levelUp(w, arch);
     }
