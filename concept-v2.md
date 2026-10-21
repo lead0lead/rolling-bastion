@@ -63,7 +63,7 @@ with no memory of earlier ones; this file and the git history are all it has.
 |---|---|
 | **Status** | Phases 1 (board and land) and 2 (editing UX) done and **merged into `v2`** (2.0.0-alpha.2). v1 (v0.8.0) is untouched on `main` and live. |
 | **Current step** | Between phases; session ended 2026-10-22. |
-| **Next step** | Start Phase 3 (readability and synergies, §11) on `v2-phase-3-readability`. First ask the user where the Saw rework (§2.9) goes: inside Phase 3 or its own step. |
+| **Next step** | **First ask the user** where the new step "Weapons rework and rebalance" (§11, §2.12) goes in the order (before or after Phase 3), then brainstorm its details with them one question at a time (§2.12 lists their requests). Then build the chosen next phase. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.2` on `v2`. Phase 3 will be `2.0.0-alpha.3`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
@@ -239,6 +239,35 @@ Unchanged from v1 (`concept.md` §2.9), except:
 | **Magnet** | Function: **pulse.** Every 8 s, each online Magnet pulls every XP gem within 300 px of **its own tile** to the city (gems fly at 600 px/s). Magnets far apart cover more ground than Magnets side by side. A visible ring expands from the Magnet on each pulse. Each Magnet keeps its own timer (starting at a random 0–8 s offset), so pulses don't line up. Level gain: +20% radius per level. **L3:** pulse every 6 s. **L5:** base radius 450 px. (Decided "pulse" 2026-10-21; numbers and perks are Claude's drafts.) |
 | **Generator / Engine** | Can form chains (§2.7). |
 | **Saw** (rework requested, not yet planned) | The user finds Saws underwhelming (2026-10-21): instead of only damaging enemies they touch, a Saw should be the origin of a **blade that rotates around it** with a larger hitbox, to make melee builds fun and viable. Details and the phase to do it in: to plan with the user (§11, §12). |
+
+### 2.12 Weapons rework and rebalance (user request 2026-10-22, not planned in detail)
+
+The user asked for a new step that reworks and rebalances the weapons and
+other tile designs. Their notes, to be turned into a design with them
+(brainstorm one question at a time, 2–3 options with a recommendation):
+
+- **Every weapon must feel impactful**, and there should be **synergies
+  between weapon types** (not only same-type chains).
+- **Gatling is very oppressive** right now. (Fits the Phase 1 balance
+  sim: Gatling builds win easily.)
+- **Mortar always misses.** (Cause to check first: the shell is lobbed at
+  where the target was, and enemies have moved on when it lands; options
+  include leading the target, faster shells or a bigger blast.)
+- **Saw rework** (§2.9): a blade rotating around the Saw with a larger
+  hitbox, to make melee builds fun and viable. (The Saw wall build lost in
+  the Phase 1 sim.)
+- **New weapon ideas** from the user: a **piercing crossbow**; a
+  **close-range flamethrower** with damage over time; a **melee spear**
+  that keeps thrusting forward out of its tile, piercing every enemy it
+  touches.
+- "Other designs" are in scope too: ask the user which other tiles to
+  revisit.
+
+Approach to propose: measure the current state first (balance sim damage
+shares, kills per weapon, Mortar hit rate), agree targets with the user,
+then change numbers and mechanics in config with tests per weapon, and
+re-run the sim. New weapons need icons, barrels and projectiles in the
+existing style, and sounds from the existing set.
 
 ### 2.10 Firing arcs
 
@@ -491,7 +520,7 @@ these v2 changes:
 | **Phase 3 — readability and synergies** | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
 | **Phase 4 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
 | **Phase 5 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
-| **Tile reworks** (to schedule with the user) | First: Saw with a rotating blade (§2.9). | — |
+| **Weapons rework and rebalance** (user request 2026-10-22; position in the order and details to agree with the user) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
 "waves and shop" is gone). If a spike is dropped, its phase is removed or rewritten with the user, and
@@ -504,8 +533,9 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- Saw rework (§2.9): how the blade works (size, speed, damage, levels,
-  perks) and which phase does it.
+- **Weapons rework and rebalance** (§2.12, user request 2026-10-22): where
+  it goes in the order, and every design detail (to brainstorm with the
+  user before building; includes the Saw rework).
 - Endless details (§2.11): scaling numbers, Colossus returns (Phase 4).
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
@@ -584,6 +614,16 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Weapons rework requested
+- Request (user): add a new step for the Saw rework and a general
+  rebalance and fixing of the weapons and other designs: Gatling is very
+  oppressive, Mortar always misses, every weapon must feel impactful,
+  synergies between weapon types; ideas: piercing crossbow, close-range
+  damage-over-time flamethrower, thrusting melee spear that pierces.
+  Recorded in §2.12 and as a step in §11; its position in the order and
+  all details are still to agree with the user.
+- Next session: ask where the step goes, brainstorm it, then continue.
 
 ### 2026-10-22 — Phase 2 merged, session end
 - Decision (user): Phase 2 "feels good"; merged `v2-phase-2-editing`
