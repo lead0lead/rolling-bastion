@@ -62,8 +62,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Both spikes built and handed to the user: Spike A on `v2-spike-a-shop` (2.0.0-spike.a), Spike B on `v2-spike-b-grid` (2.0.0-spike.b). `v2` itself still has no v2 code. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | **Decision milestone:** waiting for the user's keep / change / drop on Spike A (plus price feedback) and Spike B |
-| **Next step** | Record both decisions (§2, §11, §12, session log), then plan Phase 1 with the user. No phase before both are decided. |
+| **Current step** | Spike B decided: **change** (2026-10-21, free growth disliked). Spike A: the user is test-playing it. |
+| **Next step** | Spike A verdict; then Spike B2 (board shapes + paid directional expansions, §11). No phase before both spikes are decided. |
 | **Decision milestone** | **Keep-or-drop after Spike A and after Spike B.** No v2 phase starts before both are decided. Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | Spikes: `2.0.0-spike.a`, `2.0.0-spike.b` (on their branches only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
@@ -130,8 +130,19 @@ not mentioned here works as in v1 (`concept.md` §2).
 - Implementation: a sparse map keyed by cell (no fixed-size arrays), so a
   scattered city costs only its tile count.
 
-**Spike B (built 2026-10-21, `v2-spike-b-grid`, awaiting the user's
-verdict).** How the spike does it: the Core starts at (0, 0) and cells may
+**Spike B: change (user, 2026-10-21).** The user tested free infinite
+growth and did not like it, but wants builds with more creative shapes.
+Decided direction (details to plan in Spike B2, §11):
+
+- The board is a set of buildable cells (a mask) instead of a square.
+- **Classes:** different starting board shapes, e.g. triangle, hexagon,
+  circle, long box (approximated on the square grid).
+- **Paid expansions:** pay currency to add one row or column strip in a
+  direction of your choice. Expansion is its own option, separate from
+  buying pieces: **expansion buttons sit at the edges of the board shape.**
+- Rejected: buying land plots shaped like pieces (§13).
+
+What the spike did, kept as reference: How the spike does it: the Core starts at (0, 0) and cells may
 be negative; the run cache keys cells by a number (`cellNum`), synergies
 scan the city's bounding box; the world position is the centre of cell
 (0, 0). Placement only checks overlaps. Combat camera: follows the Core,
@@ -524,6 +535,7 @@ these v2 changes:
 |---|---|---|
 | **Spike A — shop loop** (riskiest) | On v1's code and bounded grid: waves (§2.8) replacing the 12:00 timeline; coins instead of XP; shop after each wave with 4 piece slots, 2 upgrade slots, Repair, Reroll, lock, prices with inflation; scrap refund 50%; leftover coins at 50%; boss wave. Grid expansions move to the shops after waves 6 and 10. No endless, no new editing tools. | **User answers: does the wave/shop rhythm feel better than level-ups?** Keep / change / drop, plus first price feedback. |
 | **Spike B — unbounded grid** | On `v2` (v1 levels, not Spike A): Core fixed at (0, 0), no bounds or expansions, build screen pan/zoom/fit, combat camera zoom (§3.2), filled rows removed. | **User answers: does free growth feel good, or does the city sprawl into a slow blob?** Keep / change / drop. |
+| **Spike B2 — board shapes** (planned) | Board mask with class starting shapes, expansion buttons at the board edges that add one row/column strip for currency. Reuses Spike B's coordinates, pan/zoom and camera. Details with the user after the Spike A verdict. | User answers: do shapes and directional expansions lead to more creative builds? |
 | **Phase 1 — unbounded grid** | Sparse grid, Core fixed, Tarjan bridges, camera zoom and spawn ring from view size, filled rows removed (tests updated to the new rules). | Kept Spike B behaviour, rebuilt properly; all tests pass. |
 | **Phase 2 — waves and shop** | `waves.ts`, `economy.ts`, `shop.ts` with tests; shop scene; HUD and end screen changes; coin visuals. | A full normal run with the shop. |
 | **Phase 3 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo, pan/zoom polish (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
@@ -593,6 +605,9 @@ start early if the user asks.
 - Trading posts in the world you drive to (the shop-timing alternative,
   2026-10-21).
 - Magnet as interest on saved coins (alternative to the pulse).
+- **Rejected 2026-10-21:** buying land plots shaped like pieces. Reason
+  (user): you already fit shapes together inside the grid; building the
+  grid itself must not become a second puzzle.
 - Merging duplicates by placing a tile next to the same type (alternative to
   upgrade slots).
 - Solid 3×3 blocks bonus or long-line bonus (alternatives to dropping
@@ -606,6 +621,16 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Spike B verdict
+- Decisions (user): Spike B **change**: free infinite growth disliked, but
+  more creative build shapes wanted. Direction: class starting shapes
+  (triangle, hexagon, circle, long box) plus paid one-row/column
+  expansions in a chosen direction, with expansion buttons at the edges of
+  the board shape, separate from buying pieces. Piece-shaped land plots
+  rejected (no second puzzle). Recorded in §2.1, §11, §13.
+- State: the user is test-playing Spike A.
+- Next: Spike A verdict, then plan and build Spike B2.
 
 ### 2026-10-21 — Spike B: unbounded grid
 - Done: Spike B on `v2-spike-b-grid` from `v2` (commit 2c780dc, not
