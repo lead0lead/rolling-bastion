@@ -346,9 +346,16 @@ export class RunScene extends Phaser.Scene {
     return next;
   }
 
+  /** Spike B (concept-v2.md §3.2): the city's bounding box fills at most CAMERA.cityFrame of the view. */
   private targetZoom(): number {
-    const citySpan = this.world.city.gridSize * GRID.cellPx + 2 * CAMERA.marginPx;
-    return Math.min(CAMERA.maxZoom, this.scale.height / citySpan);
+    const c = this.world.cache;
+    const w = c.maxRx - c.minRx + GRID.cellPx;
+    const h = c.maxRy - c.minRy + GRID.cellPx;
+    const fit = Math.min(
+      (this.scale.width * CAMERA.cityFrame) / w,
+      (this.scale.height * CAMERA.cityFrame) / h,
+    );
+    return Math.max(CAMERA.minZoom, Math.min(CAMERA.maxZoom, fit));
   }
 
   private render(alpha: number, frameDt: number): void {
@@ -357,10 +364,9 @@ export class RunScene extends Phaser.Scene {
     const ox = lerp(w.px, w.x);
     const oy = lerp(w.py, w.y);
 
-    // Camera: follow the city centre with light smoothing; zoom out with the grid.
-    const c = w.cache;
-    const tx = ox + (c.minRx + c.maxRx) / 2;
-    const ty = oy + (c.minRy + c.maxRy) / 2;
+    // Spike B: follow the Core with light smoothing; zoom to frame the city.
+    const tx = ox;
+    const ty = oy;
     const follow = 1 - Math.exp(-CAMERA.followRate * frameDt);
     const zoomK = 1 - Math.exp(-CAMERA.zoomRate * frameDt);
     this.cam.x += (tx - this.cam.x) * follow;
@@ -379,8 +385,9 @@ export class RunScene extends Phaser.Scene {
 
     // City tiles: pre-rendered textures as pooled sprites.
     const cell = GRID.cellPx;
-    const left = ox - (w.city.gridSize * cell) / 2;
-    const top = oy - (w.city.gridSize * cell) / 2;
+    // Spike B: (ox, oy) is the centre of the Core's cell (0, 0).
+    const left = ox - cell / 2;
+    const top = oy - cell / 2;
     const coreScale =
       1 + motion() * FX.corePulse.amount * Math.sin(this.time.now * 0.001 * FX.corePulse.speed);
     const pulse = (t: { type: string; online: boolean }) =>
@@ -546,8 +553,8 @@ export class RunScene extends Phaser.Scene {
     const p = FX.generatorPulse;
     const f = (this.pulseClock % p.period) / p.period;
     const cell = GRID.cellPx;
-    const left = ox - (w.city.gridSize * cell) / 2;
-    const top = oy - (w.city.gridSize * cell) / 2;
+    const left = ox - cell / 2;
+    const top = oy - cell / 2;
     g.lineStyle(3, TILES.generator.color, p.alpha * (1 - f));
     for (const t of w.city.tiles) {
       if (t.type !== 'generator' || !t.online) continue;

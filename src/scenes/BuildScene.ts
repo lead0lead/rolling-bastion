@@ -16,7 +16,6 @@ import {
   confirmStatus,
   debugDestroyAt,
   dropAt,
-  expand,
   pickOffer,
   pickUpAt,
   previewAt,
@@ -62,8 +61,11 @@ export interface BuildSceneData {
 
 // Screen layout (1280×720).
 const GRID_CENTRE = { x: 620, y: 390 };
-const GRID_MAX_PX = 540;
-const GRID_MAX_CELL = 64;
+/** Spike B: the city view (its own camera: pan, zoom, fit) between the side panels. */
+const VIEW = { x: 300, y: 70, w: 695, h: 650 };
+/** World px per cell in the city view (zoom scales it). */
+const CELL = 32;
+const ZOOM = { min: 0.3, max: 3, wheelStep: 1.15, panPxPerSec: 700, fitMarginCells: 3 };
 const CARDS = {
   x: 1010,
   y: 80,
@@ -124,6 +126,17 @@ export class BuildScene extends Phaser.Scene {
   private g!: Phaser.GameObjects.Graphics;
   /** Overlay graphics (outlines, arcs, frames) above the tile sprites. */
   private fg!: Phaser.GameObjects.Graphics;
+  /** Spike B: the city is drawn by `cityCam` (pan/zoom), everything else by `uiCam`. */
+  private cityLayer!: Phaser.GameObjects.Layer;
+  private uiLayer!: Phaser.GameObjects.Layer;
+  private cityCam!: Phaser.Cameras.Scene2D.Camera;
+  private gridG!: Phaser.GameObjects.Graphics;
+  private uiFg!: Phaser.GameObjects.Graphics;
+  private cardImgs!: SpritePool;
+  private cardCrackImgs!: SpritePool;
+  private cardBarrelImgs!: SpritePool;
+  private panKeys!: Record<string, Phaser.Input.Keyboard.Key>;
+  private midDrag: { x: number; y: number; scrollX: number; scrollY: number } | null = null;
   /** Arc wedges, between the grid and the tile sprites so tiles stay readable. */
   private arcs!: Phaser.GameObjects.Graphics;
   /** Chain links and filled lines, between tile bodies and barrels. */
@@ -166,15 +179,38 @@ export class BuildScene extends Phaser.Scene {
     this.cardTexts = [];
     this.upgradeTexts = [];
     const { width, height } = this.scale;
-    this.add.rectangle(0, 0, width, height, COLORS.background, this.run ? 0.94 : 1).setOrigin(0);
+    this.cityLayer = this.add.layer();
+    this.uiLayer = this.add.layer();
+    this.cityCam = this.cameras.main
+      .setViewport(VIEW.x, VIEW.y, VIEW.w, VIEW.h)
+      .setBackgroundColor(COLORS.background);
+    const uiCam = this.cameras.add(0, 0, width, height);
+    this.cityCam.ignore(this.uiLayer);
+    uiCam.ignore(this.cityLayer);
+    // Background around the city view (the view has its own camera background).
+    const bgAlpha = this.run ? 0.94 : 1;
+    for (const [x, y, w, h] of [
+      [0, 0, width, VIEW.y],
+      [0, VIEW.y + VIEW.h, width, height - VIEW.y - VIEW.h],
+      [0, VIEW.y, VIEW.x, VIEW.h],
+      [VIEW.x + VIEW.w, VIEW.y, width - VIEW.x - VIEW.w, VIEW.h],
+    ] as const) {
+      this.add.rectangle(x, y, w, h, COLORS.background, bgAlpha).setOrigin(0).setDepth(-1);
+    }
     createTextures(this);
     this.g = this.add.graphics();
-    this.tileImgs = new SpritePool(this, 1);
-    this.crackImgs = new SpritePool(this, 1.1);
-    this.barrelImgs = new SpritePool(this, 1.2);
+    this.uiFg = this.add.graphics().setDepth(3);
+    this.cardImgs = new SpritePool(this, 1, this.uiLayer);
+    this.cardCrackImgs = new SpritePool(this, 1.1, this.uiLayer);
+    this.cardBarrelImgs = new SpritePool(this, 1.2, this.uiLayer);
+    this.gridG = this.add.graphics().setDepth(0);
+    this.tileImgs = new SpritePool(this, 1, this.cityLayer);
+    this.crackImgs = new SpritePool(this, 1.1, this.cityLayer);
+    this.barrelImgs = new SpritePool(this, 1.2, this.cityLayer);
     this.fg = this.add.graphics().setDepth(3);
     this.arcs = this.add.graphics().setDepth(0.5);
     this.lines = this.add.graphics().setDepth(1.15);
+    this.cityLayer.add([this.gridG, this.fg, this.arcs, this.lines]);
     const text = { fontFamily: FONT.family, fontStyle: FONT.weight, color: COLORS.text };
 
     this.add
@@ -196,8 +232,10 @@ export class BuildScene extends Phaser.Scene {
           'Put back: Esc',
           'Scrap: drag onto SCRAP, or hover + X',
           'Bridges: B · Arcs: V',
+          'Pan: WASD / arrows / middle-drag',
+          'Zoom: wheel · Fit city: F or Home',
           'Confirm: Enter',
-          ...(DEBUG ? ['', 'Debug:', 'F2  expand grid', 'Del destroy hovered tile'] : []),
+          ...(DEBUG ? ['', 'Debug: Del destroys hovered tile'] : []),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
       )
@@ -258,6 +296,7 @@ export class BuildScene extends Phaser.Scene {
   private newPause(offers: PieceDef[]): void {
     this.session = startBuild(this.city, offers);
     this.pauseStartedAt = this.time.now;
+    this.fitView();
     this.showOffers();
   }
 
@@ -299,20 +338,62 @@ export class BuildScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- layout
 
-  private cellPx(): number {
-    return Math.min(GRID_MAX_CELL, Math.floor(GRID_MAX_PX / this.city.gridSize));
+  // Spike B: the city view's transform (computed here, not from the camera matrix,
+  // which only updates when the camera renders).
+
+  /** World point under a screen point, through the city camera. */
+  private toWorld(x: number, y: number): { x: number; y: number } {
+    const c = this.cityCam;
+    return {
+      x: c.scrollX + VIEW.w / 2 + (x - VIEW.x - VIEW.w / 2) / c.zoom,
+      y: c.scrollY + VIEW.h / 2 + (y - VIEW.y - VIEW.h / 2) / c.zoom,
+    };
   }
 
-  private gridRect(): Rect {
-    const size = this.cellPx() * this.city.gridSize;
-    return { x: GRID_CENTRE.x - size / 2, y: GRID_CENTRE.y - size / 2, w: size, h: size };
+  private inView(x: number, y: number): boolean {
+    return inRect(VIEW, x, y);
   }
 
-  /** Grid cell under a screen point (may be outside the grid). */
+  /** Grid cell under a screen point; NaN outside the city view. */
   private cellAt(x: number, y: number): { x: number; y: number } {
-    const r = this.gridRect();
-    const cs = this.cellPx();
-    return { x: Math.floor((x - r.x) / cs), y: Math.floor((y - r.y) / cs) };
+    if (!this.inView(x, y)) return { x: NaN, y: NaN };
+    const p = this.toWorld(x, y);
+    return { x: Math.floor(p.x / CELL), y: Math.floor(p.y / CELL) };
+  }
+
+  /** Zooms the city view by `factor`, keeping the world point under (x, y) in place. */
+  private zoomAt(x: number, y: number, factor: number): void {
+    const c = this.cityCam;
+    const before = this.toWorld(x, y);
+    c.setZoom(Phaser.Math.Clamp(c.zoom * factor, ZOOM.min, ZOOM.max));
+    const after = this.toWorld(x, y);
+    c.setScroll(c.scrollX + before.x - after.x, c.scrollY + before.y - after.y);
+  }
+
+  /** Fits the city (plus a margin of empty cells) into the view (concept-v2.md §3.2). */
+  private fitView(): void {
+    const tiles = this.city.tiles;
+    const m = ZOOM.fitMarginCells;
+    const minX = Math.min(0, ...tiles.map((t) => t.gx)) - m;
+    const minY = Math.min(0, ...tiles.map((t) => t.gy)) - m;
+    const maxX = Math.max(0, ...tiles.map((t) => t.gx)) + 1 + m;
+    const maxY = Math.max(0, ...tiles.map((t) => t.gy)) + 1 + m;
+    const w = (maxX - minX) * CELL;
+    const h = (maxY - minY) * CELL;
+    const c = this.cityCam;
+    c.setZoom(Phaser.Math.Clamp(Math.min(VIEW.w / w, VIEW.h / h), ZOOM.min, ZOOM.max));
+    c.setScroll(((minX + maxX) / 2) * CELL - VIEW.w / 2, ((minY + maxY) / 2) * CELL - VIEW.h / 2);
+  }
+
+  /** WASD / arrows pan the city view. */
+  private updatePan(dt: number): void {
+    const k = this.panKeys;
+    const dx = (k.right?.isDown || k.d?.isDown ? 1 : 0) - (k.left?.isDown || k.a?.isDown ? 1 : 0);
+    const dy = (k.down?.isDown || k.s?.isDown ? 1 : 0) - (k.up?.isDown || k.w?.isDown ? 1 : 0);
+    if (!dx && !dy) return;
+    const c = this.cityCam;
+    const step = (ZOOM.panPxPerSec * dt) / c.zoom;
+    c.setScroll(c.scrollX + dx * step, c.scrollY + dy * step);
   }
 
   /** Index of the offer whose (available) upgrade strip is under the point, or -1. */
@@ -334,12 +415,43 @@ export class BuildScene extends Phaser.Scene {
   private bindInput(): void {
     this.input.mouse?.disableContextMenu();
 
+    const K = Phaser.Input.Keyboard.KeyCodes;
+    this.panKeys = (this.input.keyboard?.addKeys({
+      up: K.UP,
+      down: K.DOWN,
+      left: K.LEFT,
+      right: K.RIGHT,
+      w: K.W,
+      a: K.A,
+      s: K.S,
+      d: K.D,
+    }) ?? {}) as Record<string, Phaser.Input.Keyboard.Key>;
+
+    this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (this.inView(p.x, p.y) && dy !== 0) {
+        this.zoomAt(p.x, p.y, dy < 0 ? ZOOM.wheelStep : 1 / ZOOM.wheelStep);
+      }
+    });
+
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
+      const drag = this.midDrag;
+      if (drag) {
+        const z = this.cityCam.zoom;
+        this.cityCam.setScroll(
+          drag.scrollX - (p.x - drag.x) / z,
+          drag.scrollY - (p.y - drag.y) / z,
+        );
+      }
     });
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
+      if (p.middleButtonDown()) {
+        const c = this.cityCam;
+        this.midDrag = { x: p.x, y: p.y, scrollX: c.scrollX, scrollY: c.scrollY };
+        return;
+      }
       if (p.rightButtonDown()) {
         this.rotateHeld();
         return;
@@ -374,6 +486,10 @@ export class BuildScene extends Phaser.Scene {
     });
 
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (p.button === 1) {
+        this.midDrag = null;
+        return;
+      }
       const press = this.press;
       this.press = null;
       if (!press || !this.session.held || p.rightButtonReleased()) return;
@@ -397,7 +513,7 @@ export class BuildScene extends Phaser.Scene {
       }
       return;
     }
-    if (inRect(this.gridRect(), x, y)) {
+    if (this.inView(x, y)) {
       const cell = this.cellAt(x, y);
       const groupId = s.held?.groupId;
       if (!dropAt(s, cell.x, cell.y)) {
@@ -458,11 +574,9 @@ export class BuildScene extends Phaser.Scene {
       case 'NumpadEnter':
         this.tryConfirm();
         break;
-      case 'F2':
-        if (!DEBUG) break;
-        e.preventDefault();
-        if (expand(s)) this.showFlash('GRID EXPANDED');
-        else this.showFlash(s.held ? 'Put the held piece down first' : 'Grid is at max size');
+      case 'KeyF':
+      case 'Home':
+        this.fitView();
         break;
       case 'Delete':
         if (DEBUG) debugDestroyAt(s, cell.x, cell.y);
@@ -527,18 +641,37 @@ export class BuildScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- render
 
-  override update(): void {
+  override update(_time: number, delta: number): void {
+    this.updatePan(delta / 1000);
+    // Spike B: anything created outside the city layer belongs to the UI camera.
+    let moved = false;
+    for (const obj of [...this.children.list]) {
+      if ((obj as unknown) === this.cityLayer || (obj as unknown) === this.uiLayer) continue;
+      this.uiLayer.add(obj);
+      moved = true;
+    }
+    if (moved) this.uiLayer.queueDepthSort();
     this.g.clear();
+    this.gridG.clear();
+    this.uiFg.clear();
     this.fg.clear();
     this.arcs.clear();
     this.lines.clear();
     this.syn = computeSynergies(this.city);
-    for (const pool of [this.tileImgs, this.crackImgs, this.barrelImgs]) pool.begin();
+    const pools = [
+      this.tileImgs,
+      this.crackImgs,
+      this.barrelImgs,
+      this.cardImgs,
+      this.cardCrackImgs,
+      this.cardBarrelImgs,
+    ];
+    for (const pool of pools) pool.begin();
     this.drawGrid();
     this.drawCards();
     this.drawPanels();
     this.drawHeld();
-    for (const pool of [this.tileImgs, this.crackImgs, this.barrelImgs]) pool.end();
+    for (const pool of pools) pool.end();
     this.updateTooltip();
     this.updateStatus();
   }
@@ -551,19 +684,23 @@ export class BuildScene extends Phaser.Scene {
     t: Pick<PlacedTile, 'type' | 'facing' | 'online'> & { hp?: number; maxHp?: number },
     alpha = 1,
     scale = 1,
+    ui = false,
   ): void {
+    const [tileImgs, crackImgs, barrelImgs] = ui
+      ? [this.cardImgs, this.cardCrackImgs, this.cardBarrelImgs]
+      : [this.tileImgs, this.crackImgs, this.barrelImgs];
     const hpFrac = t.hp !== undefined && t.maxHp ? t.hp / t.maxHp : 1;
     const a = alpha * damageAlpha(hpFrac, this.time.now);
     const cx = x + cs / 2;
     const cy = y + cs / 2;
     const ds = cs * scale;
-    this.tileImgs.add(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(ds, ds).setAlpha(a);
+    tileImgs.add(cx, cy, TEX.tile(t.type, !t.online)).setDisplaySize(ds, ds).setAlpha(a);
     if (showsCracks(hpFrac)) {
-      this.crackImgs.add(cx, cy, TEX.cracks).setDisplaySize(ds, ds).setAlpha(a);
+      crackImgs.add(cx, cy, TEX.cracks).setDisplaySize(ds, ds).setAlpha(a);
     }
     const barrel = barrelFor(t.type);
     if (barrel) {
-      const img = this.barrelImgs
+      const img = barrelImgs
         .add(cx, cy, TEX.barrel(barrel))
         .setDisplaySize(ds, ds)
         .setRotation(facingAngle(t.facing))
@@ -598,23 +735,27 @@ export class BuildScene extends Phaser.Scene {
   }
 
   private drawGrid(): void {
-    const g = this.g;
+    const g = this.gridG;
     const fg = this.fg;
-    const r = this.gridRect();
-    const cs = this.cellPx();
+    const r = { x: 0, y: 0 };
+    const cs = CELL;
     const city = this.city;
-    for (let y = 0; y < city.gridSize; y++) {
-      for (let x = 0; x < city.gridSize; x++) {
-        g.fillStyle(COLORS.gridCell, 1);
-        g.fillRect(r.x + x * cs, r.y + y * cs, cs, cs);
-        g.lineStyle(1, COLORS.gridLine, 1);
-        g.strokeRect(r.x + x * cs, r.y + y * cs, cs, cs);
-      }
-    }
+    // Spike B: unbounded grid; draw cell lines across the visible area only.
+    const tl = this.toWorld(VIEW.x, VIEW.y);
+    const br = this.toWorld(VIEW.x + VIEW.w, VIEW.y + VIEW.h);
+    const x0 = Math.floor(tl.x / cs);
+    const y0 = Math.floor(tl.y / cs);
+    const x1 = Math.ceil(br.x / cs);
+    const y1 = Math.ceil(br.y / cs);
+    g.fillStyle(COLORS.gridCell, 1);
+    g.fillRect(x0 * cs, y0 * cs, (x1 - x0) * cs, (y1 - y0) * cs);
+    g.lineStyle(1 / this.cityCam.zoom, COLORS.gridLine, 1);
+    for (let x = x0; x <= x1; x++) g.lineBetween(x * cs, y0 * cs, x * cs, y1 * cs);
+    for (let y = y0; y <= y1; y++) g.lineBetween(x0 * cs, y * cs, x1 * cs, y * cs);
 
     // Hovered group: what a click would pick up; its arcs are shown too.
     let hoveredGroup = -1;
-    if (!this.session.held && inRect(r, this.pointer.x, this.pointer.y)) {
+    if (!this.session.held && this.inView(this.pointer.x, this.pointer.y)) {
       const c = this.cellAt(this.pointer.x, this.pointer.y);
       hoveredGroup = tileAt(city, c.x, c.y)?.groupId ?? -1;
     }
@@ -635,7 +776,7 @@ export class BuildScene extends Phaser.Scene {
         fg.strokeCircle(px + cs / 2, py + cs / 2, cs * 0.34);
       }
     }
-    drawSynergyLines(this.lines, this.syn, city.gridSize, cs, r.x, r.y);
+    drawSynergyLines(this.lines, this.syn, 0, cs, r.x, r.y);
     this.drawGroupOutlines(city.tiles, r.x, r.y, cs, COLORS.groupOutline, 0.45);
     if (hoveredGroup >= 0) {
       const group = city.tiles.filter((t) => t.groupId === hoveredGroup);
@@ -672,11 +813,11 @@ export class BuildScene extends Phaser.Scene {
     const s = this.session;
     if (!s.held) return;
     const fg = this.fg;
-    const r = this.gridRect();
-    const cs = this.cellPx();
+    const r = { x: 0, y: 0 };
+    const cs = CELL;
     const { x: px, y: py } = this.pointer;
 
-    if (inRect(r, px, py)) {
+    if (this.inView(px, py)) {
       const c = this.cellAt(px, py);
       const preview = previewAt(s, c.x, c.y);
       if (!preview) return;
@@ -694,18 +835,24 @@ export class BuildScene extends Phaser.Scene {
       return;
     }
 
-    // Off-grid: follow the pointer freely.
-    const ox = px - (s.held.anchor.x + 0.5) * cs;
-    const oy = py - (s.held.anchor.y + 0.5) * cs;
+    // Off the city view: follow the pointer freely, drawn by the UI camera at the view's scale.
+    const ucs = CELL * this.cityCam.zoom;
+    const ox = px - (s.held.anchor.x + 0.5) * ucs;
+    const oy = py - (s.held.anchor.y + 0.5) * ucs;
     for (const t of s.held.tiles) {
-      const x = ox + t.gx * cs;
-      const y = oy + t.gy * cs;
-      this.drawTileImage(x, y, cs, { ...t, online: true }, 0.6);
-      this.drawArc(x + cs / 2, y + cs / 2, cs, t);
+      this.drawTileImage(
+        ox + t.gx * ucs,
+        oy + t.gy * ucs,
+        ucs,
+        { ...t, online: true },
+        0.6,
+        1,
+        true,
+      );
     }
     if (inRect(SCRAP, px, py)) {
-      fg.lineStyle(3, COLORS.invalid, 1);
-      fg.strokeRect(SCRAP.x, SCRAP.y, SCRAP.w, SCRAP.h);
+      this.uiFg.lineStyle(3, COLORS.invalid, 1);
+      this.uiFg.strokeRect(SCRAP.x, SCRAP.y, SCRAP.w, SCRAP.h);
     }
   }
 
@@ -741,6 +888,8 @@ export class BuildScene extends Phaser.Scene {
           cs,
           { ...c, type: c.tile, online: true },
           alpha,
+          1,
+          true,
         );
       }
 
@@ -820,7 +969,7 @@ export class BuildScene extends Phaser.Scene {
     const d = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
     const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
     const lines = [
-      `Grid ${city.gridSize}×${city.gridSize}  ·  ${city.tiles.length} tiles`,
+      `${city.tiles.length} tiles  ·  speed ${Math.round(this.syn.speedFactor * 100)}%  ·  zoom ${this.cityCam.zoom.toFixed(2)}`,
       `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
       levelSummary(city),
       `Chains: ${this.syn.chains.length}  ·  Filled lines: ${this.syn.filledRows.length + this.syn.filledCols.length}`,
