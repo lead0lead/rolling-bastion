@@ -10,6 +10,8 @@ export const COLORS = {
   /** Build screen grid cells. */
   gridCell: 0xe8ecf2,
   gridLine: 0xd3d9e3,
+  /** Spike B2: outline of the buildable board. */
+  boardEdge: 0x8a93a6,
   /** Offline tiles: grey body, light icon, red broken link. */
   offline: 0xb9c0cc,
   offlineInk: 0xeef1f5,

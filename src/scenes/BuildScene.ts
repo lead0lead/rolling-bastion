@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { OFFERS, UPGRADES } from '../config/balance';
+import type { LandShape } from '../config/land';
 import { FX } from '../config/fx';
 import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
@@ -31,6 +32,9 @@ import {
 } from '../sim/build';
 import { findBridges } from '../sim/connectivity';
 import {
+  addLand,
+  landCellsAt,
+  landProblems,
   cellKey,
   createCity,
   facingAngle,
@@ -39,7 +43,7 @@ import {
   type PlacedTile,
 } from '../sim/grid';
 import type { BuildResult } from '../sim/progression';
-import { rollOffers } from '../sim/progression';
+import { rollLand, rollOffers } from '../sim/progression';
 import { createRng, type Rng } from '../sim/rng';
 import { computeSynergies, type Synergies } from '../sim/synergies';
 import { typeLevel } from '../sim/upgrades';
@@ -48,6 +52,8 @@ import { typeLevel } from '../sim/upgrades';
 export interface BuildSceneData {
   city: CityState;
   offers: PieceDef[];
+  /** Spike B2: land shapes to choose from before the piece pick, or null. */
+  land: LandShape[] | null;
   title: string;
   /** HP Repair Core would heal now. */
   coreHeal: number;
@@ -159,6 +165,9 @@ export class BuildScene extends Phaser.Scene {
   private press: { x: number; y: number; picked: boolean } | null = null;
   private flash: { text: string; until: number } | null = null;
   private pauseStartedAt = 0;
+  /** Spike B2: land to place before the piece pick (null when done or none), and the held shape. */
+  private landOffers: LandShape[] | null = null;
+  private heldLand: { index: number; turns: number } | null = null;
   /** The group placed last and when (ms), for its bounce. */
   private placed: { groupId: number; at: number } | null = null;
 
@@ -235,7 +244,7 @@ export class BuildScene extends Phaser.Scene {
           'Pan: WASD / arrows / middle-drag',
           'Zoom: wheel · Fit city: F or Home',
           'Confirm: Enter',
-          ...(DEBUG ? ['', 'Debug: Del destroys hovered tile'] : []),
+          ...(DEBUG ? ['', 'Debug: Del destroys hovered tile', 'F2 offers new land'] : []),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
       )
@@ -289,6 +298,8 @@ export class BuildScene extends Phaser.Scene {
       })
       .setOrigin(1, 0);
 
+    this.landOffers = this.run?.land ?? null;
+    this.heldLand = null;
     this.newPause(this.run?.offers ?? rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
     this.bindInput();
   }
@@ -302,6 +313,20 @@ export class BuildScene extends Phaser.Scene {
 
   private showOffers(): void {
     for (const t of [...this.cardTexts, ...this.upgradeTexts]) t.destroy();
+    if (this.landOffers) {
+      // Spike B2: land cards first; the piece offers follow once the land is placed.
+      this.upgradeTexts = [];
+      this.cardTexts = this.landOffers.map((land, i) => {
+        const r = cardRect(i);
+        return this.add.text(r.x + 12, r.y + 10, `${i + 1}  Land: ${land.name}`, {
+          fontFamily: FONT.family,
+          fontStyle: FONT.weight,
+          fontSize: '13px',
+          color: COLORS.text,
+        });
+      });
+      return;
+    }
     this.cardTexts = this.session.offers.map((def, i) => {
       const r = cardRect(i);
       return this.add.text(r.x + 12, r.y + 10, `${i + 1}  ${pieceSummary(def)}`, {
@@ -333,7 +358,59 @@ export class BuildScene extends Phaser.Scene {
 
   /** Run-only options are shown when the pause has offers (not for a grid expansion). */
   private hasRunOptions(): boolean {
-    return this.run !== null && this.session.offers.length > 0;
+    return this.run !== null && this.session.offers.length > 0 && !this.landOffers;
+  }
+
+  // ----------------------------------------------------------- land (B2)
+
+  /** Board cells the held land would cover with its centre over the pointer's cell. */
+  private heldLandCells(): { x: number; y: number }[] | null {
+    const held = this.heldLand;
+    const shape = held && this.landOffers?.[held.index];
+    if (!held || !shape || !this.inView(this.pointer.x, this.pointer.y)) return null;
+    const c = this.cellAt(this.pointer.x, this.pointer.y);
+    const turned = landCellsAt(shape.cells, held.turns, 0, 0);
+    const w = Math.max(...turned.map((p) => p.x)) + 1;
+    const h = Math.max(...turned.map((p) => p.y)) + 1;
+    return landCellsAt(shape.cells, held.turns, c.x - Math.floor(w / 2), c.y - Math.floor(h / 2));
+  }
+
+  private pickLand(index: number): void {
+    if (!this.landOffers?.[index]) return;
+    this.heldLand = { index, turns: this.heldLand?.turns ?? 0 };
+    playSfx(this, 'ui-pick');
+  }
+
+  private placeLand(): void {
+    const cells = this.heldLandCells();
+    if (!cells) return;
+    if (!addLand(this.city, cells)) {
+      this.showFlash('Land must touch the board and not overlap it');
+      return;
+    }
+    this.landOffers = null;
+    this.heldLand = null;
+    playSfx(this, 'grid-expand');
+    this.showOffers();
+  }
+
+  /** Spike B2 sandbox/debug: offer new land in this pause. */
+  private offerLand(): void {
+    if (this.session.held) return;
+    this.landOffers = rollLand(this.rng);
+    this.heldLand = null;
+    this.showOffers();
+  }
+
+  /** Clicks during the land step. */
+  private landPointerDown(p: Phaser.Input.Pointer): void {
+    if (this.heldLand && this.inView(p.x, p.y)) {
+      this.placeLand();
+      return;
+    }
+    const card = this.cardAt(p.x, p.y);
+    if (card >= 0) this.pickLand(card);
+    else this.heldLand = null;
   }
 
   // ---------------------------------------------------------------- layout
@@ -372,12 +449,13 @@ export class BuildScene extends Phaser.Scene {
 
   /** Fits the city (plus a margin of empty cells) into the view (concept-v2.md §3.2). */
   private fitView(): void {
-    const tiles = this.city.tiles;
+    // Spike B2: fit the whole board (it contains every tile).
+    const cells = [...this.city.board].map((k) => k.split(',').map(Number) as [number, number]);
     const m = ZOOM.fitMarginCells;
-    const minX = Math.min(0, ...tiles.map((t) => t.gx)) - m;
-    const minY = Math.min(0, ...tiles.map((t) => t.gy)) - m;
-    const maxX = Math.max(0, ...tiles.map((t) => t.gx)) + 1 + m;
-    const maxY = Math.max(0, ...tiles.map((t) => t.gy)) + 1 + m;
+    const minX = Math.min(0, ...cells.map((c) => c[0])) - m;
+    const minY = Math.min(0, ...cells.map((c) => c[1])) - m;
+    const maxX = Math.max(0, ...cells.map((c) => c[0])) + 1 + m;
+    const maxY = Math.max(0, ...cells.map((c) => c[1])) + 1 + m;
     const w = (maxX - minX) * CELL;
     const h = (maxY - minY) * CELL;
     const c = this.cityCam;
@@ -454,6 +532,10 @@ export class BuildScene extends Phaser.Scene {
       }
       if (p.rightButtonDown()) {
         this.rotateHeld();
+        return;
+      }
+      if (this.landOffers && !inRect(CONFIRM, p.x, p.y)) {
+        this.landPointerDown(p);
         return;
       }
       if (this.session.held) {
@@ -535,6 +617,10 @@ export class BuildScene extends Phaser.Scene {
       case 'Digit2':
       case 'Digit3': {
         const index = Number(e.code.slice(-1)) - 1;
+        if (this.landOffers) {
+          this.pickLand(index);
+          break;
+        }
         if (e.shiftKey) {
           if (this.hasRunOptions() && toggleUpgrade(s, index)) playSfx(this, 'ui-toggle');
           break;
@@ -553,7 +639,13 @@ export class BuildScene extends Phaser.Scene {
         this.rotateHeld();
         break;
       case 'Escape':
+        this.heldLand = null;
         cancelHeld(s);
+        break;
+      case 'F2':
+        if (!DEBUG) break;
+        e.preventDefault();
+        this.offerLand();
         break;
       case 'KeyX':
         if (s.held ? scrapHeld(s) : scrapAt(s, cell.x, cell.y)) {
@@ -611,6 +703,11 @@ export class BuildScene extends Phaser.Scene {
   }
 
   private rotateHeld(): void {
+    if (this.heldLand) {
+      this.heldLand.turns = (this.heldLand.turns + 1) % 4;
+      playSfx(this, 'ui-rotate');
+      return;
+    }
     if (!this.session.held) return;
     rotate(this.session);
     playSfx(this, 'ui-rotate');
@@ -618,7 +715,7 @@ export class BuildScene extends Phaser.Scene {
 
   private tryConfirm(): void {
     const s = this.session;
-    if (!confirmStatus(s).ok) {
+    if (this.landOffers || !confirmStatus(s).ok) {
       playSfx(this, 'ui-error');
       return;
     }
@@ -747,11 +844,46 @@ export class BuildScene extends Phaser.Scene {
     const y0 = Math.floor(tl.y / cs);
     const x1 = Math.ceil(br.x / cs);
     const y1 = Math.ceil(br.y / cs);
-    g.fillStyle(COLORS.gridCell, 1);
-    g.fillRect(x0 * cs, y0 * cs, (x1 - x0) * cs, (y1 - y0) * cs);
-    g.lineStyle(1 / this.cityCam.zoom, COLORS.gridLine, 1);
+    // Spike B2: faint lines off the board; board cells filled, with a strong outline.
+    const px = 1 / this.cityCam.zoom;
+    g.lineStyle(px, COLORS.bgGridLine, 1);
     for (let x = x0; x <= x1; x++) g.lineBetween(x * cs, y0 * cs, x * cs, y1 * cs);
     for (let y = y0; y <= y1; y++) g.lineBetween(x0 * cs, y * cs, x1 * cs, y * cs);
+    const board = city.board;
+    for (const key of board) {
+      const [bx = 0, by = 0] = key.split(',').map(Number);
+      if (bx < x0 - 1 || bx > x1 || by < y0 - 1 || by > y1) continue;
+      g.fillStyle(COLORS.gridCell, 1);
+      g.fillRect(bx * cs, by * cs, cs, cs);
+      g.lineStyle(px, COLORS.gridLine, 1);
+      g.strokeRect(bx * cs, by * cs, cs, cs);
+    }
+    g.lineStyle(3 * px, COLORS.boardEdge, 1);
+    for (const key of board) {
+      const [bx = 0, by = 0] = key.split(',').map(Number);
+      const x = bx * cs;
+      const y = by * cs;
+      if (!board.has(cellKey(bx, by - 1))) g.lineBetween(x, y, x + cs, y);
+      if (!board.has(cellKey(bx, by + 1))) g.lineBetween(x, y + cs, x + cs, y + cs);
+      if (!board.has(cellKey(bx - 1, by))) g.lineBetween(x, y, x, y + cs);
+      if (!board.has(cellKey(bx + 1, by))) g.lineBetween(x + cs, y, x + cs, y + cs);
+    }
+    // The held land: green where it fits, red where not.
+    const land = this.heldLandCells();
+    if (land) {
+      const bad = landProblems(city, land);
+      for (const c of land) {
+        // Any problem makes the whole shape red; the problem cells are stronger.
+        const invalid = bad.size > 0;
+        g.fillStyle(
+          invalid ? COLORS.invalid : COLORS.valid,
+          bad.has(cellKey(c.x, c.y)) ? 0.6 : 0.3,
+        );
+        g.fillRect(c.x * cs, c.y * cs, cs, cs);
+        g.lineStyle(2 * px, invalid ? COLORS.invalid : COLORS.valid, 1);
+        g.strokeRect(c.x * cs + px, c.y * cs + px, cs - 2 * px, cs - 2 * px);
+      }
+    }
 
     // Hovered group: what a click would pick up; its arcs are shown too.
     let hoveredGroup = -1;
@@ -859,6 +991,10 @@ export class BuildScene extends Phaser.Scene {
   private drawCards(): void {
     const g = this.g;
     const s = this.session;
+    if (this.landOffers) {
+      this.drawLandCards();
+      return;
+    }
     s.offers.forEach((def, i) => {
       const r = cardRect(i);
       const upgraded = s.upgradeChosen === i;
@@ -904,6 +1040,32 @@ export class BuildScene extends Phaser.Scene {
     });
   }
 
+  /** Spike B2: the land shapes on offer, drawn as board cells. */
+  private drawLandCards(): void {
+    const g = this.g;
+    (this.landOffers ?? []).forEach((land, i) => {
+      const r = cardRect(i);
+      const held = this.heldLand?.index === i;
+      const hovered = inRect(r, this.pointer.x, this.pointer.y);
+      g.fillStyle(held ? COLORS.selected : COLORS.panel, 1);
+      g.fillRoundedRect(r.x, r.y, r.w, r.h, 8);
+      g.lineStyle(2, held ? COLORS.valid : hovered ? COLORS.hover : COLORS.panelBorder, 1);
+      g.strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
+      const w = Math.max(...land.cells.map((c) => c.x)) + 1;
+      const h = Math.max(...land.cells.map((c) => c.y)) + 1;
+      const room = r.h - CARDS.previewTop - CARDS.previewPad;
+      const cs = Math.min(CARDS.cell, Math.floor(room / h));
+      const ox = r.x + (r.w - w * cs) / 2;
+      const oy = r.y + CARDS.previewTop + (room - h * cs) / 2;
+      for (const c of land.cells) {
+        g.fillStyle(COLORS.gridCell, 1);
+        g.fillRect(ox + c.x * cs, oy + c.y * cs, cs, cs);
+        g.lineStyle(1, COLORS.boardEdge, 1);
+        g.strokeRect(ox + c.x * cs, oy + c.y * cs, cs, cs);
+      }
+    });
+  }
+
   private drawPanels(): void {
     const g = this.g;
     const s = this.session;
@@ -924,21 +1086,24 @@ export class BuildScene extends Phaser.Scene {
       this.rerollText.setText(`5  Reroll  (${this.rerollsLeft} left)`).setAlpha(rerollOn ? 1 : 0.4);
     }
 
-    const status = confirmStatus(s);
+    const landBlock = this.landOffers !== null;
+    const status = landBlock ? { ok: false } : confirmStatus(s);
     const hovered = status.ok && inRect(CONFIRM, this.pointer.x, this.pointer.y);
     g.fillStyle(status.ok ? (hovered ? COLORS.confirmHover : COLORS.confirm) : COLORS.disabled, 1);
     g.fillRoundedRect(CONFIRM.x, CONFIRM.y, CONFIRM.w, CONFIRM.h, 8);
     this.confirmText.setAlpha(status.ok ? 1 : 0.4);
     this.reasonText.setText(
-      status.block === 'holding'
-        ? 'Place the held piece (Esc puts it back)'
-        : status.block === 'no_offer_taken'
-          ? this.run
-            ? 'Pick a piece, an upgrade or Repair Core'
-            : 'Pick one of the offered pieces'
-          : status.block === 'disconnected'
-            ? `${status.offline} tile${status.offline === 1 ? ' is' : 's are'} not connected to the Core — reconnect or scrap`
-            : '',
+      landBlock
+        ? 'Place the new land first: it must touch the board'
+        : status.block === 'holding'
+          ? 'Place the held piece (Esc puts it back)'
+          : status.block === 'no_offer_taken'
+            ? this.run
+              ? 'Pick a piece, an upgrade or Repair Core'
+              : 'Pick one of the offered pieces'
+            : status.block === 'disconnected'
+              ? `${status.offline} tile${status.offline === 1 ? ' is' : 's are'} not connected to the Core — reconnect or scrap`
+              : '',
     );
   }
 
@@ -953,7 +1118,7 @@ export class BuildScene extends Phaser.Scene {
 
   private updateTooltip(): void {
     const s = this.session;
-    const i = s.held ? -1 : this.cardAt(this.pointer.x, this.pointer.y);
+    const i = s.held || this.landOffers ? -1 : this.cardAt(this.pointer.x, this.pointer.y);
     const def = s.offers[i];
     if (!def) {
       this.tooltip.setVisible(false);

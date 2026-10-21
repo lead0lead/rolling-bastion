@@ -23,6 +23,8 @@ export interface PlacedTile {
 
 export interface CityState {
   gridSize: number;
+  /** Spike B2: buildable cells (`cellKey`); starts as a square around the Core, grows by land. */
+  board: Set<string>;
   tiles: PlacedTile[];
   typeLevels: Record<TileType, number>;
   nextTileId: number;
@@ -52,8 +54,15 @@ export function createCity(gridSize: number = GRID.startSize): CityState {
   typeLevels.core = 1;
   // Spike B (concept-v2.md §2.1): the Core is fixed at (0, 0) on an unbounded grid.
   const centre = 0;
+  // Spike B2: the starting board is a gridSize² square with the Core where v1 had it.
+  const board = new Set<string>();
+  const off = Math.floor(gridSize / 2);
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) board.add(cellKey(x - off, y - off));
+  }
   return {
     gridSize,
+    board,
     tiles: [
       {
         id: 1,
@@ -103,8 +112,9 @@ export function placementProblems(
   const problems = new Map<string, CellProblem>();
   for (const c of cells) {
     const key = cellKey(c.x, c.y);
-    // Spike B: the grid is unbounded, so only overlaps are problems.
-    if (tileAt(city, c.x, c.y)) problems.set(key, 'overlap');
+    // Spike B2: cells must be on the board (which grows by land shapes).
+    if (!city.board.has(key)) problems.set(key, 'out_of_bounds');
+    else if (tileAt(city, c.x, c.y)) problems.set(key, 'overlap');
   }
   return problems;
 }
@@ -253,4 +263,40 @@ function centralCell(tiles: readonly PlacedTile[]): Cell {
   }
   if (!best) throw new Error('centralCell: empty group');
   return { x: best.gx, y: best.gy };
+}
+
+/** Spike B2: a land shape's cells with its top-left at (ox, oy), rotated by quarter turns. */
+export function landCellsAt(
+  cells: readonly Cell[],
+  quarterTurns: number,
+  ox: number,
+  oy: number,
+): Cell[] {
+  const turned = normalizeCells(rotateCells(cells, quarterTurns));
+  return turned.map((c) => ({ x: ox + c.x, y: oy + c.y }));
+}
+
+/** Spike B2: new land may not overlap the board and must share an edge with it. */
+export function landProblems(city: CityState, cells: readonly Cell[]): Set<string> {
+  const bad = new Set<string>();
+  let touches = false;
+  for (const c of cells) {
+    if (city.board.has(cellKey(c.x, c.y))) bad.add(cellKey(c.x, c.y));
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      if (city.board.has(cellKey(c.x + dx, c.y + dy))) touches = true;
+    }
+  }
+  if (!touches) for (const c of cells) bad.add(cellKey(c.x, c.y));
+  return bad;
+}
+
+export function addLand(city: CityState, cells: readonly Cell[]): boolean {
+  if (landProblems(city, cells).size > 0) return false;
+  for (const c of cells) city.board.add(cellKey(c.x, c.y));
+  return true;
 }

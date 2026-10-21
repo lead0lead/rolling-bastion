@@ -142,6 +142,8 @@ export interface World {
   xp: number;
   level: number;
   pendingLevelUps: number;
+  /** Spike B2: level-ups still to open that also offer new land (LAND.atLevels). */
+  pendingLand: number;
   /** Timed grid expansions done so far, and free build pauses still to open for them. */
   expansions: number;
   pendingExpansions: number;
@@ -201,6 +203,7 @@ export function createWorld(seed: number): World {
     xp: 0,
     level: 1,
     pendingLevelUps: 0,
+    pendingLand: 0,
     expansions: 0,
     pendingExpansions: 0,
     expandedAt: -Infinity,

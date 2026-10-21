@@ -1,6 +1,6 @@
 {
   "name": "rolling-bastion",
-  "version": "2.0.0-spike.b",
+  "version": "2.0.0-spike.b2",
   "private": true,
   "type": "module",
   "scripts": {

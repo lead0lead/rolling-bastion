@@ -24,17 +24,16 @@ import {
   debugSpawn,
 } from '../sim/debugActions';
 import { chargePath } from '../sim/boss';
-import { expandGrid, facingAngle } from '../sim/grid';
-import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
-import { step, type MoveInput } from '../sim/step';
+import { facingAngle } from '../sim/grid';
 import {
-  bossEnraged,
-  cityChanged,
-  createWorld,
-  type CityCache,
-  type Enemy,
-  type World,
-} from '../sim/world';
+  applyBuildResult,
+  repairCoreAmount,
+  rollLand,
+  rollRunOffers,
+  scrapRefund,
+} from '../sim/progression';
+import { step, type MoveInput } from '../sim/step';
+import { bossEnraged, createWorld, type CityCache, type Enemy, type World } from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
 
@@ -219,11 +218,17 @@ export class RunScene extends Phaser.Scene {
     this.buildOpen = true;
     if (kind === 'level') playSfx(this, 'level-up');
     const w = this.world;
+    // Spike B2: an expansion level-up first offers land, then the normal piece pick.
+    const land = kind === 'level' && w.pendingLand > 0 ? rollLand(w.rng) : null;
+    if (land) w.pendingLand--;
     const data: BuildSceneData = {
       city: w.city,
+      land,
       offers: kind === 'level' ? rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time) : [],
       title:
-        kind === 'level' ? `Salvage!  Level ${w.level - w.pendingLevelUps + 1}` : 'GRID EXPANDED',
+        kind === 'level'
+          ? `${land ? 'New land!' : 'Salvage!'}  Level ${w.level - w.pendingLevelUps + 1}`
+          : 'GRID EXPANDED',
       coreHeal: repairCoreAmount(w),
       rerollsLeft: w.rerolls,
       refundPerScrap: scrapRefund(w),
@@ -283,12 +288,10 @@ export class RunScene extends Phaser.Scene {
         this.ui.debugOverlay = !this.ui.debugOverlay;
         break;
       case 'F2':
+        // Spike B2: the next level-up also offers land.
         e.preventDefault();
-        if (expandGrid(w.city)) {
-          cityChanged(w);
-          w.pendingExpansions++;
-          w.expandedAt = w.time;
-        }
+        w.pendingLand++;
+        debugLevelUp(w);
         break;
       case 'F3':
         e.preventDefault();

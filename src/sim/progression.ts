@@ -1,4 +1,5 @@
 import { GRID, LEVEL_UP, XP } from '../config/balance';
+import { LAND, LAND_SHAPES, type LandShape } from '../config/land';
 import type { PieceDef } from '../config/pieces';
 import type { TileType } from '../config/tiles';
 import { coreTile } from './grid';
@@ -59,6 +60,7 @@ export function addXp(w: World, amount: number): void {
     w.xp -= need;
     w.level++;
     w.pendingLevelUps++;
+    if ((LAND.atLevels as readonly number[]).includes(w.level)) w.pendingLand++;
     w.events.push({ kind: 'levelUp', level: w.level });
     need = xpToNext(w.level);
   }
@@ -167,4 +169,14 @@ export function applyBuildResult(w: World, result: BuildResult): void {
     if (core) core.hp += repairCoreAmount(w);
   }
   if (result.scrapped > 0) addXp(w, result.scrapped * scrapRefund(w));
+}
+
+/** Spike B2: distinct land shapes for an expansion level-up. */
+export function rollLand(rng: Rng): LandShape[] {
+  const pool = [...LAND_SHAPES];
+  const out: LandShape[] = [];
+  while (out.length < LAND.offers && pool.length > 0) {
+    out.push(...pool.splice(rng.int(0, pool.length - 1), 1));
+  }
+  return out;
 }
