@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | v2 concept written 2026-10-21. No v2 code yet. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Spike A — shop loop: not started |
-| **Next step** | Branch `v2-spike-a-shop` from `v2` and build Spike A (§11). |
+| **Status** | Spike A built on `v2-spike-a-shop` (2.0.0-spike.a), handed to the user. `v2` itself still has no v2 code. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Spike A — shop loop: **built, waiting for the user's keep / change / drop** and first price feedback |
+| **Next step** | Record the Spike A decision (§2.8, §12, session log); then Spike B on `v2-spike-b-grid` from `v2`. |
 | **Decision milestone** | **Keep-or-drop after Spike A and after Spike B.** No v2 phase starts before both are decided. Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | v2 not built yet. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | Spike A: `2.0.0-spike.a` (on its branch only); `v2` still says 0.8.0. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-21 (v2 concept written) |
+| **Last updated** | 2026-10-21 (Spike A built, awaiting decision) |
 
 ---
 
@@ -248,6 +248,27 @@ all Claude's calls, to be calibrated in Spike A):
 | Upgrade | 8 × the level bought (L2 = 16, L5 = 40) |
 | Repair Core | 10 |
 | Reroll | 2, +1 per reroll within the same visit |
+
+**Spike A (built 2026-10-21, `v2-spike-a-shop`, awaiting the user's
+verdict).** How the spike does it, for the user to judge (Claude's calls):
+
+- The v1 spawner runs on a remapped "v1 clock": wave starts 1, 2, 4, 6, 8,
+  10, 13, 16 map to v1 times 0, 60, 150, 240, 330, 420, 600, 720 s
+  (interpolated in between). That puts every new enemy type, the 40-Swarmer
+  spike (wave 4), the Elite Brute (wave 10, 40 coins), pentominoes and the
+  final escalation at the waves above, with v1's budget curve and group
+  weights. Enemy HP growth stays on combat time.
+- Shop: slot click buys and puts the piece in the hand; a bought, unplaced
+  piece stays in its slot ("Owned") and Esc puts it back there; placing it
+  empties the slot. Reroll refills every unlocked slot that is not owned
+  (sold ones too). Repair Core can be bought repeatedly until full HP.
+  Upgrades can be bought while holding a piece.
+- Scrap refunds are tracked per tile (`paid` = price / cells), so split
+  parts and damaged-away tiles refund their share automatically.
+- Grid expansions happen in the shops after waves 6 and 10 (spike only).
+- Debug: G +50 coins, T ends the wave, J jumps to the shop before the boss.
+  `?sandbox=1` opens a shop with 9999 coins before wave 1.
+- All prices and coin values are the table's guesses, untouched.
 
 **Start of a run:** Core plus a free starter piece (domino: Gatling facing up
 + Hull), 0 coins. The first shop opens after wave 1.
@@ -506,7 +527,8 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- Spike A and Spike B: keep / change / drop.
+- Spike A and Spike B: keep / change / drop. (Spike A built 2026-10-21,
+  waiting for the verdict.)
 - v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
   on GitHub Pages (the workflow would build both branches into one Pages
   artifact), or v2 replaces v1 on `main`.
@@ -570,6 +592,28 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Spike A: shop loop
+- Done: Spike A on `v2-spike-a-shop` (commit d41e7ad, not merged, by the
+  spike rules): 15 timed waves (25 → 60 s) plus the boss wave; coins (gold,
+  v2 coin values) instead of XP, 50% of leftover coins at wave end; enemies
+  fade out with a "WAVE n CLEARED" banner, then the shop: 4 piece slots,
+  2 upgrade slots, Repair Core, Reroll (2, +1 per reroll), locks, inflation
+  +20% per wave, 50% scrap refund; free starter domino; boss enrages 120 s
+  after arriving; HUD shows wave, countdown and coins; end screen shows
+  waves survived and coins earned. Version label `2.0.0-spike.a`.
+- Checked by driving a headless browser: title → wave 1 → shop (buy,
+  place, upgrade, reroll, lock) → wave 2; jump to the wave-15 shop (grid
+  10×10, lock kept, prices ×3.8) → boss wave; sandbox shop. No console
+  errors. Build, type check and lint pass.
+- Failing tests on the spike branch, on purpose (rules changed, not
+  edited): `boss.test.ts` (8, boss arrives by time, not wave),
+  `world.test.ts` and `synergies.test.ts` (2, gems give XP),
+  `enemies.test.ts` (1, Elite Brute worth XP).
+- Watch: the shop timer in the status panel ("Shop time: last / avg") is
+  the measure for the "shop pauses break the flow" risk (target < 20 s).
+- Next: the user plays it and decides keep / change / drop, with first
+  price feedback; then Spike B.
 
 ### 2026-10-21 — v2 planning
 - Done: brainstormed v2 with the user; wrote `concept-v2.md` on the new `v2`
