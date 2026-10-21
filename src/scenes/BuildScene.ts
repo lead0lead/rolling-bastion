@@ -64,8 +64,8 @@ export interface BuildSceneData {
   rerollsLeft: number;
   /** XP refunded per placed piece scrapped. */
   refundPerScrap: number;
-  /** New offers, spending one reroll; null if none left. */
-  reroll: () => PieceDef[] | null;
+  /** New offers for a reroll (the session counts rerolls used; the run charges them at the end). */
+  reroll: () => PieceDef[];
   done: (result: BuildResult) => void;
 }
 
@@ -703,15 +703,18 @@ export class BuildScene extends Phaser.Scene {
     }
   }
 
+  /** Rerolls left in the run, minus those spent (and not undone) this pause. */
+  private rerollsLeftNow(): number {
+    return this.rerollsLeft - this.session.rerollsUsed;
+  }
+
   private tryReroll(): void {
     if (!this.run || !canReroll(this.session)) return;
-    const offers = this.run.reroll();
-    if (!offers) {
+    if (this.rerollsLeftNow() <= 0) {
       this.showFlash('No rerolls left');
       return;
     }
-    this.rerollsLeft--;
-    reroll(this.session, offers);
+    reroll(this.session, this.run.reroll());
     this.showOffers();
     playSfx(this, 'ui-toggle');
   }
@@ -733,7 +736,12 @@ export class BuildScene extends Phaser.Scene {
     durations.push((this.time.now - this.pauseStartedAt) / 1000);
     this.registry.set('pauseDurations', durations);
     if (this.run) {
-      this.run.done({ repair: s.repairChosen, scrapped: s.scrapped, upgrade: chosenUpgrade(s) });
+      this.run.done({
+        repair: s.repairChosen,
+        scrapped: s.scrapped,
+        upgrade: chosenUpgrade(s),
+        rerollsUsed: s.rerollsUsed,
+      });
       return;
     }
     this.newPause(rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
@@ -1093,13 +1101,15 @@ export class BuildScene extends Phaser.Scene {
     this.rerollText.setVisible(runOptions);
     if (runOptions && this.run) {
       const repairOn = (!s.offerTaken || s.repairChosen) && !s.held && this.canRepair();
-      const rerollOn = canReroll(s) && this.rerollsLeft > 0;
+      const rerollOn = canReroll(s) && this.rerollsLeftNow() > 0;
       this.drawButton(REPAIR, repairOn, s.repairChosen);
       this.drawButton(REROLL, rerollOn, false);
       this.repairText
         .setText(`4  Repair Core  +${Math.round(this.run.coreHeal)} HP`)
         .setAlpha(repairOn ? 1 : 0.4);
-      this.rerollText.setText(`5  Reroll  (${this.rerollsLeft} left)`).setAlpha(rerollOn ? 1 : 0.4);
+      this.rerollText
+        .setText(`5  Reroll  (${this.rerollsLeftNow()} left)`)
+        .setAlpha(rerollOn ? 1 : 0.4);
     }
 
     const status = confirmStatus(s);

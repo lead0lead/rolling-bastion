@@ -158,6 +158,8 @@ export interface BuildResult {
   upgrade?: TileType | null;
   /** Placed pieces scrapped during the pause (each refunds XP). */
   scrapped: number;
+  /** Rerolls spent during the pause (undone ones don't count). */
+  rerollsUsed?: number;
 }
 
 /** Applies a finished build pause to the run; the build screen has already edited the city. */
@@ -169,4 +171,5 @@ export function applyBuildResult(w: World, result: BuildResult): void {
     if (core) core.hp += repairCoreAmount(w);
   }
   if (result.scrapped > 0) addXp(w, result.scrapped * scrapRefund(w));
+  w.rerolls = Math.max(0, w.rerolls - (result.rerollsUsed ?? 0));
 }
