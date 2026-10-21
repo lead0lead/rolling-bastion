@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PieceDef } from '../src/config/pieces';
 import {
   cancelHeld,
+  clearSelection,
   confirmStatus,
   debugDestroyAt,
   dropAt,
@@ -12,10 +13,16 @@ import {
   rotate,
   scrapAt,
   scrapHeld,
+  scrapSelection,
+  selectAll,
+  selectBox,
+  selectedGroups,
   startBuild,
   toggleRepair,
+  toggleSelectAt,
 } from '../src/sim/build';
 import { createCity, tileAt } from '../src/sim/grid';
+import { cityFrom } from './helpers';
 
 const DOMINO: PieceDef = {
   id: 'test-domino',
@@ -160,5 +167,82 @@ describe('build session: run options', () => {
     pickOffer(t, 0);
     scrapHeld(t);
     expect(t.scrapped).toBe(0);
+  });
+});
+
+describe('build session: selection', () => {
+  // Core at (2, 2); single-tile groups a (0,0), b (4,0), c (0,4), d (4,4).
+  function city() {
+    return cityFrom(['a...b', '.....', '..C..', '.....', 'c...d']);
+  }
+  const group = (s: ReturnType<typeof startBuild>, x: number, y: number) =>
+    tileAt(s.city, x, y)?.groupId as number;
+
+  it('Shift+click toggles groups but never the Core', () => {
+    const s = startBuild(city(), []);
+    expect(toggleSelectAt(s, 0, 0)).toBe(true);
+    expect(toggleSelectAt(s, 4, 0)).toBe(true);
+    expect(toggleSelectAt(s, 2, 2)).toBe(false);
+    expect(selectedGroups(s).sort()).toEqual([group(s, 0, 0), group(s, 4, 0)].sort());
+    toggleSelectAt(s, 0, 0);
+    expect(selectedGroups(s)).toEqual([group(s, 4, 0)]);
+  });
+
+  it('box select takes every group with a tile in the box, replacing or adding', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 2); // top half, Core included in the box but not selected
+    expect(selectedGroups(s).sort()).toEqual([group(s, 0, 0), group(s, 4, 0)].sort());
+    selectBox(s, 4, 4, 0, 3, true);
+    expect(selectedGroups(s)).toHaveLength(4);
+    selectBox(s, 0, 4, 0, 4);
+    expect(selectedGroups(s)).toEqual([group(s, 0, 4)]);
+    selectAll(s);
+    expect(selectedGroups(s)).toHaveLength(4);
+    clearSelection(s);
+    expect(selectedGroups(s)).toEqual([]);
+  });
+
+  it('picking up a selected tile lifts the whole selection; it stays selected after the drop', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 0); // a and b
+    expect(pickUpAt(s, 0, 0)).toBe(true);
+    expect(s.held?.tiles).toHaveLength(2);
+    expect(dropAt(s, 0, 1)).toBe(true); // a → (0,1), b → (4,1)
+    expect(tileAt(s.city, 0, 1)?.groupId).toBe(group(s, 0, 1));
+    expect(tileAt(s.city, 4, 1)).toBeDefined();
+    expect(tileAt(s.city, 0, 0)).toBeUndefined();
+    expect(selectedGroups(s)).toHaveLength(2);
+  });
+
+  it('picking up an unselected group lifts only it and clears the selection', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 0);
+    expect(pickUpAt(s, 0, 4)).toBe(true);
+    expect(s.held?.tiles).toHaveLength(1);
+    expect(selectedGroups(s)).toEqual([]);
+  });
+
+  it('cancel puts a held selection back; an invalid drop keeps it in hand', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 0);
+    pickUpAt(s, 4, 0); // held by b
+    expect(dropAt(s, 2, 2)).toBe(false); // b onto the Core
+    expect(s.held).not.toBeNull();
+    cancelHeld(s);
+    expect(tileAt(s.city, 0, 0)).toBeDefined();
+    expect(tileAt(s.city, 4, 0)).toBeDefined();
+  });
+
+  it('scraps a held selection or the selection in place, counting each piece', () => {
+    const s = startBuild(city(), []);
+    selectBox(s, 0, 0, 4, 0);
+    pickUpAt(s, 0, 0);
+    expect(scrapHeld(s)).toBe(true);
+    expect(s.scrapped).toBe(2);
+    selectBox(s, 0, 4, 4, 4);
+    expect(scrapSelection(s)).toBe(2);
+    expect(s.scrapped).toBe(4);
+    expect(s.city.tiles).toHaveLength(1);
+    expect(selectedGroups(s)).toEqual([]);
   });
 });
