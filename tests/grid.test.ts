@@ -8,7 +8,9 @@ import {
   destroyTile,
   dropGroup,
   heldFromPiece,
+  heldGroupIds,
   liftGroup,
+  liftGroups,
   placementProblems,
   rotateCells,
   rotateHeld,
@@ -139,6 +141,38 @@ describe('held groups', () => {
     const r = rotateHeld(held, 1);
     const cannon = r.tiles.find((t) => t.type === 'cannon');
     expect({ x: cannon?.gx, y: cannon?.gy }).toEqual(r.anchor);
+  });
+});
+
+describe('held selections of several groups', () => {
+  it('lift, rotate and drop together, keeping relative positions and groups', () => {
+    const city = cityFrom(['.....', '.aCb.', '.....']); // a (1,1), Core (2,1), b (3,1)
+    const a = tileAt(city, 1, 1)?.groupId as number;
+    const b = tileAt(city, 3, 1)?.groupId as number;
+    const held = liftGroups(city, [a, b], { x: 1, y: 1 });
+    if (!held) throw new Error('nothing lifted');
+    expect(held.groupId).toBe(a);
+    expect(heldGroupIds(held).sort()).toEqual([a, b].sort());
+    expect(held.tiles.map((t) => [t.gx, t.gy])).toEqual([
+      [0, 0],
+      [2, 0],
+    ]);
+    // A quarter turn stands the pair on end around the grabbed tile.
+    const turned = rotateHeld(held, 1);
+    expect(dropGroup(city, turned, 0, 0)).toBe(true);
+    expect(tileAt(city, 0, 0)?.groupId).toBe(a);
+    expect(tileAt(city, 0, 2)?.groupId).toBe(b);
+  });
+
+  it('refuse a drop when any tile of any group is blocked', () => {
+    const city = cityFrom(['.....', '.aCb.', '.....']);
+    const a = tileAt(city, 1, 1)?.groupId as number;
+    const b = tileAt(city, 3, 1)?.groupId as number;
+    const held = liftGroups(city, [a, b], { x: 1, y: 1 });
+    if (!held) throw new Error('nothing lifted');
+    expect(dropGroup(city, held, 3, 0)).toBe(false); // b would be off the board (x 5)
+    expect(dropGroup(city, held, 0, 1)).toBe(false); // b would sit on the Core
+    expect(city.tiles).toHaveLength(1);
   });
 });
 
