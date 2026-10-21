@@ -240,6 +240,26 @@ Unchanged from v1 (`concept.md` §2.9), except:
 | **Generator / Engine** | Can form chains (§2.7). |
 | **Saw** (rework requested, not yet planned) | The user finds Saws underwhelming (2026-10-21): instead of only damaging enemies they touch, a Saw should be the origin of a **blade that rotates around it** with a larger hitbox, to make melee builds fun and viable. Details and the phase to do it in: to plan with the user (§11, §12). |
 
+### 2.10 Firing arcs
+
+Unchanged from v1 (`concept.md` §2.10).
+
+### 2.11 Endless (v2, draft for Phase 4)
+
+- The win screen after the boss offers **"Keep going"** and **"End run"**
+  (decided 2026-10-21).
+- Keep going (Claude's draft, to confirm in Phase 4, user agreed the
+  outline 2026-10-21): spawns resume at the v1 12:00 budget; enemy HP and
+  contact/shot damage grow **×1.12 per minute** past the boss kill
+  (compounding, on top of v1's +6%/min HP growth); **the Colossus returns**
+  every 5 minutes with HP ×1.5 per return, alongside the normal spawns.
+- **Land keeps coming** every 7 levels after level 36 (43, 50, …), so the
+  board can grow without limit in endless (user agreed 2026-10-21).
+- Elite conversion above 600 live enemies is unchanged; elites become the main
+  way the late game gets harder.
+- The run ends when the Core is destroyed. The end screen reports time
+  survived, "Boss defeated", level and kills.
+
 ### 2.12 Weapons rework and rebalance (user request 2026-10-22, not planned in detail)
 
 The user asked for a new step that reworks and rebalances the weapons and
@@ -268,26 +288,6 @@ shares, kills per weapon, Mortar hit rate), agree targets with the user,
 then change numbers and mechanics in config with tests per weapon, and
 re-run the sim. New weapons need icons, barrels and projectiles in the
 existing style, and sounds from the existing set.
-
-### 2.10 Firing arcs
-
-Unchanged from v1 (`concept.md` §2.10).
-
-### 2.11 Endless (v2, draft for Phase 4)
-
-- The win screen after the boss offers **"Keep going"** and **"End run"**
-  (decided 2026-10-21).
-- Keep going (Claude's draft, to confirm in Phase 4, user agreed the
-  outline 2026-10-21): spawns resume at the v1 12:00 budget; enemy HP and
-  contact/shot damage grow **×1.12 per minute** past the boss kill
-  (compounding, on top of v1's +6%/min HP growth); **the Colossus returns**
-  every 5 minutes with HP ×1.5 per return, alongside the normal spawns.
-- **Land keeps coming** every 7 levels after level 36 (43, 50, …), so the
-  board can grow without limit in endless (user agreed 2026-10-21).
-- Elite conversion above 600 live enemies is unchanged; elites become the main
-  way the late game gets harder.
-- The run ends when the Core is destroyed. The end screen reports time
-  survived, "Boss defeated", level and kills.
 
 ---
 
