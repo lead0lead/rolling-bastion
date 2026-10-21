@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Spikes done (A dropped, B changed into B2, B2 kept). **Phase 1 — board and land built** on `v2-phase-1-board` (2.0.0-alpha.1), handed to the user; not merged into `v2` yet. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 1 done, waiting for the user to try it. |
-| **Next step** | User tries Phase 1 → merge `v2-phase-1-board` into `v2`; then Phase 2 (editing UX) and scheduling the Saw rework with the user. |
+| **Status** | Phase 1 — board and land: tried by the user ("works well") and **merged into `v2`** 2026-10-21 (2.0.0-alpha.1). v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 2 — editing UX: agreeing the interaction details with the user. |
+| **Next step** | Build Phase 2 on `v2-phase-2-editing` from `v2`. Saw rework still to schedule. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.1` (Phase 1, on its branch). Spikes: `2.0.0-spike.a/.b/.b2` on theirs; `v2` says 0.8.0 until the merge. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.1` on `v2`. Phase 2 will be `2.0.0-alpha.2`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-21 (Phase 1 built) |
+| **Last updated** | 2026-10-21 (Phase 1 merged) |
 
 ---
 
@@ -567,6 +567,10 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-21 — Phase 1 merged
+- Decision (user): Phase 1 works well; merged `v2-phase-1-board` into
+  `v2`. Next: Phase 2 (editing UX).
 
 ### 2026-10-21 — Phase 1: board and land
 - Done (branch `v2-phase-1-board`, one commit per step, all checks green
