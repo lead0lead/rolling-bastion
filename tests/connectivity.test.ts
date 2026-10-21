@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { findBridges, updateOnline } from '../src/sim/connectivity';
+import { connectedToCore, findBridges, updateOnline } from '../src/sim/connectivity';
+import { createRng } from '../src/sim/rng';
 import { tileAt, type CityState } from '../src/sim/grid';
 import { cityFrom } from './helpers';
 
@@ -54,5 +55,37 @@ describe('findBridges', () => {
     const city = cityFrom(['Ca..', '....', '..bb', '..b.']);
     expect(bridgeCells(city)).toEqual([]);
     expect(tileAt(city, 0, 0)?.type).toBe('core');
+  });
+});
+
+/** v1's brute force: remove each online tile and count who drops offline. */
+function bruteBridges(city: CityState): Set<number> {
+  const out = new Set<number>();
+  const connected = connectedToCore(city);
+  for (const t of city.tiles) {
+    if (t.type === 'core' || !connected.has(t.id)) continue;
+    const without = city.tiles.filter((o) => o.id !== t.id);
+    if (connectedToCore(city, without).size < connected.size - 1) out.add(t.id);
+  }
+  return out;
+}
+
+describe('findBridges (linear time)', () => {
+  it('matches the brute force on many random cities', () => {
+    const rng = createRng(7);
+    for (let n = 0; n < 200; n++) {
+      const rows = Array.from({ length: 7 }, () =>
+        Array.from({ length: 7 }, () => (rng.next() < 0.6 ? 'a' : '.')).join(''),
+      );
+      const row = rows[3] as string;
+      rows[3] = row.slice(0, 3) + 'C' + row.slice(4);
+      const city = cityFrom(rows);
+      expect([...findBridges(city)].sort()).toEqual([...bruteBridges(city)].sort());
+    }
+  });
+
+  it('handles a long snake without deep recursion', () => {
+    const city = cityFrom(['C' + 'a'.repeat(3000)]);
+    expect(findBridges(city).size).toBe(2999);
   });
 });
