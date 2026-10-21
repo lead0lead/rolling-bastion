@@ -3,8 +3,12 @@
  * levels. Every shape has the same cell count. Claude's first guesses.
  */
 export const LAND = {
-  /** Levels whose level-up also offers new land. */
-  atLevels: [5, 9, 13],
+  /**
+   * Levels whose level-up also offers new land. Spread out so land keeps
+   * coming all run: the balance sim's bots reach these at about 2:10, 3:30,
+   * 5:35, 7:20 and 9:05 (they collect every gem, so players are later).
+   */
+  atLevels: [8, 15, 22, 29, 36],
   /** Land shapes offered per expansion. */
   offers: 3,
   /** Cells per land shape (checked against LAND_SHAPES). */

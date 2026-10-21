@@ -71,6 +71,17 @@ const GRID_CENTRE = { x: 620, y: 390 };
 const VIEW = { x: 300, y: 70, w: 695, h: 650 };
 /** World px per cell in the city view (zoom scales it). */
 const CELL = 32;
+/** Spike B2: key codes of the pan keys, by their name in `panKeys`. */
+const PAN_CODES: Record<string, string> = {
+  up: 'ArrowUp',
+  down: 'ArrowDown',
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
+  w: 'KeyW',
+  a: 'KeyA',
+  s: 'KeyS',
+  d: 'KeyD',
+};
 const ZOOM = { min: 0.3, max: 3, wheelStep: 1.15, panPxPerSec: 700, fitMarginCells: 3 };
 const CARDS = {
   x: 1010,
@@ -143,6 +154,11 @@ export class BuildScene extends Phaser.Scene {
   private cardBarrelImgs!: SpritePool;
   private panKeys!: Record<string, Phaser.Input.Keyboard.Key>;
   private midDrag: { x: number; y: number; scrollX: number; scrollY: number } | null = null;
+  /**
+   * Keys pressed fresh (not auto-repeat) during this pause. A pan key still held
+   * from driving only sends repeats, so it doesn't pan until pressed again.
+   */
+  private freshKeys = new Set<string>();
   /** Arc wedges, between the grid and the tile sprites so tiles stay readable. */
   private arcs!: Phaser.GameObjects.Graphics;
   /** Chain links and filled lines, between tile bodies and barrels. */
@@ -465,7 +481,10 @@ export class BuildScene extends Phaser.Scene {
 
   /** WASD / arrows pan the city view. */
   private updatePan(dt: number): void {
-    const k = this.panKeys;
+    const k: Record<string, { isDown: boolean } | undefined> = {};
+    for (const [name, key] of Object.entries(this.panKeys)) {
+      k[name] = { isDown: key.isDown && this.freshKeys.has(PAN_CODES[name] ?? '') };
+    }
     const dx = (k.right?.isDown || k.d?.isDown ? 1 : 0) - (k.left?.isDown || k.a?.isDown ? 1 : 0);
     const dy = (k.down?.isDown || k.s?.isDown ? 1 : 0) - (k.up?.isDown || k.w?.isDown ? 1 : 0);
     if (!dx && !dy) return;
@@ -493,6 +512,11 @@ export class BuildScene extends Phaser.Scene {
   private bindInput(): void {
     this.input.mouse?.disableContextMenu();
 
+    this.freshKeys = new Set();
+    this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+      if (!e.repeat) this.freshKeys.add(e.code);
+    });
+    this.input.keyboard?.on('keyup', (e: KeyboardEvent) => this.freshKeys.delete(e.code));
     const K = Phaser.Input.Keyboard.KeyCodes;
     this.panKeys = (this.input.keyboard?.addKeys({
       up: K.UP,
