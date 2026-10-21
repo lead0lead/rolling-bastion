@@ -1,3 +1,4 @@
+import type { LandShape } from '../config/land';
 import type { PieceDef } from '../config/pieces';
 import type { TileType } from '../config/tiles';
 import { updateOnline } from './connectivity';
@@ -17,6 +18,7 @@ import {
   type HeldGroup,
   type PlacedTile,
 } from './grid';
+import { addLand, landCells, landProblems } from './land';
 import { canUpgrade, upgradeType } from './upgrades';
 
 /** Where the held group came from, so a cancelled move can be undone. */
@@ -38,9 +40,16 @@ export interface BuildSession {
   scrapped: number;
   held: HeldGroup | null;
   heldOrigin: HeldOrigin | null;
+  /**
+   * Land shapes to choose from before anything else this pause (a land
+   * level-up, concept-v2.md §2.1), or null when there is none or it is placed.
+   */
+  land: LandShape[] | null;
+  /** The land shape in hand (index into `land`) and its rotation. */
+  heldLand: { index: number; turns: number } | null;
 }
 
-export type ConfirmBlock = 'holding' | 'no_offer_taken' | 'disconnected';
+export type ConfirmBlock = 'land' | 'holding' | 'no_offer_taken' | 'disconnected';
 
 export interface ConfirmStatus {
   ok: boolean;
@@ -49,9 +58,15 @@ export interface ConfirmStatus {
   offline?: number;
 }
 
-export function startBuild(city: CityState, offers: PieceDef[]): BuildSession {
+export function startBuild(
+  city: CityState,
+  offers: PieceDef[],
+  land: LandShape[] | null = null,
+): BuildSession {
   updateOnline(city);
   return {
+    land: land && land.length > 0 ? land : null,
+    heldLand: null,
     city,
     offers,
     offerTaken: offers.length === 0,
@@ -64,9 +79,41 @@ export function startBuild(city: CityState, offers: PieceDef[]): BuildSession {
   };
 }
 
+// --------------------------------------------------------------------- land
+
+/** Takes a land shape in hand (swapping out one already held, keeping its rotation). */
+export function pickLand(s: BuildSession, index: number): boolean {
+  if (!s.land?.[index] || s.held) return false;
+  s.heldLand = { index, turns: s.heldLand?.turns ?? 0 };
+  return true;
+}
+
+/** Cells the held land would cover centred on (x, y), and the cells (`cellKey`) that block it. */
+export function landPreviewAt(
+  s: BuildSession,
+  x: number,
+  y: number,
+): { cells: Cell[]; problems: Set<string> } | null {
+  const shape = s.heldLand && s.land?.[s.heldLand.index];
+  if (!shape || !s.heldLand) return null;
+  const cells = landCells(shape, s.heldLand.turns, x, y);
+  return { cells, problems: landProblems(s.city, cells) };
+}
+
+/** Places the held land centred on (x, y). The land step is then done. False if invalid. */
+export function placeLandAt(s: BuildSession, x: number, y: number): boolean {
+  const preview = landPreviewAt(s, x, y);
+  if (!preview || !addLand(s.city, preview.cells)) return false;
+  s.land = null;
+  s.heldLand = null;
+  return true;
+}
+
+// ------------------------------------------------------------------- pieces
+
 export function pickOffer(s: BuildSession, index: number): boolean {
   const def = s.offers[index];
-  if (!def || s.offerTaken || s.held) return false;
+  if (!def || s.offerTaken || s.held || s.land) return false;
   s.held = heldFromPiece(s.city, def);
   s.heldOrigin = { kind: 'offer', index };
   return true;
@@ -74,7 +121,7 @@ export function pickOffer(s: BuildSession, index: number): boolean {
 
 /** Lifts the group under the given cell, held by that cell. The Core is fixed (concept-v2.md §2.1). */
 export function pickUpAt(s: BuildSession, x: number, y: number): boolean {
-  if (s.held) return false;
+  if (s.held || s.land) return false;
   const tile = tileAt(s.city, x, y);
   if (!tile || tile.type === 'core') return false;
   const snapshot = s.city.tiles.filter((t) => t.groupId === tile.groupId).map((t) => ({ ...t }));
@@ -86,8 +133,10 @@ export function pickUpAt(s: BuildSession, x: number, y: number): boolean {
   return true;
 }
 
+/** Rotates the held land or group. */
 export function rotate(s: BuildSession, quarterTurns = 1): void {
-  if (s.held) s.held = rotateHeld(s.held, quarterTurns);
+  if (s.heldLand) s.heldLand.turns = (((s.heldLand.turns + quarterTurns) % 4) + 4) % 4;
+  else if (s.held) s.held = rotateHeld(s.held, quarterTurns);
 }
 
 /** Top-left grid position of the held group when its anchor is over (x, y). */
@@ -121,6 +170,7 @@ export function dropAt(s: BuildSession, x: number, y: number): boolean {
 
 /** Puts the held group back where it came from (offer tray or its old cells). */
 export function cancelHeld(s: BuildSession): void {
+  s.heldLand = null;
   if (!s.held || !s.heldOrigin) return;
   if (s.heldOrigin.kind === 'grid') s.city.tiles.push(...s.heldOrigin.tiles);
   s.held = null;
@@ -152,7 +202,7 @@ export function scrapAt(s: BuildSession, x: number, y: number): boolean {
 
 /** Takes Repair Core instead of a piece, or un-chooses it again. */
 export function toggleRepair(s: BuildSession): boolean {
-  if (s.held) return false;
+  if (s.held || s.land) return false;
   if (s.repairChosen) {
     s.repairChosen = false;
     s.offerTaken = false;
@@ -177,7 +227,7 @@ function offerUpgrades(city: CityState, offers: PieceDef[]): (TileType | null)[]
 
 /** Takes an offer as an upgrade instead of placing it, or un-chooses it again. */
 export function toggleUpgrade(s: BuildSession, index: number): boolean {
-  if (s.held || !s.upgrades[index]) return false;
+  if (s.held || s.land || !s.upgrades[index]) return false;
   if (s.upgradeChosen === index) {
     s.upgradeChosen = null;
     s.offerTaken = false;
@@ -196,7 +246,7 @@ export function chosenUpgrade(s: BuildSession): TileType | null {
 
 /** Replaces the offers. Only before an offer is taken and while no offer is held. */
 export function canReroll(s: BuildSession): boolean {
-  return !s.offerTaken && s.heldOrigin?.kind !== 'offer' && s.offers.length > 0;
+  return !s.land && !s.offerTaken && s.heldOrigin?.kind !== 'offer' && s.offers.length > 0;
 }
 
 export function reroll(s: BuildSession, offers: PieceDef[]): boolean {
@@ -207,6 +257,7 @@ export function reroll(s: BuildSession, offers: PieceDef[]): boolean {
 }
 
 export function confirmStatus(s: BuildSession): ConfirmStatus {
+  if (s.land) return { ok: false, block: 'land' };
   if (s.held) return { ok: false, block: 'holding' };
   if (!s.offerTaken) return { ok: false, block: 'no_offer_taken' };
   const offline = s.city.tiles.filter((t) => !t.online).length;

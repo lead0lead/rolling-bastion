@@ -3,6 +3,7 @@ import type { PieceDef } from '../config/pieces';
 import type { TileType } from '../config/tiles';
 import { coreTile } from './grid';
 import type { Rng } from './rng';
+import { isLandLevel } from './land';
 import { applyUpgrade, upgradeType } from './upgrades';
 import { cityCentre, cityChanged, cellOrigin, tileAtCell, type World } from './world';
 
@@ -59,6 +60,7 @@ export function addXp(w: World, amount: number): void {
     w.xp -= need;
     w.level++;
     w.pendingLevelUps++;
+    if (isLandLevel(w.level)) w.pendingLand++;
     w.events.push({ kind: 'levelUp', level: w.level });
     need = xpToNext(w.level);
   }

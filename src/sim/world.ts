@@ -141,6 +141,8 @@ export interface World {
   xp: number;
   level: number;
   pendingLevelUps: number;
+  /** Of the pending level-ups, how many also offer land (concept-v2.md §2.1). */
+  pendingLand: number;
   /** The live boss, if any; checked outside the spatial hash (it is too big for it). */
   boss: Enemy | null;
   bossSpawned: boolean;
@@ -195,6 +197,7 @@ export function createWorld(seed: number): World {
     xp: 0,
     level: 1,
     pendingLevelUps: 0,
+    pendingLand: 0,
     boss: null,
     bossSpawned: false,
     bossState: newBossState(),
