@@ -37,6 +37,8 @@ export interface WeaponDef {
   minRange?: number;
   /** Lobbed shells: fly to the target point and damage every enemy within this radius there. */
   blastRadius?: number;
+  /** Aim where the target will be when the shot arrives (from its current velocity). */
+  leadsTarget?: boolean;
 }
 
 /** How a weapon tile takes part in status combos (concept-v2.md §2.12). */
@@ -194,9 +196,9 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 35,
     color: 0xff9933,
     label: 'C',
-    description: '30 dmg, 0.8 shots/s, range 380, fires in a 90° arc, knockback.',
+    description: '45 dmg, 0.8 shots/s, range 380, fires in a 90° arc, knockback.',
     weapon: {
-      damage: 30,
+      damage: 45,
       fireRate: 0.8,
       range: 380,
       projectileSpeed: 460,
@@ -217,14 +219,15 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 35,
     color: 0xf2762e,
     label: 'M',
-    description: '20 dmg in a 48 px blast, 0.5 shots/s, range 80–350, all directions.',
+    description: '30 dmg in a 64 px blast, 0.5 shots/s, range 80–350, all directions; aims ahead.',
     weapon: {
-      damage: 20,
+      damage: 30,
       fireRate: 0.5,
       range: 350,
       minRange: 80,
-      blastRadius: 48,
-      projectileSpeed: 280,
+      blastRadius: 64,
+      leadsTarget: true,
+      projectileSpeed: 420,
       projectileRadius: 4,
       spreadDeg: 0,
       knockback: 0,
@@ -232,7 +235,7 @@ export const TILES: Record<TileType, TileDef> = {
     },
     combo: { applies: 'staggered', profitsFrom: ['snagged'] },
     perks: {
-      l3: { name: 'Heavy shells: blast radius 48 → 72', effect: { kind: 'blastRadius', px: 72 } },
+      l3: { name: 'Heavy shells: blast radius 64 → 96', effect: { kind: 'blastRadius', px: 96 } },
       l5: {
         name: 'Salvo: 3 scattered shells per shot',
         effect: { kind: 'shells', count: 3, scatterPx: 40 },

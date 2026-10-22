@@ -399,6 +399,10 @@ target was.
   damage multiplier); `updateBurns` runs each tick after projectiles and
   credits the burning-applying type; `statusSpeed` gives 0 / 0.6 / 1 for
   enemy movement. The Colossus ignores snag and stagger.
+- Cannon 45 dmg; Mortar 30 dmg, blast 64 (L3 96), shells 420 px/s,
+  `leadsTarget`: `leadPoint` solves the intercept from the target's
+  movement over the last tick (exact, falls back to the current position
+  if it can't be caught).
 
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,

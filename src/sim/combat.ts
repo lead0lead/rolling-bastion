@@ -111,10 +111,13 @@ export function updateWeapons(w: World, dt: number): void {
 
     const damage = weapon.damage * mods.damage;
     if (weapon.blastRadius) {
+      const aim = weapon.leadsTarget
+        ? leadPoint(target, c.x, c.y, weapon.projectileSpeed, dt)
+        : target;
       for (let i = 0; i < weapon.shells; i++) {
         const s = i === 0 ? 0 : weapon.shellScatter;
-        const tx = target.x + (w.rng.next() * 2 - 1) * s;
-        const ty = target.y + (w.rng.next() * 2 - 1) * s;
+        const tx = aim.x + (w.rng.next() * 2 - 1) * s;
+        const ty = aim.y + (w.rng.next() * 2 - 1) * s;
         fireShell(w, t, weapon, damage, c.x, c.y, tx, ty);
       }
     } else {
@@ -127,6 +130,31 @@ export function updateWeapons(w: World, dt: number): void {
     w.tally.shots[t.type] = (w.tally.shots[t.type] ?? 0) + 1;
     st.cooldown = Math.max(st.cooldown + interval, 0);
   }
+}
+
+/**
+ * Where an enemy will be when a shot fired now from (x, y) at `speed`
+ * arrives, from its movement over the last tick. Solves |P + V·t| = speed·t;
+ * aims at the current position if the enemy is too fast to catch.
+ */
+export function leadPoint(
+  e: Enemy,
+  x: number,
+  y: number,
+  speed: number,
+  dt: number,
+): { x: number; y: number } {
+  const vx = (e.x - e.px) / dt;
+  const vy = (e.y - e.py) / dt;
+  const rx = e.x - x;
+  const ry = e.y - y;
+  const a = vx * vx + vy * vy - speed * speed;
+  const b = 2 * (rx * vx + ry * vy);
+  const c = rx * rx + ry * ry;
+  const disc = b * b - 4 * a * c;
+  if (a >= 0 || disc < 0) return { x: e.x, y: e.y };
+  const t = (-b - Math.sqrt(disc)) / (2 * a);
+  return { x: e.x + vx * t, y: e.y + vy * t };
 }
 
 function newProjectile(w: World, t: PlacedTile, x: number, y: number): Projectile {
