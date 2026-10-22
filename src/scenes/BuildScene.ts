@@ -7,7 +7,7 @@ import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
-import { tileDetails } from '../render/buffText';
+import { comboLine, tileDetails } from '../render/buffText';
 import { RulesLegend } from './RulesLegend';
 import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
@@ -1530,7 +1530,8 @@ function pieceDetails(def: PieceDef, city: CityState, upgrade: TileType | null):
   const lines = countTiles(def).map(([type, n]) => {
     const t = TILES[type];
     const level = typeLevel(city, type);
-    return `${n}× ${t.name} L${level} — ${t.maxHp} HP\n   ${t.description}`;
+    const combo = comboLine(type);
+    return `${n}× ${t.name} L${level} — ${t.maxHp} HP\n   ${t.description}${combo ? `\n   ${combo}` : ''}`;
   });
   if (upgrade) {
     const next = typeLevel(city, upgrade) + 1;

@@ -435,6 +435,13 @@ target was.
   with a white head juts out 0.06 s and pulls back 0.16 s; build screen:
   the stab line with the arcs. Spearhead barrel, `ui-place` sound. Pieces
   `domino-spear` (0.8), `i3-spear` (0.5); sandbox `i3-spear`.
+- Readability: burning enemies are tinted orange; snagged get a blue
+  ring, staggered a white ring, marked a red reticle (`drawStatuses`,
+  `STATUS_LOOK`, colours in `COLORS`). Tile tooltips and piece cards add
+  "Applies: … · +50% vs …" (`comboLine`, `src/render/buffText.ts`); the
+  rules legend has a combo row generated from config (panel 620 px tall).
+- Debug: `F4` in a run fills every empty board cell with all weapon types
+  in turn, facing outward (`debugFillWeapons`).
 
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,
@@ -626,7 +633,7 @@ legend open/close (`ui-toggle`), hint closed (`ui-click`). Claude's call.
 - **End screen:** as v1; the final city is drawn on its board.
 - **Saving:** none (unchanged). Settings key unchanged.
 - **Debug** (v1 keys, changes): `F2` = level-up with land (was: grow the
-  grid); in the build screen `F2` offers land; `F3` fills every empty board
+  grid); `F4` = fill the board with every weapon type (Phase 4); in the build screen `F2` offers land; `F3` fills every empty board
   cell with Gatlings. `?sandbox=1` opens the build screen alone.
 
 ---

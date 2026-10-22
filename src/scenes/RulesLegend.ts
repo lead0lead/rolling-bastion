@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { LINES } from '../config/balance';
+import { STATUS, type StatusType } from '../config/statuses';
+import { STATUS_NAMES } from '../render/buffText';
 import { TILES, type TileType } from '../config/tiles';
 import { barrelFor } from '../render/icons';
 import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
@@ -10,7 +12,7 @@ import { createCity, facingAngle, type CityState } from '../sim/grid';
 import { computeSynergies } from '../sim/synergies';
 
 /** Panel size and layout (screen px) of the rules legend (concept-v2.md §3.3). */
-const PANEL = { w: 820, h: 540, pad: 28, cell: 30, exampleW: 210, rowH: 112, titleH: 44 };
+const PANEL = { w: 820, h: 620, pad: 28, cell: 30, exampleW: 210, rowH: 104, titleH: 44 };
 
 /** Example tiles per character; each character is its own group. */
 const CHARS: Record<string, TileType> = {
@@ -21,6 +23,7 @@ const CHARS: Record<string, TileType> = {
   r: 'repair',
   h: 'hull',
   H: 'hull',
+  f: 'flamethrower',
 };
 
 const pct = (f: number) => `${Math.round(f * 100)}%`;
@@ -54,6 +57,28 @@ function exampleCity(rows: string[]): CityState {
   return city;
 }
 
+/** One line per status: who applies it, what it does, who profits (from config). */
+function comboText(): string {
+  const types = Object.keys(TILES) as TileType[];
+  const names = (list: TileType[]) => list.map((t) => TILES[t].name).join(', ');
+  const effect: Record<StatusType, string> = {
+    burning: 'burns',
+    snagged: 'slowed',
+    staggered: 'stopped',
+    marked: '',
+  };
+  const lines = (Object.keys(STATUS_NAMES) as StatusType[]).map((s) => {
+    const by = types.filter((t) => TILES[t].combo?.applies === s);
+    const profit = types.filter((t) => TILES[t].combo?.profitsFrom?.includes(s));
+    const what = effect[s] ? ` (${effect[s]})` : '';
+    return `${names(by)} → ${STATUS_NAMES[s]}${what} → ${names(profit)}`;
+  });
+  return (
+    `Combos: weapons put a status on enemies they hit; others deal +${pct(STATUS.comboBonus)} ` +
+    `to them.\n${lines.join('\n')}`
+  );
+}
+
 function sections(): { rows: string[]; bridges?: boolean; text: string }[] {
   const gen = TILES.generator.support;
   const shield = TILES.shield.support;
@@ -83,6 +108,10 @@ function sections(): { rows: string[]; bridges?: boolean; text: string }[] {
       text:
         'Connected or useless: every tile must link to the Core. A bridge (ringed; B shows all) ' +
         'holds other tiles on, and losing it cuts them off. Offline tiles (grey) do nothing.',
+    },
+    {
+      rows: ['gfC'],
+      text: comboText(),
     },
     {
       rows: ['ChhH', '.hHH'],

@@ -1,9 +1,31 @@
-import { TILES } from '../config/tiles';
+import { STATUS, type StatusType } from '../config/statuses';
+import { TILES, type TileType } from '../config/tiles';
 import type { CityState, PlacedTile } from '../sim/grid';
 import { buffsReceived, type Synergies } from '../sim/synergies';
 import { perk, typeLevel } from '../sim/upgrades';
 
 const pct = (f: number) => `${Math.round(f * 100)}%`;
+
+/** Display names of enemy statuses (concept-v2.md §2.12). */
+export const STATUS_NAMES: Record<StatusType, string> = {
+  burning: 'Burning',
+  snagged: 'Snagged',
+  staggered: 'Staggered',
+  marked: 'Marked',
+};
+
+/** "Applies: Marked · +50% vs Staggered" for a weapon type, or '' if it has no combo. */
+export function comboLine(type: TileType): string {
+  const combo = TILES[type].combo;
+  if (!combo) return '';
+  const parts: string[] = [];
+  if (combo.applies) parts.push(`Applies: ${STATUS_NAMES[combo.applies]}`);
+  if (combo.profitsFrom?.length) {
+    const names = combo.profitsFrom.map((s) => STATUS_NAMES[s]).join(' or ');
+    parts.push(`+${pct(STATUS.comboBonus)} vs ${names}`);
+  }
+  return parts.join(' · ');
+}
 const num = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
 
 /**
@@ -14,6 +36,8 @@ export function tileDetails(city: CityState, syn: Synergies, t: PlacedTile): str
   const def = TILES[t.type];
   const lines = [`${def.name} L${typeLevel(city, t.type)} — ${Math.ceil(t.hp)}/${t.maxHp} HP`];
   if (!t.online) lines.push('Offline: not connected to the Core');
+  const combo = comboLine(t.type);
+  if (combo) lines.push(combo);
   const mods = syn.mods.get(t.id);
   const got = buffsReceived(syn, t.id);
   const received: string[] = [];

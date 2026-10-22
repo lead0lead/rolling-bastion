@@ -18,6 +18,7 @@ import { damageAlpha, outlineOf, showsCracks, SpritePool } from '../render/tiles
 import {
   debugAddTime,
   debugFillGrid,
+  debugFillWeapons,
   debugHurtBoss,
   debugKillAll,
   debugLayoutJson,
@@ -76,6 +77,9 @@ const FLAME_LOOK = {
     [0xffe08a, 0.45, 0.7],
   ] as const,
 };
+
+/** Status marks: gap from the enemy's edge, ring width, reticle tick length (px), ring alpha. */
+const STATUS_LOOK = { gap: 2, ring: 2, tick: 4, alpha: 0.9 };
 
 /** Spear jab look: time out and back (s), shaft width and colour, head length (px). */
 const THRUST_LOOK = { out: 0.06, back: 0.16, shaft: 4, shaftColor: 0xc8963e, head: 12 };
@@ -154,6 +158,7 @@ export class RunScene extends Phaser.Scene {
   private pulseGfx!: Phaser.GameObjects.Graphics;
   private bladeGfx!: Phaser.GameObjects.Graphics;
   private flameGfx!: Phaser.GameObjects.Graphics;
+  private statusGfx!: Phaser.GameObjects.Graphics;
   private pulseClock = 0;
   private particles!: Particles;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
@@ -204,6 +209,7 @@ export class RunScene extends Phaser.Scene {
     this.pulseGfx = this.add.graphics().setDepth(1.9);
     this.bladeGfx = this.add.graphics().setDepth(2.6);
     this.flameGfx = this.add.graphics().setDepth(2.65);
+    this.statusGfx = this.add.graphics().setDepth(3.4);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
     this.magnetRings = [];
@@ -349,6 +355,10 @@ export class RunScene extends Phaser.Scene {
       case 'F3':
         e.preventDefault();
         debugFillGrid(w, 'gatling');
+        break;
+      case 'F4':
+        e.preventDefault();
+        debugFillWeapons(w);
         break;
       case 'KeyG':
         debugLevelUp(w);
@@ -501,6 +511,7 @@ export class RunScene extends Phaser.Scene {
       const sinceHit = w.time - e.hitTime;
       if (sinceHit < FX.hitFlash) img.setTintFill(0xffffff);
       else if (e === w.boss && bossEnraged(w)) img.setTint(ENRAGE_TINT);
+      else if (w.time < e.burnUntil) img.setTint(COLORS.burning);
       else img.clearTint();
       // Idle wobble plus a squash that springs back after a hit (concept.md §6).
       const wob = Math.sin(this.time.now * 0.001 * FX.wobbleSpeed + this.wobblePhase(e));
@@ -517,6 +528,7 @@ export class RunScene extends Phaser.Scene {
       );
     }
     this.enemySprites.end();
+    this.drawStatuses(w, lerp);
 
     this.shotSprites.begin();
     for (const p of w.projectiles) {
@@ -596,6 +608,43 @@ export class RunScene extends Phaser.Scene {
     this.drawBlades(w, ox - w.x, oy - w.y);
     this.drawFlames(w, ox - w.x, oy - w.y);
     this.drawThrusts(w, ox - w.x, oy - w.y);
+  }
+
+  /**
+   * Status marks around enemies (concept-v2.md §2.12): burning shows as the
+   * sprite tint; snagged a blue ring, staggered a white ring, marked a red
+   * reticle.
+   */
+  private drawStatuses(w: World, lerp: (a: number, b: number) => number): void {
+    const g = this.statusGfx;
+    g.clear();
+    const look = STATUS_LOOK;
+    for (const e of w.enemies) {
+      const snag = w.time < e.snagUntil;
+      const stagger = w.time < e.staggerUntil;
+      const mark = w.time < e.markUntil;
+      if (!snag && !stagger && !mark) continue;
+      const x = lerp(e.px, e.x);
+      const y = lerp(e.py, e.y);
+      const r = e.radius + look.gap;
+      if (snag) {
+        g.lineStyle(look.ring, COLORS.snagged, look.alpha);
+        g.strokeCircle(x, y, r);
+      }
+      if (stagger) {
+        g.lineStyle(look.ring + 1, COLORS.staggered, 1);
+        g.strokeCircle(x, y, r + look.ring);
+      }
+      if (mark) {
+        const m = r + look.ring * 2;
+        g.lineStyle(look.ring, COLORS.marked, look.alpha);
+        g.strokeCircle(x, y, m);
+        g.lineBetween(x - m - look.tick, y, x - m + look.tick, y);
+        g.lineBetween(x + m - look.tick, y, x + m + look.tick, y);
+        g.lineBetween(x, y - m - look.tick, x, y - m + look.tick);
+        g.lineBetween(x, y + m - look.tick, x, y + m + look.tick);
+      }
+    }
   }
 
   /** Spear shafts jutting out on each jab (concept-v2.md §2.12); drawn with the blades. */

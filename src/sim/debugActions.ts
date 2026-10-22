@@ -1,5 +1,5 @@
 import { ENEMIES, type EnemyType } from '../config/enemies';
-import { TILES, type TileType } from '../config/tiles';
+import { TILES, type Facing, type TileType } from '../config/tiles';
 import { addXp, xpToNext } from './progression';
 import { spawnRing } from './spawner';
 import { cellFromId, cellId } from './grid';
@@ -61,6 +61,36 @@ export function debugFillGrid(w: World, type: TileType): void {
     }
   }
   if (city.typeLevels[type] === 0) city.typeLevels[type] = 1;
+  cityChanged(w);
+}
+
+/**
+ * Debug: fills every empty board cell with weapons of every type in turn
+ * (concept-v2.md §2.12), each facing away from the Core along its larger axis.
+ */
+export function debugFillWeapons(w: World): void {
+  const city = w.city;
+  const types = (Object.keys(TILES) as TileType[]).filter((t) => TILES[t].family === 'weapon');
+  const taken = new Set(city.tiles.map((t) => cellId(t.gx, t.gy)));
+  let i = 0;
+  for (const id of city.board) {
+    if (taken.has(id)) continue;
+    const { x: gx, y: gy } = cellFromId(id);
+    const type = types[i++ % types.length] as TileType;
+    const facing: Facing = Math.abs(gx) > Math.abs(gy) ? (gx > 0 ? 1 : 3) : gy > 0 ? 2 : 0;
+    city.tiles.push({
+      id: city.nextTileId++,
+      type,
+      gx,
+      gy,
+      hp: TILES[type].maxHp,
+      maxHp: TILES[type].maxHp,
+      groupId: city.nextGroupId++,
+      online: false,
+      facing,
+    });
+    if (city.typeLevels[type] === 0) city.typeLevels[type] = 1;
+  }
   cityChanged(w);
 }
 
