@@ -8,6 +8,7 @@ import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
 import { tileDetails } from '../render/buffText';
+import { RulesLegend } from './RulesLegend';
 import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
 import { COLORS, css, FONT } from '../render/palette';
@@ -208,6 +209,7 @@ export class BuildScene extends Phaser.Scene {
   private chainPreview: { held: unknown; x: number; y: number; chains: Chain[] } | null = null;
   private chainLabels: Phaser.GameObjects.Text[] = [];
   private chainLabelsShown = 0;
+  private legend!: RulesLegend;
   /** First-time chain hint card (concept-v2.md §3.3), once per session. */
   private hint: Phaser.GameObjects.Text | null = null;
   private tileImgs!: SpritePool;
@@ -305,7 +307,7 @@ export class BuildScene extends Phaser.Scene {
           'Scrap: drag onto SCRAP, or X (selection or hovered)',
           'Bridges: B · Arcs: V · Confirm: Enter',
           'Pan: WASD / arrows / middle-drag',
-          'Zoom: wheel · Fit: F or Home',
+          'Zoom: wheel · Fit: F or Home · Rules: H or ?',
           ...(DEBUG ? ['Debug: K destroys hovered tile · F2 offers land'] : []),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
@@ -365,6 +367,7 @@ export class BuildScene extends Phaser.Scene {
       .setOrigin(1, 0);
 
     this.adoptUi();
+    this.legend = new RulesLegend(this, this.uiLayer, 640, 360);
     this.newPause(
       this.run?.offers ?? rollOffers(this.rng, SANDBOX_POOL, OFFERS.count),
       this.run?.land ?? null,
@@ -579,6 +582,10 @@ export class BuildScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
+      if (this.legend.visible) {
+        this.legend.setVisible(false);
+        return;
+      }
       if (this.hint?.visible && this.hint.getBounds().contains(p.x, p.y)) {
         this.hint.setVisible(false);
         playSfx(this, 'ui-click');
@@ -706,6 +713,13 @@ export class BuildScene extends Phaser.Scene {
   }
 
   private onKey(e: KeyboardEvent): void {
+    const legendKey = e.code === 'KeyH' || e.key === '?';
+    if (legendKey || (this.legend.visible && e.code === 'Escape')) {
+      this.legend.setVisible(!this.legend.visible && legendKey);
+      playSfx(this, 'ui-toggle');
+      return;
+    }
+    if (this.legend.visible) return;
     const s = this.session;
     const cell = this.cellAt(this.pointer.x, this.pointer.y);
     switch (e.code) {

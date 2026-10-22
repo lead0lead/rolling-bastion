@@ -437,6 +437,13 @@ As implemented (Phase 3, in progress):
 - First-time hint: the first chain preview in a browser session shows the
   §3.3 text as a card at the top of the board view until clicked
   (`CHAIN_HINT`; remembered in the game registry, not saved).
+- Rules legend: `RulesLegend` (`src/scenes/RulesLegend.ts`), opened and
+  closed with H or ? in the build screen (Esc or a click also close it;
+  other input is ignored while open). Four rows (chains, neighbour buffs,
+  connection / bridges / offline, piece outlines), each with an example
+  city drawn by the real synergy, outline and pip code; numbers in the text
+  come from config. Text is a draft (§5). Not in the run screen, where H
+  stays a debug key.
 
 ---
 
