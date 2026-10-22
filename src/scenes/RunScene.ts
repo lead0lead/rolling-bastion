@@ -97,6 +97,8 @@ export class RunScene extends Phaser.Scene {
   private pulseClock = 0;
   private particles!: Particles;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
+  /** Magnet pulse rings (concept-v2.md §2.9), in game time like blasts. */
+  private magnetRings: { x: number; y: number; r: number; at: number }[] = [];
   /** Render-only wobble phase per (pooled) enemy object. */
   private wobblePhases = new WeakMap<Enemy, number>();
   /** Last tally values seen, to play a sound when they grow. */
@@ -142,6 +144,7 @@ export class RunScene extends Phaser.Scene {
     this.pulseGfx = this.add.graphics().setDepth(1.9);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
+    this.magnetRings = [];
     this.seen = { shots: {}, gems: 0, enemyShots: 0, boss: false, charge: 'walk' };
 
     this.cam = { x: this.world.x, y: this.world.y, zoom: this.targetZoom() };
@@ -502,6 +505,9 @@ export class RunScene extends Phaser.Scene {
       } else if (ev.kind === 'blast') {
         this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
         playSfx(this, ev.bomb ? 'bomb' : 'blast');
+      } else if (ev.kind === 'magnetPulse') {
+        this.magnetRings.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
+        playSfx(this, 'gem');
       } else if (ev.kind === 'bossPhase') {
         if (motion()) camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
         playSfx(this, 'boss-phase');
@@ -585,5 +591,15 @@ export class RunScene extends Phaser.Scene {
       g.strokeCircle(b.x, b.y, b.r);
     }
     this.blasts.length = n;
+    const m = FX.magnetPulse;
+    n = 0;
+    for (const ring of this.magnetRings) {
+      const age = (w.time - ring.at) / m.time;
+      if (age >= 1) continue;
+      this.magnetRings[n++] = ring;
+      g.lineStyle(m.width, TILES.magnet.color, m.alpha * (1 - age));
+      g.strokeCircle(ring.x, ring.y, ring.r * (motion() ? age : 1));
+    }
+    this.magnetRings.length = n;
   }
 }

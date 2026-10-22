@@ -44,6 +44,15 @@ export interface SupportDef {
   cap?: number;
 }
 
+/** Magnet pulse (concept-v2.md §2.9): each Magnet pulls in nearby XP gems on its own timer. */
+export interface PulseDef {
+  intervalSec: number;
+  /** Gems within this distance of the Magnet's centre are pulled (px); grows per level. */
+  radius: number;
+  /** Speed of pulled gems flying to the city (px/s). */
+  gemSpeed: number;
+}
+
 /** What a level 3 / level 5 perk does (concept.md §2.8). Applies to the whole tile type. */
 export type PerkEffect =
   | { kind: 'extraProjectiles'; count: number }
@@ -58,8 +67,8 @@ export type PerkEffect =
   | { kind: 'diagonals' }
   | { kind: 'reflect'; fraction: number }
   | { kind: 'lowHpHealBoost'; belowFrac: number; factor: number }
-  | { kind: 'gemDrift'; radiusFactor: number; speed: number }
-  | { kind: 'gemPull'; intervalSec: number; speed: number }
+  | { kind: 'pulseInterval'; sec: number }
+  | { kind: 'pulseRadius'; px: number }
   | { kind: 'sizePenalty'; factor: number }
   | { kind: 'neighbourHp'; bonus: number }
   | { kind: 'regen'; hpPerSec: number }
@@ -86,6 +95,7 @@ export interface TileDef {
   /** Damage per second to touching enemies (Saw). */
   contactDps?: number;
   support?: SupportDef;
+  pulse?: PulseDef;
   /** Named perks unlocked at type level 3 and 5. */
   perks?: { l3: PerkDef; l5: PerkDef };
 }
@@ -286,16 +296,16 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 30,
     color: 0x16b8a6,
     label: 'U',
-    description: '+30% pickup radius city-wide (cap +150%).',
-    support: { amount: 0.3, cap: 1.5 },
+    description: 'Every 8 s, pulls in XP gems within 300 px of itself.',
+    pulse: { intervalSec: 8, radius: 300, gemSpeed: 600 },
     perks: {
       l3: {
-        name: 'Field: gems drift in from 2× pickup radius',
-        effect: { kind: 'gemDrift', radiusFactor: 2, speed: 160 },
+        name: 'Quick pulse: every 8 s → 6 s',
+        effect: { kind: 'pulseInterval', sec: 6 },
       },
       l5: {
-        name: 'Recall: every 60 s, pulls in every gem on screen',
-        effect: { kind: 'gemPull', intervalSec: 60, speed: 600 },
+        name: 'Wide pulse: base radius 300 → 450 px',
+        effect: { kind: 'pulseRadius', px: 450 },
       },
     },
   },

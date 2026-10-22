@@ -1,5 +1,5 @@
 import { LINES, MOVE } from '../config/balance';
-import { TILES, type TileType, type WeaponDef } from '../config/tiles';
+import { TILES, type PulseDef, type TileType, type WeaponDef } from '../config/tiles';
 import { cellId, type CityState, type PlacedTile } from './grid';
 import { levelDamage, levelEffect, levelHpBonus, perk } from './upgrades';
 
@@ -55,10 +55,8 @@ export interface Synergies {
   weapons: Partial<Record<TileType, WeaponStats>>;
   /** Movement speed as a fraction of base. */
   speedFactor: number;
-  /** Gem pickup radius multiplier. */
-  pickupFactor: number;
-  gemDrift?: { radiusFactor: number; speed: number };
-  gemPull?: { intervalSec: number; speed: number };
+  /** Magnet pulse with levels and perks applied (the same for every Magnet). */
+  magnetPulse: PulseDef;
   lowHpHealBoost?: { belowFrac: number; factor: number };
 }
 
@@ -114,7 +112,6 @@ export function computeSynergies(city: CityState): Synergies {
   const repairAmount = (TILES.repair.support?.amount ?? 0) * levelEffect(city, 'repair');
   const repairDiag = !!perk(city, 'repair', 'diagonals');
   const hullBonus = perk(city, 'hull', 'neighbourHp')?.bonus ?? 0;
-  let magnets = 0;
   let engines = 0;
   const { chains, chainBonus } = findChains(city, at);
   const own = (t: PlacedTile) => 1 + (chainBonus.get(t.id) ?? 0);
@@ -141,9 +138,6 @@ export function computeSynergies(city: CityState): Synergies {
         break;
       case 'hull':
         if (hullBonus > 0) around(t, false, (a) => (a.hpBonus += hullBonus));
-        break;
-      case 'magnet':
-        magnets++;
         break;
       case 'engine':
         engines += own(t);
@@ -193,11 +187,12 @@ export function computeSynergies(city: CityState): Synergies {
     Math.max(MOVE.minSpeedFactor, 1 - penalty) +
     engines * MOVE.engineBonus * levelEffect(city, 'engine');
 
-  const magnetDef = TILES.magnet.support;
-  const pickup = Math.min(
-    magnets * (magnetDef?.amount ?? 0) * levelEffect(city, 'magnet'),
-    magnetDef?.cap ?? 0,
-  );
+  const pulse = TILES.magnet.pulse as PulseDef;
+  const magnetPulse: PulseDef = {
+    intervalSec: perk(city, 'magnet', 'pulseInterval')?.sec ?? pulse.intervalSec,
+    radius: (perk(city, 'magnet', 'pulseRadius')?.px ?? pulse.radius) * levelEffect(city, 'magnet'),
+    gemSpeed: pulse.gemSpeed,
+  };
 
   const weapons: Synergies['weapons'] = {};
   for (const type of Object.keys(TILES) as TileType[]) {
@@ -210,9 +205,7 @@ export function computeSynergies(city: CityState): Synergies {
     chains,
     weapons,
     speedFactor,
-    pickupFactor: 1 + pickup,
-    gemDrift: magnets > 0 ? perk(city, 'magnet', 'gemDrift') : undefined,
-    gemPull: magnets > 0 ? perk(city, 'magnet', 'gemPull') : undefined,
+    magnetPulse,
     lowHpHealBoost: perk(city, 'repair', 'lowHpHealBoost'),
   };
 }

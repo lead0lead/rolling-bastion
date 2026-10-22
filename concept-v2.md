@@ -249,6 +249,16 @@ Unchanged from v1 (`concept.md` §2.9), except:
 | **Generator / Engine** | Can form chains (§2.7). |
 | **Saw** (rework requested, not yet planned) | The user finds Saws underwhelming (2026-10-21): instead of only damaging enemies they touch, a Saw should be the origin of a **blade that rotates around it** with a larger hitbox, to make melee builds fun and viable. Details and the phase to do it in: to plan with the user (§11, §12). |
 
+Magnet as implemented (Phase 3): the pulse replaces v1's pickup radius
+bonus and its L3 drift / L5 recall perks. `TILES.magnet.pulse` holds the
+numbers (8 s, 300 px, gems 600 px/s); perks `pulseInterval` (L3, 6 s) and
+`pulseRadius` (L5, base 450 px); level gain ×(1 + 20% per level) on the
+radius. `pulseMagnets` (`src/sim/progression.ts`) keeps one timer per online
+Magnet in `World.magnetTimers` (first value drawn from the seeded RNG,
+pruned in `cityChanged`) and emits a `magnetPulse` event; the run screen
+draws a teal ring growing to the radius over 0.6 s (`FX.magnetPulse`;
+static fade with reduced motion) and plays the quiet `gem` sound.
+
 ### 2.10 Firing arcs
 
 Unchanged from v1 (`concept.md` §2.10).
