@@ -302,6 +302,29 @@ other tile designs. Their notes, to be turned into a design with them
 - "Other designs" are in scope too: ask the user which other tiles to
   revisit.
 
+**Measured 2026-10-22** (`bench/weapons.sim.ts`: 8 tiles of one weapon
+ringed around the Core, invulnerable, driving circles through the normal
+spawns; effective damage per tile per second, overkill not counted):
+Gatling 2.7 / 5.8 / 9.1 at 0–3 / 3–6 / 6–9 min, Cannon 2.1 / 4.9 / 4.8,
+Mortar 1.8 / 4.7 / 5.2, Saw 0.8 / 1.5 / 2.6. Mortar shells land on nobody
+75% of the time early (47% at 6–9 min): a shell flies up to ~1.25 s while
+enemies move 75–175 px, and the blast is 48 px; it is aimed where the
+target was.
+
+**Decisions (user, 2026-10-22):**
+- Phase 4 adds **all three new weapons** (piercing crossbow, close-range
+  flamethrower with damage over time, thrusting spear), next to the
+  reworked Gatling, Cannon, Mortar and Saw.
+- **Synergies between weapon types are enemy effects that combo:** each
+  weapon puts a status on enemies it hits and other weapons profit from it
+  (draft from the brainstorm: Flamethrower → burning, Gatling +X% vs
+  burning; Cannon → stagger, Mortar profits; Saw/Spear → snag (slow),
+  Crossbow profits; Crossbow → mark, Cannon profits). Details still open.
+- **Buff the others, don't nerf the Gatling hard:** "Each weapon should
+  feel powerful." The Gatling stays roughly as is (at most a light trim if
+  it still leads by far); the other weapons are raised to its level. Enemy
+  toughness may have to rise in Phase 5 to keep runs hard.
+
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,
 then change numbers and mechanics in config with tests per weapon, and
