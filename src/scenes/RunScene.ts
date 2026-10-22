@@ -9,7 +9,7 @@ import { PHASE3_POOL } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
-import { drawPieceOutlines, drawSynergyLines } from '../render/lines';
+import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { COLORS } from '../render/palette';
 import { motion, particleCount } from '../render/effects';
 import { Particles } from '../render/particles';
@@ -428,6 +428,7 @@ export class RunScene extends Phaser.Scene {
       this.linesGfx.clear();
       drawPieceOutlines(this.linesGfx, w.city.tiles, cell, 0, 0, 1 / this.cam.zoom);
       drawSynergyLines(this.linesGfx, w.cache.syn, cell, 0, 0);
+      drawBuffPips(this.linesGfx, w.city.tiles, w.cache.syn, cell, 0, 0);
     }
     this.linesGfx.setPosition(left, top);
 

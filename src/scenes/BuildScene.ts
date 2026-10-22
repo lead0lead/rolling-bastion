@@ -7,7 +7,7 @@ import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
-import { drawPieceOutlines, drawSynergyLines } from '../render/lines';
+import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
 import { COLORS, css, FONT } from '../render/palette';
 import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
@@ -1009,6 +1009,7 @@ export class BuildScene extends Phaser.Scene {
     }
     drawSynergyLines(this.lines, this.syn, cs, r.x, r.y);
     drawPieceOutlines(this.fg, city.tiles, cs, r.x, r.y, px);
+    drawBuffPips(this.fg, city.tiles, this.syn, cs, r.x, r.y);
     const selected = new Set(selectedGroups(this.session));
     if (selected.size > 0) {
       const tiles = city.tiles.filter((t) => selected.has(t.groupId));

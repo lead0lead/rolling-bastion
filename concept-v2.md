@@ -414,6 +414,13 @@ As implemented (Phase 3, in progress):
   them every frame (they replace Phase 2's faint group outline); the run
   screen draws them with the chain lines, redrawn when the city changes or
   the zoom has drifted 5%, so widths stay constant on screen.
+- Buff links: `computeSynergies` records every adjacency buff as a
+  `BuffLink` (source, target, type, amount before caps) in `Synergies.links`;
+  `buffsReceived` sums them per type for one tile. Hull L3 bracing is a link
+  type too (tooltips), but gets no pip.
+- Buff pips: `drawBuffPips` (`src/render/lines.ts`), one dot per Generator /
+  Shield / Repair type along the tile's bottom left, fixed slot per type,
+  in the support colour with an ink rim; in both screens.
 
 ---
 

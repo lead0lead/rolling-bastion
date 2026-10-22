@@ -41,6 +41,22 @@ export interface Chain {
   length: number;
 }
 
+/** Neighbour buff types, in the fixed order buff pips are drawn (concept-v2.md §3.3). */
+export const BUFF_TYPES = ['generator', 'shield', 'repair', 'hull'] as const;
+export type BuffType = (typeof BUFF_TYPES)[number];
+
+/**
+ * One adjacency buff from an online support tile to a neighbour. `amount` is
+ * the main effect before caps: fire rate fraction (Generator), damage taken
+ * reduction (Shield), HP/s (Repair Bay), max HP fraction (Hull L3).
+ */
+export interface BuffLink {
+  from: number;
+  to: number;
+  type: BuffType;
+  amount: number;
+}
+
 /** A weapon type's stats with its perks applied. */
 export interface WeaponStats extends WeaponDef {
   projectiles: number;
@@ -52,6 +68,8 @@ export interface WeaponStats extends WeaponDef {
 export interface Synergies {
   mods: Map<number, TileMods>;
   chains: Chain[];
+  /** Every adjacency buff, in tile order of the source. */
+  links: BuffLink[];
   weapons: Partial<Record<TileType, WeaponStats>>;
   /** Movement speed as a fraction of base. */
   speedFactor: number;
@@ -96,11 +114,20 @@ export function computeSynergies(city: CityState): Synergies {
   for (const t of city.tiles) {
     acc.set(t.id, { fire: 0, genDamage: 0, shield: 0, heal: 0, hpBonus: 0, reflect: 0 });
   }
-  const around = (t: PlacedTile, diagonals: boolean, fn: (a: Acc) => void) => {
+  const links: BuffLink[] = [];
+  const around = (
+    t: PlacedTile,
+    diagonals: boolean,
+    type: BuffType,
+    amount: number,
+    fn: (a: Acc) => void,
+  ) => {
     for (const [dx, dy] of diagonals ? [...ORTHO, ...DIAG] : ORTHO) {
       const o = at(t.gx + dx, t.gy + dy);
       const a = o && acc.get(o.id);
-      if (a) fn(a);
+      if (!a) continue;
+      fn(a);
+      links.push({ from: t.id, to: o.id, type, amount });
     }
   };
 
@@ -121,23 +148,23 @@ export function computeSynergies(city: CityState): Synergies {
     switch (t.type) {
       case 'generator': {
         const fire = genAmount * own(t);
-        around(t, false, (a) => {
+        around(t, false, 'generator', fire, (a) => {
           a.fire += fire;
           a.genDamage += genDamage;
         });
         break;
       }
       case 'shield':
-        around(t, shieldDiag, (a) => {
+        around(t, shieldDiag, 'shield', shieldAmount, (a) => {
           a.shield += shieldAmount;
           a.reflect = Math.max(a.reflect, reflect);
         });
         break;
       case 'repair':
-        around(t, repairDiag, (a) => (a.heal += repairAmount));
+        around(t, repairDiag, 'repair', repairAmount, (a) => (a.heal += repairAmount));
         break;
       case 'hull':
-        if (hullBonus > 0) around(t, false, (a) => (a.hpBonus += hullBonus));
+        if (hullBonus > 0) around(t, false, 'hull', hullBonus, (a) => (a.hpBonus += hullBonus));
         break;
       case 'engine':
         engines += own(t);
@@ -203,11 +230,27 @@ export function computeSynergies(city: CityState): Synergies {
   return {
     mods,
     chains,
+    links,
     weapons,
     speedFactor,
     magnetPulse,
     lowHpHealBoost: perk(city, 'repair', 'lowHpHealBoost'),
   };
+}
+
+/** Buffs one tile receives, per type: how many sources and their summed amount (before caps). */
+export function buffsReceived(
+  syn: Synergies,
+  tileId: number,
+): Partial<Record<BuffType, { count: number; total: number }>> {
+  const out: Partial<Record<BuffType, { count: number; total: number }>> = {};
+  for (const l of syn.links) {
+    if (l.to !== tileId) continue;
+    const r = (out[l.type] ??= { count: 0, total: 0 });
+    r.count++;
+    r.total += l.amount;
+  }
+  return out;
 }
 
 /** True if a tile type chains regardless of facing (no firing arc: Mortar, Saw, support tiles). */

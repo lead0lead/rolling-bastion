@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TILES } from '../config/tiles';
 import { cellId, type PlacedTile } from '../sim/grid';
-import type { Synergies } from '../sim/synergies';
+import type { BuffType, Synergies } from '../sim/synergies';
 import { COLORS } from './palette';
 
 /** Look of chain links (dark ink line, white dots) (concept.md §2.7, §6). */
@@ -50,6 +50,44 @@ export function drawPieceOutlines(
     ] as const) {
       if (group.get(cellId(t.gx + dx, t.gy + dy)) !== t.groupId) edge(t, dx, dy);
     }
+  }
+}
+
+/** Buff pips (concept-v2.md §3.3): which types get one, in corner order, and their look. */
+const PIP_TYPES: readonly BuffType[] = ['generator', 'shield', 'repair'];
+const PIP = { radius: 0.11, x0: 0.24, step: 0.26, y: 0.76, outline: 0.035 };
+
+/**
+ * Draws one pip per support type buffing each tile, along the tile's bottom
+ * left in PIP_TYPES order (a fixed slot per type), in that type's colour.
+ * Same grid convention as drawPieceOutlines.
+ */
+export function drawBuffPips(
+  g: Phaser.GameObjects.Graphics,
+  tiles: readonly PlacedTile[],
+  syn: Synergies,
+  cs: number,
+  ox: number,
+  oy: number,
+): void {
+  const types = new Map<number, Set<BuffType>>();
+  for (const l of syn.links) {
+    let set = types.get(l.to);
+    if (!set) types.set(l.to, (set = new Set()));
+    set.add(l.type);
+  }
+  for (const t of tiles) {
+    const set = types.get(t.id);
+    if (!set) continue;
+    PIP_TYPES.forEach((type, i) => {
+      if (!set.has(type)) return;
+      const x = ox + (t.gx + PIP.x0 + i * PIP.step) * cs;
+      const y = oy + (t.gy + PIP.y) * cs;
+      g.fillStyle(TILES[type].color, 1);
+      g.fillCircle(x, y, cs * PIP.radius);
+      g.lineStyle(Math.max(1, cs * PIP.outline), COLORS.ink, 1);
+      g.strokeCircle(x, y, cs * PIP.radius);
+    });
   }
 }
 

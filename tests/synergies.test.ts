@@ -5,6 +5,7 @@ import { TILES, type TileType } from '../src/config/tiles';
 import { damageTile, healTiles, updateProjectiles, updateWeapons } from '../src/sim/combat';
 import { updateEnemies } from '../src/sim/enemies';
 import { tileAt, turnFacing } from '../src/sim/grid';
+import { buffsReceived } from '../src/sim/synergies';
 import { collectGems } from '../src/sim/progression';
 import { spawnEnemy } from '../src/sim/spawner';
 import { cityChanged, createWorld, modsOf, tileCentre, type World } from '../src/sim/world';
@@ -237,6 +238,27 @@ describe('weapon chains', () => {
   it('offline weapons break a chain', () => {
     const w = worldOf(['C..', '...', 'ggg']);
     expect(w.cache.syn.chains).toEqual([]);
+  });
+});
+
+describe('buff links', () => {
+  it('records each adjacency buff from an online support tile', () => {
+    const w = worldOf(['ege.', 'Cd..', '....', '....']);
+    const gun = tile(w, 1, 0);
+    const got = buffsReceived(w.cache.syn, gun.id);
+    expect(got.generator?.count).toBe(2);
+    expect(got.generator?.total).toBeCloseTo(2 * (TILES.generator.support?.amount ?? 0));
+    expect(got.shield).toEqual({ count: 1, total: TILES.shield.support?.amount });
+    expect(got.repair).toBeUndefined();
+    const fromShield = w.cache.syn.links.filter((l) => l.from === tile(w, 1, 1).id);
+    expect(fromShield.map((l) => l.to).sort()).toEqual([tile(w, 0, 1).id, gun.id].sort());
+  });
+
+  it('diagonal perks add diagonal links; offline sources give none', () => {
+    const w = worldOf(['h.h.', 'Cd..', 'h.h.', '....'], { shield: 3 });
+    expect(w.cache.syn.links.filter((l) => l.type === 'shield')).toHaveLength(5);
+    const off = worldOf(['C...', '....', '.dh.', '....']);
+    expect(off.cache.syn.links).toEqual([]);
   });
 });
 
