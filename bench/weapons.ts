@@ -1,5 +1,4 @@
-import { it } from 'vitest';
-import { GRID, SIM } from '../src/config/balance';
+import { SIM } from '../src/config/balance';
 import { TILES, type Facing, type TileType } from '../src/config/tiles';
 import { cityChanged, createWorld } from '../src/sim/world';
 import { step } from '../src/sim/step';
@@ -10,10 +9,22 @@ import { step } from '../src/sim/step';
  * circle through the normal 12-minute spawns. Prints effective damage per
  * tile per second (overkill not counted) and, for lobbed shells, how many
  * land on nobody. Compare weapons with each other, not with real runs.
- * Run with `npm run sim`.
+ * Run with `npm run sim:weapons`; the weapons are split over the
+ * `weapons.shard<N>.sim.ts` files so they run on several cores.
  */
 
-const WEAPONS: TileType[] = ['gatling', 'cannon', 'mortar', 'saw'];
+/** Number of weapon shard files; keep in sync with them. */
+export const WEAPON_SHARDS = 4;
+
+/** All weapon types, or the ones in SIM_WEAPONS (comma-separated tile types). */
+const WEAPONS = (Object.keys(TILES) as TileType[]).filter(
+  (t) =>
+    TILES[t].family === 'weapon' &&
+    (!import.meta.env.SIM_WEAPONS ||
+      String(import.meta.env.SIM_WEAPONS)
+        .split(',')
+        .includes(t)),
+);
 const MINUTES = [0, 3, 6, 9];
 const SEEDS = [1, 2];
 /** Tiles are topped up to this every tick, so no single hit can destroy one. */
@@ -47,11 +58,13 @@ function ring(type: TileType, seed: number) {
   return w;
 }
 
-it('measures weapons', () => {
+/** Measures this shard's share of the weapons and prints a block per weapon. */
+export function measureWeaponShard(shard: number): void {
   const lines: string[] = [
-    'Weapon measurement — 8 tiles around the Core, invulnerable, driving circles',
+    `Weapon measurement shard ${shard + 1}/${WEAPON_SHARDS} — 8 tiles around the Core, invulnerable, driving circles`,
   ];
-  for (const type of WEAPONS) {
+  for (const [i, type] of WEAPONS.entries()) {
+    if (i % WEAPON_SHARDS !== shard) continue;
     const perWindow = MINUTES.map(() => ({ dmg: 0, shells: 0, empty: 0, hits: 0 }));
     for (const seed of SEEDS) {
       const w = ring(type, seed);
@@ -100,6 +113,5 @@ it('measures weapons', () => {
       lines.push(line);
     });
   }
-  console.log(lines.join('\n'));
-  void GRID;
-});
+  if (lines.length > 1) console.log(lines.join('\n'));
+}

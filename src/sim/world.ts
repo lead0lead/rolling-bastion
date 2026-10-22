@@ -38,9 +38,6 @@ export interface Enemy {
   markUntil: number;
   /** Burn damage per second while burning. */
   burnDps: number;
-  /** Last Saw blade hit: when, and which blade (so each blade hits it once per pass). */
-  bladeHitAt: number;
-  bladeHitBy: number;
   dead: boolean;
 }
 
@@ -153,6 +150,8 @@ export interface World {
   spawn: { budget: number; next: { id: SpawnGroupId; count: number } | null; spikeIndex: number };
   /** Seconds until each Magnet's next pulse, by tile id (concept-v2.md §2.9). */
   magnetTimers: Map<number, number>;
+  /** Per Saw blade (tile id × stride + index): enemies it hit recently and when (concept-v2.md §2.12). */
+  bladeHits: Map<number, Map<Enemy, number>>;
   /** State of each weapon tile, by tile id. */
   weapons: Map<number, WeaponState>;
   xp: number;
@@ -210,6 +209,7 @@ export function createWorld(seed: number): World {
     hash: new SpatialHash(GRID.cellPx),
     spawn: { budget: 0, next: null, spikeIndex: 0 },
     weapons: new Map(),
+    bladeHits: new Map(),
     magnetTimers: new Map(),
     xp: 0,
     level: 1,
@@ -232,12 +232,20 @@ export function createWorld(seed: number): World {
   return world;
 }
 
+/** Blades per tile id, for unique blade ids (`tile id × this + blade index`). */
+export const BLADE_ID_STRIDE = 8;
+
 /** Call after any change to the city's tiles (destruction, build pause). */
 export function cityChanged(w: World): void {
   updateOnline(w.city);
   w.cache = buildCache(w.city);
   for (const id of w.magnetTimers.keys()) {
     if (!w.cache.magnets.some((t) => t.id === id)) w.magnetTimers.delete(id);
+  }
+  // Forget the hit memory of blades whose Saw is gone or offline.
+  for (const id of w.bladeHits.keys()) {
+    const tileId = Math.floor(id / BLADE_ID_STRIDE);
+    if (!w.cache.blades.some((t) => t.id === tileId)) w.bladeHits.delete(id);
   }
 }
 

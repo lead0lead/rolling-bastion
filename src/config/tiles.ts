@@ -244,10 +244,10 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 35,
     color: 0xff9933,
     label: 'C',
-    description: '45 dmg, 0.8 shots/s, range 380, fires in a 90° arc, knockback.',
+    description: '45 dmg, 1.2 shots/s, range 380, fires in a 90° arc, knockback.',
     weapon: {
       damage: 45,
-      fireRate: 0.8,
+      fireRate: 1.2,
       range: 380,
       projectileSpeed: 460,
       projectileRadius: 5,
@@ -293,11 +293,11 @@ export const TILES: Record<TileType, TileDef> = {
   saw: {
     name: 'Saw',
     family: 'weapon',
-    maxHp: 60,
+    maxHp: 90,
     color: 0xffe14d,
     label: 'S',
-    description: 'A blade circles it 48 px out, 18 dmg to every enemy it passes, 1.5 turns/s.',
-    blade: { orbit: 48, radius: 20, turnsPerSec: 1.5, damage: 18, hitCooldown: 0.25 },
+    description: 'A blade circles it 48 px out, 26 dmg to every enemy it passes, 1.5 turns/s.',
+    blade: { orbit: 48, radius: 20, turnsPerSec: 1.5, damage: 26, hitCooldown: 0.25 },
     combo: { applies: 'snagged', profitsFrom: ['burning'] },
     perks: {
       l3: {
@@ -334,15 +334,15 @@ export const TILES: Record<TileType, TileDef> = {
   flamethrower: {
     name: 'Flamethrower',
     family: 'weapon',
-    maxHp: 40,
+    maxHp: 60,
     color: 0xff5e3a,
     label: 'F',
     description:
-      'Sprays a 60° cone 80 px out: 2 dmg × 10/s to all in it, and they burn 6 dmg/s for 3 s.',
+      'Sprays a 60° cone 96 px out: 3 dmg × 10/s to all in it, and they burn 8 dmg/s for 3 s.',
     weapon: {
-      damage: 2,
+      damage: 3,
       fireRate: 10,
-      range: 80,
+      range: 96,
       projectileSpeed: 0,
       projectileRadius: 0,
       spreadDeg: 0,
@@ -350,20 +350,20 @@ export const TILES: Record<TileType, TileDef> = {
       arcDeg: 180,
       coneDeg: 60,
     },
-    combo: { applies: 'burning', profitsFrom: ['snagged'], burnDps: 6 },
+    combo: { applies: 'burning', profitsFrom: ['snagged'], burnDps: 8 },
     perks: {
-      l3: { name: 'Long nozzle: reach 80 → 112 px', effect: { kind: 'range', px: 112 } },
+      l3: { name: 'Long nozzle: reach 96 → 128 px', effect: { kind: 'range', px: 128 } },
       l5: { name: 'Napalm: burn damage ×2', effect: { kind: 'burnFactor', factor: 2 } },
     },
   },
   spear: {
     name: 'Spear',
     family: 'weapon',
-    maxHp: 40,
+    maxHp: 70,
     color: 0xc8963e,
     label: 'K',
-    description: 'Thrusts straight ahead 96 px every 1 s: 35 dmg to every enemy on the line.',
-    thrust: { interval: 1, reach: 96, width: 16, damage: 35, jabGap: 0.25 },
+    description: 'Thrusts straight ahead 96 px every 0.8 s: 80 dmg to every enemy on the line.',
+    thrust: { interval: 0.8, reach: 96, width: 24, damage: 80, jabGap: 0.25 },
     combo: { applies: 'snagged', profitsFrom: ['staggered'] },
     perks: {
       l3: { name: 'Long shaft: reach 96 → 128 px', effect: { kind: 'thrustReach', px: 128 } },

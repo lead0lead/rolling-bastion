@@ -6,6 +6,7 @@ import { destroyTile, facingAngle, type PlacedTile } from './grid';
 import { dropGem } from './progression';
 import type { WeaponStats } from './synergies';
 import {
+  BLADE_ID_STRIDE,
   cityChanged,
   modsOf,
   tileCentre,
@@ -246,14 +247,13 @@ export function updateThrusts(w: World, dt: number): void {
   }
 }
 
-/** Blades per tile id, for unique blade ids (`tile id × this + blade index`). */
-const BLADE_ID_STRIDE = 8;
-
 /**
  * Saw blades (concept-v2.md §2.12): each online Saw's blades circle its
  * centre (Generators speed the spin up) and hit every enemy they pass, each
- * blade at most once per `hitCooldown` per enemy. The angle lives in the
- * tile's `WeaponState.aim` for the renderer. Uses the enemy hash built this tick.
+ * blade at most once per `hitCooldown` per enemy (each blade remembers its
+ * own recent hits, so a big enemy under several blades is hit once by each).
+ * The angle lives in the tile's `WeaponState.aim` for the renderer. Uses the
+ * enemy hash built this tick.
  */
 export function updateBlades(w: World, dt: number): void {
   for (const t of w.cache.blades) {
@@ -274,13 +274,17 @@ export function updateBlades(w: World, dt: number): void {
       const bx = c.x + Math.cos(a) * blade.orbit;
       const by = c.y + Math.sin(a) * blade.orbit;
       const id = t.id * BLADE_ID_STRIDE + b;
+      let recent = w.bladeHits.get(id);
+      if (!recent) w.bladeHits.set(id, (recent = new Map()));
+      for (const [e, at] of recent) {
+        if (w.time - at >= blade.hitCooldown || e.dead) recent.delete(e);
+      }
+      const hitBefore = recent;
       const strike = (e: Enemy) => {
-        if (e.dead) return;
+        if (e.dead || hitBefore.has(e)) return;
         const r = blade.radius + e.radius;
         if ((e.x - bx) ** 2 + (e.y - by) ** 2 > r * r) return;
-        if (e.bladeHitBy === id && w.time - e.bladeHitAt < blade.hitCooldown) return;
-        e.bladeHitBy = id;
-        e.bladeHitAt = w.time;
+        hitBefore.set(e, w.time);
         hitEnemy(w, e, damage, 0, 0, 0, t.type);
         hits++;
       };

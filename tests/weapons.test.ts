@@ -120,6 +120,21 @@ describe('Saw blade', () => {
     expect(far.w.damageBy.saw ?? 0).toBe(0);
   });
 
+  it('several blades over the Colossus each hit it once per pass, not every tick', () => {
+    const w = worldOf(['.....', '.sss.', '.sCs.', '.sss.', '.....']);
+    const core = tileAt(w.city, 2, 2);
+    if (!core) throw new Error('no core');
+    const c = tileCentre(w, core);
+    const boss = spawnEnemy(w, 'colossus', c.x, c.y - 70);
+    const seconds = 2 / blade.turnsPerSec;
+    spin(w, seconds);
+    const saws = 8;
+    // At most one hit per blade per cooldown window, per Saw.
+    const cap = saws * Math.ceil(seconds / blade.hitCooldown) * blade.damage;
+    expect(boss.maxHp - boss.hp).toBeGreaterThan(0);
+    expect(boss.maxHp - boss.hp).toBeLessThanOrEqual(cap);
+  });
+
   it('L3 adds a second blade; L5 lengthens the orbit', () => {
     const { w } = sawWith(blade.orbit);
     w.city.typeLevels.saw = 3;

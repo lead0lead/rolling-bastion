@@ -160,8 +160,6 @@ export function spawnEnemy(
   e.hitTime = -Infinity;
   e.burnUntil = e.snagUntil = e.staggerUntil = e.markUntil = -Infinity;
   e.burnDps = 0;
-  e.bladeHitAt = -Infinity;
-  e.bladeHitBy = -1;
   e.dead = false;
   w.enemies.push(e);
   return e;

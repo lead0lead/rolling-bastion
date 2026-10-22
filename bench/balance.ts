@@ -1,4 +1,3 @@
-import { it } from 'vitest';
 import { SIM, UPGRADES } from '../src/config/balance';
 import { BOSS } from '../src/config/enemies';
 import { TILES, type Facing, type TileType } from '../src/config/tiles';
@@ -13,7 +12,9 @@ import { cityCentre, createWorld, type World } from '../src/sim/world';
 /**
  * Balance check (concept.md §11 Phase 4): plays the same seeds with a few
  * archetype builds and a fixed steering script, and prints how each fared.
- * Run with `npm run sim` (seeds: SIM_SEEDS=1,2,3). Not part of `npm test`.
+ * Run with `npm run sim:balance` (seeds: SIM_SEEDS=1,2,3); the runs are split
+ * over the `balance.shard<N>.sim.ts` files so they use several cores. Not
+ * part of `npm test`.
  *
  * A build is a rule giving the tile for each cell of an n×n grid. At each
  * level-up the bot repairs the Core when it is low, takes an upgrade every
@@ -39,6 +40,8 @@ interface Archetype {
   rule: (c: Cell) => TileType | null;
   /** Types to level up, in turn. */
   upgrades: TileType[];
+  /** Short-range build: drives into the boss instead of fleeing it (as a player would). */
+  melee?: boolean;
 }
 
 const ARCHETYPES: Archetype[] = [
@@ -71,6 +74,57 @@ const ARCHETYPES: Archetype[] = [
     rule: (c) =>
       c.edge === 0 ? (c.corner ? 'plating' : 'saw') : c.edge === 1 && c.cross ? 'repair' : 'hull',
     upgrades: ['saw', 'repair'],
+    melee: true,
+  },
+  {
+    name: 'Saw grinder',
+    rule: (c) => (c.edge === 0 ? 'plating' : c.edge === 1 ? 'saw' : c.cross ? 'repair' : 'hull'),
+    upgrades: ['saw', 'plating'],
+    melee: true,
+  },
+  {
+    name: 'Crossbow lines',
+    rule: (c) =>
+      c.edge === 0
+        ? c.corner
+          ? 'plating'
+          : 'crossbow'
+        : c.edge === 1 && c.cross
+          ? 'generator'
+          : 'hull',
+    upgrades: ['crossbow', 'generator'],
+  },
+  {
+    name: 'Flame ring',
+    rule: (c) =>
+      c.edge === 0
+        ? c.corner
+          ? 'plating'
+          : 'flamethrower'
+        : c.edge === 1 && c.cross
+          ? 'repair'
+          : 'hull',
+    upgrades: ['flamethrower', 'repair'],
+    melee: true,
+  },
+  {
+    name: 'Spear wall',
+    rule: (c) =>
+      c.edge === 0 ? 'plating' : c.edge === 1 ? 'spear' : c.cross ? 'generator' : 'hull',
+    upgrades: ['spear', 'generator'],
+    melee: true,
+  },
+  {
+    name: 'Combo mix',
+    rule: (c) => {
+      if (c.edge === 0) {
+        if (c.corner) return 'cannon';
+        return (c.dx + c.dy) % 2 === 0 ? 'flamethrower' : 'gatling';
+      }
+      if (c.edge === 1) return c.cross ? 'generator' : 'crossbow';
+      return 'mortar';
+    },
+    upgrades: ['gatling', 'flamethrower', 'crossbow', 'mortar'],
   },
   {
     name: 'Mixed cluster',
@@ -262,9 +316,18 @@ function levelUp(w: World, arch: Archetype): void {
   applyBuildResult(w, { repair: false, scrapped: 0, upgrade: grown === 0 ? upgrade : null });
 }
 
-/** Steering: away from enemies that get close (the boss counts more), otherwise a slow wander. */
-function steer(w: World): { x: number; y: number } {
+/**
+ * Steering: away from enemies that get close (the boss counts more), otherwise
+ * a slow wander. Melee builds drive straight at the boss once it is there.
+ */
+function steer(w: World, arch: Archetype): { x: number; y: number } {
   const c = cityCentre(w);
+  if (arch.melee && w.boss) {
+    const dx = w.boss.x - c.x;
+    const dy = w.boss.y - c.y;
+    const d = Math.hypot(dx, dy) || 1;
+    return { x: dx / d, y: dy / d };
+  }
   let fx = 0;
   let fy = 0;
   for (const e of w.enemies) {
@@ -312,7 +375,7 @@ function play(arch: Archetype, seed: number, xpShare: number): Result {
   let bossHitAt: number | null = null;
   let bossPhase = 0;
   while (!w.over && w.time < TIME_LIMIT) {
-    step(w, steer(w), SIM.dt);
+    step(w, steer(w, arch), SIM.dt);
     if (w.boss || w.won) bossPhase = Math.max(bossPhase, w.bossState.phase);
     if (bossHitAt === null && (w.won || (w.boss && w.boss.hp < w.boss.maxHp))) bossHitAt = w.time;
     collectAll(w, xpShare);
@@ -342,40 +405,47 @@ function play(arch: Archetype, seed: number, xpShare: number): Result {
 
 const clock = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
-it('compares archetype builds', () => {
+/** Number of balance shard files (`bench/balance.shard<N>.sim.ts`); keep in sync with them. */
+export const BALANCE_SHARDS = 6;
+
+function report(arch: Archetype, r: Result): string {
+  const fight =
+    r.bossFight === null ? '' : ` (boss fight ${r.bossFight.toFixed(1)} s, phase ${r.bossPhase})`;
+  const boss = r.bossHp === null ? '' : ` vs boss (${Math.round(r.bossHp * 100)}% HP left)`;
+  const outcome = r.won
+    ? `WON at ${clock(r.time)}${fight}`
+    : r.time >= TIME_LIMIT
+      ? `alive at ${clock(r.time)}, time limit${boss}`
+      : `died at ${clock(r.time)}${boss}`;
+  const total = Object.values(r.damage).reduce((a: number, b) => a + (b ?? 0), 0) || 1;
+  const shares = Object.entries(r.damage)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([t, d]) => `${t} ${Math.round(((d ?? 0) / total) * 100)}%`)
+    .join(', ');
+  return `${arch.name} · seed ${r.seed}: ${outcome} · level ${r.level} · kills ${r.kills} · ${r.tiles} tiles · damage: ${shares}`;
+}
+
+/**
+ * Plays this shard's share of the (build, seed) runs and prints one line per
+ * run. Each shard is its own test file, so Vitest runs them in parallel on
+ * separate cores. SIM_SEEDS: seeds (default 1,2); SIM_XP: XP share; SIM_ARCH:
+ * comma-separated parts of build names to run (default: all).
+ */
+export function runBalanceShard(shard: number): void {
   const seeds = String(import.meta.env.SIM_SEEDS ?? '1,2')
     .split(',')
     .map(Number);
   const xpShare = Number(import.meta.env.SIM_XP ?? 1);
-  const lines: string[] = [
-    `Balance sim — seeds ${seeds.join(', ')}, XP share ${xpShare}; bot: ${TILES_PER_LEVEL} tiles/level, upgrade every ${UPGRADE_EVERY} levels (max L${UPGRADES.maxLevel})`,
-    '',
+  const only = import.meta.env.SIM_ARCH ? String(import.meta.env.SIM_ARCH).split(',') : null;
+  const jobs = ARCHETYPES.filter(
+    (a) => !only || only.some((n) => a.name.toLowerCase().includes(n.toLowerCase())),
+  ).flatMap((arch) => seeds.map((seed) => ({ arch, seed })));
+  const lines = [
+    `Balance sim shard ${shard + 1}/${BALANCE_SHARDS} — XP share ${xpShare}; bot: ${TILES_PER_LEVEL} tiles/level, upgrade every ${UPGRADE_EVERY} levels (max L${UPGRADES.maxLevel})`,
   ];
-  for (const arch of ARCHETYPES) {
-    const results = seeds.map((s) => play(arch, s, xpShare));
-    lines.push(`${arch.name}`);
-    for (const r of results) {
-      const fight =
-        r.bossFight === null
-          ? ''
-          : ` (boss fight ${r.bossFight.toFixed(1)} s, phase ${r.bossPhase})`;
-      const outcome = r.won
-        ? `WON at ${clock(r.time)}${fight}`
-        : r.bossHp !== null
-          ? `died at ${clock(r.time)} vs boss (${Math.round(r.bossHp * 100)}% HP left)`
-          : r.time >= TIME_LIMIT
-            ? `alive at ${clock(r.time)} (time limit)`
-            : `died at ${clock(r.time)}`;
-      const total = Object.values(r.damage).reduce((a: number, b) => a + (b ?? 0), 0) || 1;
-      const shares = Object.entries(r.damage)
-        .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-        .map(([t, d]) => `${t} ${Math.round(((d ?? 0) / total) * 100)}%`)
-        .join(', ');
-      lines.push(
-        `  seed ${r.seed}: ${outcome} · level ${r.level} · kills ${r.kills} · ${r.tiles} tiles · damage: ${shares}`,
-      );
-    }
-    lines.push('');
-  }
-  console.log(lines.join('\n'));
-});
+  jobs.forEach((job, i) => {
+    if (i % BALANCE_SHARDS !== shard) return;
+    lines.push(report(job.arch, play(job.arch, job.seed, xpShare)));
+  });
+  if (lines.length > 1) console.log(lines.join('\n'));
+}
