@@ -62,8 +62,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1 (board and land), 2 (editing UX) and 3 (readability and synergies) done and **merged into `v2`** (2.0.0-alpha.3). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 4 (weapons rework and rebalance): measuring the current weapons, then brainstorming the design with the user (§2.12). |
-| **Next step** | Agree the Phase 4 design one question at a time, record it in §2.12, then build it on `v2-phase-4-weapons`. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
+| **Current step** | Phase 4 (weapons rework and rebalance) on `v2-phase-4-weapons`: design agreed (§2.12), building step by step. |
+| **Next step** | Finish the Phase 4 steps (§2.12) and hand the build over. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.3` on `v2`. Phase 4 will be `2.0.0-alpha.4`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
@@ -305,9 +305,10 @@ other tile designs. Their notes, to be turned into a design with them
 **Measured 2026-10-22** (`bench/weapons.sim.ts`: 8 tiles of one weapon
 ringed around the Core, invulnerable, driving circles through the normal
 spawns; effective damage per tile per second, overkill not counted):
-Gatling 2.7 / 5.8 / 9.1 at 0–3 / 3–6 / 6–9 min, Cannon 2.1 / 4.9 / 4.8,
-Mortar 1.8 / 4.7 / 5.2, Saw 0.8 / 1.5 / 2.6. Mortar shells land on nobody
-75% of the time early (47% at 6–9 min): a shell flies up to ~1.25 s while
+Gatling 2.7 / 5.8 / 10.5 / 17.3 at 0–3 / 3–6 / 6–9 / 9–12 min, Cannon
+2.1 / 4.9 / 8.5 / 11.1, Mortar 1.8 / 4.7 / 8.2 / 13.8, Saw 0.8 / 1.5 /
+2.6 / 1.0. Mortar shells land on nobody 75% of the time early (35% at
+9–12 min, in dense crowds): a shell flies up to ~1.25 s while
 enemies move 75–175 px, and the blast is 48 px; it is aimed where the
 target was.
 
@@ -324,6 +325,68 @@ target was.
   feel powerful." The Gatling stays roughly as is (at most a light trim if
   it still leads by far); the other weapons are raised to its level. Enemy
   toughness may have to rise in Phase 5 to keep runs hard.
+
+- **Mortar:** leads the target (aims where it will be when the shell
+  lands), faster shells, bigger blast, more damage (user picked
+  "lead + faster + bigger").
+- **Saw:** the blade circles at **1.5 cells** (~48 px) from the Saw's
+  centre and passes harmlessly over the city's own tiles, so a Saw works on
+  the edge and one row in, behind Plating.
+- **Spear:** thrusts **straight ahead** in its facing (fixed, no aiming),
+  ~3 cells out over its own tiles, about once a second, hitting every
+  enemy along it.
+- **Crossbow:** slow heavy bolt, long range, narrow arc, **pierces every
+  enemy** in its path.
+- **Flamethrower:** sprays a cone (~80 px, 60°) aimed at the nearest enemy
+  in its arc; everything in the cone takes damage and **keeps burning
+  ~3 s**.
+- **Combo table (agreed as proposed):**
+
+  | Status | Applied by | Lasts | Effect | Profits (+50% damage) |
+  |---|---|---|---|---|
+  | Burning | Flamethrower | 3 s | damage over time | Gatling, Saw |
+  | Snagged | Saw, Spear | 1 s | slowed 40% | Mortar, Flamethrower |
+  | Staggered | Cannon, Mortar | 0.4 s | stops moving | Crossbow, Spear |
+  | Marked | Crossbow | 4 s | — | Cannon |
+
+  The Gatling applies nothing; it cashes in on fire.
+- **No other tiles** change in Phase 4 (support and structure stay).
+
+**Phase 4 plan (Claude's draft numbers, to tune by playing and the sim):**
+
+| Weapon | HP | Attack | Applies / profits | L3 perk | L5 perk |
+|---|---|---|---|---|---|
+| Gatling | 35 | unchanged: 4 dmg, 8/s, 270, 180° | — / Burning | unchanged | unchanged |
+| Cannon | 35 | 30 → **45** dmg, 0.8/s, 380, 90°, knockback | Staggered / Marked | unchanged (arc 135°) | unchanged (pierce 3) |
+| Mortar | 35 | 20 → **30** dmg, blast 48 → **64**, shell 280 → **420** px/s, leads the target, 0.5/s, 80–350 | Staggered / Snagged | blast → 96 | unchanged (3-shell salvo) |
+| Saw | 60 | blade at 48 px, blade radius 14 px, **1.5 turns/s**, **18 dmg** per hit, each enemy hit at most every 0.25 s; the body no longer deals contact damage; Generators speed up the spin | Snagged / Burning | second blade opposite | blade reach 48 → 64 px |
+| Crossbow (new) | 35 | **60 dmg**, 0.7/s, range 450, 60° arc, bolt 700 px/s, pierces all | Marked / Staggered | +1 bolt per shot (small spread) | arc 60° → 120° |
+| Flamethrower (new) | 40 | cone 80 px, 60°, aimed in a 180° arc; 10 puffs/s × **2 dmg** to everything in the cone; burn **6 dmg/s** for 3 s (refreshed, not stacked) | Burning / Snagged | reach 80 → 112 px | burn damage ×2 |
+| Spear (new) | 40 | thrust every **1.0 s**, reach 96 px from the centre, 16 px wide, **35 dmg** to every enemy on the line | Snagged / Staggered | reach 96 → 128 px | double thrust (two jabs per cycle) |
+
+- Status details: burn damage uses the Flamethrower's damage multiplier
+  and is credited to it; bonuses don't stack between statuses (×1.5 once
+  if the target has any status the weapon profits from). The Colossus can
+  burn and be marked but ignores snag and stagger (it can't be stopped);
+  elites take them normally.
+- Readability: each status shows on the enemy (Burning orange flicker,
+  Snagged blue ring, Staggered white flash, Marked red reticle); the tile
+  tooltip lists "Applies: … · Profits from: …"; the rules legend gets a
+  combo row.
+- Pieces (new letters: x Crossbow, f Flamethrower, k Spear): domino and one
+  tromino per new weapon in the pool; sandbox pool too.
+- Visuals in the existing style: icon and barrel for each new tile, a bolt
+  projectile, a flame cone, a spear shaft that juts out on each thrust,
+  the Saw's blade as a spinning disc on its orbit. Sounds from the
+  existing set.
+- Steps: (1) measurement bench + enemy statuses and combo bonuses;
+  (2) Cannon and Mortar buffs with stagger and target leading; (3) Saw
+  blade; (4) Crossbow; (5) Flamethrower; (6) Spear; (7) pieces, tooltips,
+  legend, status visuals; (8) balance sim archetypes for every weapon and
+  a combo build, tuning pass; (9) version 2.0.0-alpha.4 and docs.
+- Target: in the measurement bench every weapon within about ±25% of the
+  Gatling's damage per tile; in the balance sim every single-weapon build
+  can win, and the mixed combo build does best.
 
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,
@@ -706,6 +769,17 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase 4 design agreed
+- Measured the weapons (`bench/weapons.sim.ts`, §2.12): Gatling leads,
+  Mortar misses most shells early, Saw far behind.
+- Decisions (user): all three new weapons; synergies as enemy-status
+  combos (table in §2.12, accepted as proposed); buff the others instead of
+  nerfing the Gatling ("Each weapon should feel powerful"); Mortar leads
+  + faster + bigger; Saw blade at 1.5 cells; Spear fixed straight ahead;
+  Crossbow heavy piercing bolt; Flamethrower cone + lingering burn; no
+  other tiles in Phase 4.
+- Numbers, perks and pieces are Claude's drafts (§2.12).
 
 ### 2026-10-22 — Phase 3 merged
 - Decision (user): "merge and continue" without change requests; merged
