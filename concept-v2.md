@@ -62,14 +62,14 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1–3 merged into `v2` (2.0.0-alpha.3). **Phase 4 (weapons rework) built** on `v2-phase-4-weapons` (2.0.0-alpha.4), handed to the user, not merged yet. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 4 hand-over: the user plays the new weapons (§14, 2026-10-22 "Phase 4"). |
-| **Next step** | User feedback on Phase 4 (feel of each weapon; Spear and Flamethrower builds still lose in the sim); tune, then merge into `v2`. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
+| **Current step** | Phase 4 played by the user ("had a ton of fun", 2026-10-22); session ended. Not merged yet. |
+| **Next step** | **Ask the user** whether to merge `v2-phase-4-weapons` into `v2` as is or tune first (Spear and Flamethrower builds still lose in the sim; the combo build doesn't beat single-weapon builds). Then Phase 5 (endless and balance). Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.4` on `v2-phase-4-weapons` (`2.0.0-alpha.3` on `v2`). Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 4 built and handed over) |
+| **Last updated** | 2026-10-22 (Phase 4 playtested, session end) |
 
 ---
 
@@ -846,6 +846,14 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase 4 playtested, session end
+- Feedback (user): after the freeze fix, "tested it and had a ton of fun";
+  continue in a new session. No change requests yet.
+- State: `v2-phase-4-weapons` at 2.0.0-alpha.4, not merged (the user did
+  not say merge; ask first). Build, lint and 165 tests pass. Nothing
+  pushed.
+- Next: ask about merging / tuning, then Phase 5.
 
 ### 2026-10-22 — Phase 4: weapons rework
 - Built on `v2-phase-4-weapons`: enemy statuses and combos; Cannon and
