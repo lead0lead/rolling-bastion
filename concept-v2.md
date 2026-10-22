@@ -873,6 +873,14 @@ Same format as v1 (`concept.md` §14). Newest first.
   weapon at real speed (headless screenshots run too slowly).
 - Next: user plays (F4 in a run fills the board with every weapon), then
   tuning and merge.
+- Bug (user playtest, Firefox): the game froze when holding a 3-Gatling
+  piece in a later pause ("can't access property drawImage, this.data is
+  null" in `drawChainPreview`). The Build scene object is reused between
+  pauses; Phase 3's chain labels and hint were kept in fields across
+  pauses after Phaser had destroyed them. Fixed by resetting them in
+  `create()`. The preview now shows one summary label above all chains
+  ("Chain 6 ×10: +150% damage · Chain 3 ×2: +50% damage") instead of one
+  label per chain, which overlapped badly with many chains.
 
 ### 2026-10-22 — Phase 4 design agreed
 - Measured the weapons (`bench/weapons.sim.ts`, §2.12): Gatling leads,
