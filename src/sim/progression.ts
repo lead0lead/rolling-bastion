@@ -5,7 +5,7 @@ import { coreTile } from './grid';
 import type { Rng } from './rng';
 import { isLandLevel } from './land';
 import { applyUpgrade, upgradeType } from './upgrades';
-import { cityCentre, cityChanged, cellOrigin, tileAtCell, type World } from './world';
+import { cityCentre, cityChanged, cellOrigin, tileAtCell, tileCentre, type World } from './world';
 
 /** Weighted random pick of `count` distinct pieces from the pool. */
 export function rollOffers(rng: Rng, pool: readonly PieceDef[], count: number): PieceDef[] {
@@ -76,28 +76,41 @@ export function dropGem(w: World, x: number, y: number, value: number): void {
 }
 
 /**
- * A gem is collected when it is within the pickup radius of any tile
- * (Magnets widen it). With Magnet L3, gems within a wider radius drift toward
- * the city; Magnet L5 periodically pulls in every gem on screen.
+ * Magnet pulses (concept-v2.md §2.9): each online Magnet counts down its own
+ * timer (starting at a random offset) and, when it runs out, marks every gem
+ * within the pulse radius of its own tile as pulled.
+ */
+export function pulseMagnets(w: World, dt: number): void {
+  const pulse = w.cache.syn.magnetPulse;
+  const r2 = pulse.radius * pulse.radius;
+  for (const t of w.cache.magnets) {
+    let timer = w.magnetTimers.get(t.id) ?? w.rng.next() * pulse.intervalSec;
+    timer = Math.min(timer, pulse.intervalSec) - dt;
+    if (timer <= 0) {
+      timer += pulse.intervalSec;
+      const c = tileCentre(w, t);
+      for (const gem of w.gems) {
+        if ((gem.x - c.x) ** 2 + (gem.y - c.y) ** 2 <= r2) gem.pulled = true;
+      }
+      w.events.push({ kind: 'magnetPulse', x: c.x, y: c.y, radius: pulse.radius });
+    }
+    w.magnetTimers.set(t.id, timer);
+  }
+}
+
+/**
+ * A gem is collected when it is within the pickup radius of any tile.
+ * Gems pulled by a Magnet pulse fly to the city until collected.
  */
 export function collectGems(w: World, dt = 0): void {
   const syn = w.cache.syn;
   const cell = GRID.cellPx;
-  const radius = XP.pickupRadius * syn.pickupFactor;
-  const drift = syn.gemDrift ? radius * syn.gemDrift.radiusFactor : radius;
-  const reach = Math.ceil(drift / cell);
+  const radius = XP.pickupRadius;
+  const reach = Math.ceil(radius / cell);
   const { left, top } = cellOrigin(w);
   const centre = cityCentre(w);
 
-  if (syn.gemPull) {
-    w.gemPullTimer -= dt;
-    if (w.gemPullTimer <= 0) {
-      w.gemPullTimer = syn.gemPull.intervalSec;
-      for (const gem of w.gems) {
-        if (Math.hypot(gem.x - centre.x, gem.y - centre.y) <= w.viewRadius) gem.pulled = true;
-      }
-    }
-  }
+  pulseMagnets(w, dt);
 
   let gained = 0;
   let n = 0;
@@ -120,12 +133,8 @@ export function collectGems(w: World, dt = 0): void {
       gained += gem.value;
       continue;
     }
-    const speed = gem.pulled
-      ? (syn.gemPull?.speed ?? 0)
-      : best2 <= drift * drift
-        ? (syn.gemDrift?.speed ?? 0)
-        : 0;
-    if (speed > 0) {
+    if (gem.pulled) {
+      const speed = syn.magnetPulse.gemSpeed;
       const d = Math.hypot(centre.x - gem.x, centre.y - gem.y) || 1;
       const step = Math.min(d, speed * dt);
       gem.x += ((centre.x - gem.x) / d) * step;

@@ -82,7 +82,7 @@ export interface Gem {
   x: number;
   y: number;
   value: number;
-  /** Pulled in by a Magnet L5 recall; flies to the city until collected. */
+  /** Pulled in by a Magnet pulse; flies to the city until collected. */
   pulled?: boolean;
 }
 
@@ -91,7 +91,8 @@ export type WorldEvent =
   | { kind: 'enemyKilled'; x: number; y: number; type: EnemyType }
   | { kind: 'blast'; x: number; y: number; radius: number; bomb: boolean }
   | { kind: 'levelUp'; level: number }
-  | { kind: 'bossPhase'; phase: number };
+  | { kind: 'bossPhase'; phase: number }
+  | { kind: 'magnetPulse'; x: number; y: number; radius: number };
 
 /** City-derived data, recomputed only when the city changes (concept.md §9). */
 export interface CityCache {
@@ -106,6 +107,8 @@ export interface CityCache {
   maxRy: number;
   /** Online tiles that have a weapon. */
   weapons: PlacedTile[];
+  /** Online Magnets. */
+  magnets: PlacedTile[];
   /** Bridge tiles (Sapper targets) and their centres relative to the origin. */
   bridges: Set<number>;
   bridgeCentres: { rx: number; ry: number }[];
@@ -134,8 +137,8 @@ export interface World {
   enemyShotPool: EnemyShot[];
   hash: SpatialHash;
   spawn: { budget: number; next: { id: SpawnGroupId; count: number } | null; spikeIndex: number };
-  /** Seconds until the next Magnet L5 recall. */
-  gemPullTimer: number;
+  /** Seconds until each Magnet's next pulse, by tile id (concept-v2.md §2.9). */
+  magnetTimers: Map<number, number>;
   /** State of each weapon tile, by tile id. */
   weapons: Map<number, WeaponState>;
   xp: number;
@@ -193,7 +196,7 @@ export function createWorld(seed: number): World {
     hash: new SpatialHash(GRID.cellPx),
     spawn: { budget: 0, next: null, spikeIndex: 0 },
     weapons: new Map(),
-    gemPullTimer: 0,
+    magnetTimers: new Map(),
     xp: 0,
     level: 1,
     pendingLevelUps: 0,
@@ -219,6 +222,9 @@ export function createWorld(seed: number): World {
 export function cityChanged(w: World): void {
   updateOnline(w.city);
   w.cache = buildCache(w.city);
+  for (const id of w.magnetTimers.keys()) {
+    if (!w.cache.magnets.some((t) => t.id === id)) w.magnetTimers.delete(id);
+  }
 }
 
 /** The Colossus's phase and attack timers (concept.md §4.3). */
@@ -278,6 +284,7 @@ function buildCache(city: CityState): CityCache {
   const cells = new Map<number, PlacedTile>();
   const centres: CityCache['centres'] = [];
   const weapons: PlacedTile[] = [];
+  const magnets: PlacedTile[] = [];
   let minRx = Infinity;
   let maxRx = -Infinity;
   let minRy = Infinity;
@@ -297,10 +304,23 @@ function buildCache(city: CityState): CityCache {
     maxRy = Math.max(maxRy, ry);
     if (!t.online) continue;
     if (TILES[t.type].weapon) weapons.push(t);
+    if (t.type === 'magnet') magnets.push(t);
     if (bridges.has(t.id)) bridgeCentres.push({ rx, ry });
   }
   if (centres.length === 0) minRx = maxRx = minRy = maxRy = 0;
-  return { cells, centres, minRx, maxRx, minRy, maxRy, weapons, bridges, bridgeCentres, syn };
+  return {
+    cells,
+    centres,
+    minRx,
+    maxRx,
+    minRy,
+    maxRy,
+    weapons,
+    magnets,
+    bridges,
+    bridgeCentres,
+    syn,
+  };
 }
 
 /** World x of the left edge and y of the top edge of cell (0, 0); cell (gx, gy) starts gx/gy cells further. */

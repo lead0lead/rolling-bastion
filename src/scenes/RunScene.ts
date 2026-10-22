@@ -9,7 +9,7 @@ import { PHASE3_POOL } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
-import { drawSynergyLines } from '../render/lines';
+import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { COLORS } from '../render/palette';
 import { motion, particleCount } from '../render/effects';
 import { Particles } from '../render/particles';
@@ -51,6 +51,8 @@ const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
 const CHARGE_COLOR = COLORS.charge;
 /** Tint of the enraged boss. */
 const ENRAGE_TINT = 0xff6060;
+/** Redraw piece outlines once the zoom has drifted this much (fraction) since the last draw. */
+const OUTLINE_REDRAW_ZOOM = 0.05;
 /** Shell blasts: fade time (s) and colour. */
 const BLAST_FADE = 0.3;
 const BLAST_COLOR = COLORS.blast;
@@ -87,6 +89,8 @@ export class RunScene extends Phaser.Scene {
   /** Chain links, in grid-local coordinates; redrawn when the city changes. */
   private linesGfx!: Phaser.GameObjects.Graphics;
   private linesFor: CityCache | null = null;
+  /** Camera zoom the lines were drawn for (outline widths stay constant on screen). */
+  private linesZoom = 0;
   /** Current drawn barrel angle per weapon tile id. */
   private barrelAngles = new Map<number, number>();
   private enemySprites!: SpritePool;
@@ -97,6 +101,8 @@ export class RunScene extends Phaser.Scene {
   private pulseClock = 0;
   private particles!: Particles;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
+  /** Magnet pulse rings (concept-v2.md §2.9), in game time like blasts. */
+  private magnetRings: { x: number; y: number; r: number; at: number }[] = [];
   /** Render-only wobble phase per (pooled) enemy object. */
   private wobblePhases = new WeakMap<Enemy, number>();
   /** Last tally values seen, to play a sound when they grow. */
@@ -142,6 +148,7 @@ export class RunScene extends Phaser.Scene {
     this.pulseGfx = this.add.graphics().setDepth(1.9);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
+    this.magnetRings = [];
     this.seen = { shots: {}, gems: 0, enemyShots: 0, boss: false, charge: 'walk' };
 
     this.cam = { x: this.world.x, y: this.world.y, zoom: this.targetZoom() };
@@ -414,10 +421,14 @@ export class RunScene extends Phaser.Scene {
     this.barrelSprites.end();
     this.tileSprites.end();
     this.crackSprites.end();
-    if (this.linesFor !== w.cache) {
+    const zoomDrift = Math.abs(this.cam.zoom / this.linesZoom - 1);
+    if (this.linesFor !== w.cache || zoomDrift > OUTLINE_REDRAW_ZOOM) {
       this.linesFor = w.cache;
+      this.linesZoom = this.cam.zoom;
       this.linesGfx.clear();
-      drawSynergyLines(this.linesGfx, w.cache.syn, cell, 0, 0);
+      drawPieceOutlines(this.linesGfx, w.city.tiles, cell, 0, 0, 1 / this.cam.zoom);
+      drawSynergyLines(this.linesGfx, w.cache.syn.chains, cell, 0, 0);
+      drawBuffPips(this.linesGfx, w.city.tiles, w.cache.syn, cell, 0, 0);
     }
     this.linesGfx.setPosition(left, top);
 
@@ -502,6 +513,9 @@ export class RunScene extends Phaser.Scene {
       } else if (ev.kind === 'blast') {
         this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
         playSfx(this, ev.bomb ? 'bomb' : 'blast');
+      } else if (ev.kind === 'magnetPulse') {
+        this.magnetRings.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
+        playSfx(this, 'gem');
       } else if (ev.kind === 'bossPhase') {
         if (motion()) camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
         playSfx(this, 'boss-phase');
@@ -585,5 +599,15 @@ export class RunScene extends Phaser.Scene {
       g.strokeCircle(b.x, b.y, b.r);
     }
     this.blasts.length = n;
+    const m = FX.magnetPulse;
+    n = 0;
+    for (const ring of this.magnetRings) {
+      const age = (w.time - ring.at) / m.time;
+      if (age >= 1) continue;
+      this.magnetRings[n++] = ring;
+      g.lineStyle(m.width, TILES.magnet.color, m.alpha * (1 - age));
+      g.strokeCircle(ring.x, ring.y, ring.r * (motion() ? age : 1));
+    }
+    this.magnetRings.length = n;
   }
 }

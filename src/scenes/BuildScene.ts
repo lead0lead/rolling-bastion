@@ -7,7 +7,9 @@ import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
-import { drawSynergyLines } from '../render/lines';
+import { tileDetails } from '../render/buffText';
+import { RulesLegend } from './RulesLegend';
+import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
 import { COLORS, css, FONT } from '../render/palette';
 import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
@@ -25,6 +27,7 @@ import {
   pickOffer,
   pickUpAt,
   previewAt,
+  previewChains,
   redo,
   reroll,
   rotate,
@@ -58,7 +61,7 @@ import type { BuildResult } from '../sim/progression';
 import { rollOffers } from '../sim/progression';
 import { rollLand } from '../sim/land';
 import { createRng, type Rng } from '../sim/rng';
-import { computeSynergies, type Synergies } from '../sim/synergies';
+import { chainBonusFor, computeSynergies, type Chain, type Synergies } from '../sim/synergies';
 import { typeLevel } from '../sim/upgrades';
 
 /** Data for a build pause inside a run. Without it the scene runs as a sandbox. */
@@ -116,6 +119,20 @@ const SCRAP = { x: 30, y: 590, w: 250, h: 106 };
 const ARC_PREVIEW_CELLS = 1.6;
 const ARC_FILL_ALPHA = 0.18;
 const ARC_LINE_ALPHA = 0.55;
+/** First-time chain hint (concept-v2.md §3.3; draft text, the user's to rewrite). Not saved. */
+const CHAIN_HINT = {
+  key: 'chainHintShown',
+  width: 420,
+  text:
+    'Chains: line up 3 or more identical tiles facing the same way: each gets +50% damage. ' +
+    'Generators and Engines chain too.\n(click to close)',
+};
+
+/**
+ * Hovered support tile (concept-v2.md §3.3): tint alpha on the tiles it buffs,
+ * arrow start/end along the way to them and head size, in cells.
+ */
+const HOVER_BUFF = { tint: 0.35, arrowFrom: 0.3, arrowTo: 0.62, head: 0.14 };
 const OFFLINE_TINT = COLORS.offline;
 /** Pointer travel (px) that turns a click into a drag. */
 const DRAG_THRESHOLD = 6;
@@ -188,6 +205,13 @@ export class BuildScene extends Phaser.Scene {
   /** Chain links, between tile bodies and barrels. */
   private lines!: Phaser.GameObjects.Graphics;
   private syn!: Synergies;
+  /** Last chain preview, recomputed when the held group or its cell changes. */
+  private chainPreview: { held: unknown; x: number; y: number; chains: Chain[] } | null = null;
+  private chainLabels: Phaser.GameObjects.Text[] = [];
+  private chainLabelsShown = 0;
+  private legend!: RulesLegend;
+  /** First-time chain hint card (concept-v2.md §3.3), once per session. */
+  private hint: Phaser.GameObjects.Text | null = null;
   private tileImgs!: SpritePool;
   private crackImgs!: SpritePool;
   private barrelImgs!: SpritePool;
@@ -283,7 +307,7 @@ export class BuildScene extends Phaser.Scene {
           'Scrap: drag onto SCRAP, or X (selection or hovered)',
           'Bridges: B · Arcs: V · Confirm: Enter',
           'Pan: WASD / arrows / middle-drag',
-          'Zoom: wheel · Fit: F or Home',
+          'Zoom: wheel · Fit: F or Home · Rules: H or ?',
           ...(DEBUG ? ['Debug: K destroys hovered tile · F2 offers land'] : []),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
@@ -343,6 +367,7 @@ export class BuildScene extends Phaser.Scene {
       .setOrigin(1, 0);
 
     this.adoptUi();
+    this.legend = new RulesLegend(this, this.uiLayer, 640, 360);
     this.newPause(
       this.run?.offers ?? rollOffers(this.rng, SANDBOX_POOL, OFFERS.count),
       this.run?.land ?? null,
@@ -557,6 +582,15 @@ export class BuildScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
+      if (this.legend.visible) {
+        this.legend.setVisible(false);
+        return;
+      }
+      if (this.hint?.visible && this.hint.getBounds().contains(p.x, p.y)) {
+        this.hint.setVisible(false);
+        playSfx(this, 'ui-click');
+        return;
+      }
       if (p.middleButtonDown()) {
         const c = this.boardCam;
         this.midDrag = { x: p.x, y: p.y, scrollX: c.scrollX, scrollY: c.scrollY };
@@ -679,6 +713,13 @@ export class BuildScene extends Phaser.Scene {
   }
 
   private onKey(e: KeyboardEvent): void {
+    const legendKey = e.code === 'KeyH' || e.key === '?';
+    if (legendKey || (this.legend.visible && e.code === 'Escape')) {
+      this.legend.setVisible(!this.legend.visible && legendKey);
+      playSfx(this, 'ui-toggle');
+      return;
+    }
+    if (this.legend.visible) return;
     const s = this.session;
     const cell = this.cellAt(this.pointer.x, this.pointer.y);
     switch (e.code) {
@@ -866,7 +907,9 @@ export class BuildScene extends Phaser.Scene {
     this.drawGrid();
     this.drawCards();
     this.drawPanels();
+    this.chainLabelsShown = 0;
     this.drawHeld();
+    this.chainLabels.forEach((l, i) => l.setVisible(i < this.chainLabelsShown));
     this.drawHeldLand();
     for (const pool of pools) pool.end();
     this.updateTooltip();
@@ -1007,8 +1050,10 @@ export class BuildScene extends Phaser.Scene {
         fg.strokeCircle(tx + cs / 2, ty + cs / 2, cs * 0.34);
       }
     }
-    drawSynergyLines(this.lines, this.syn, cs, r.x, r.y);
-    this.drawGroupOutlines(city.tiles, r.x, r.y, cs, COLORS.groupOutline, 0.45, 2 * px);
+    drawSynergyLines(this.lines, this.syn.chains, cs, r.x, r.y);
+    drawPieceOutlines(this.fg, city.tiles, cs, r.x, r.y, px);
+    drawBuffPips(this.fg, city.tiles, this.syn, cs, r.x, r.y);
+    this.drawBuffTargets();
     const selected = new Set(selectedGroups(this.session));
     if (selected.size > 0) {
       const tiles = city.tiles.filter((t) => selected.has(t.groupId));
@@ -1064,6 +1109,74 @@ export class BuildScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Chains the held tiles would form or extend at (x, y): the link line plus
+   * a floating label per chain (concept-v2.md §3.3).
+   */
+  private drawChainPreview(x: number, y: number): void {
+    const s = this.session;
+    const memo = this.chainPreview;
+    if (!memo || memo.held !== s.held || memo.x !== x || memo.y !== y) {
+      this.chainPreview = { held: s.held, x, y, chains: previewChains(s, x, y) };
+    }
+    const chains = this.chainPreview?.chains ?? [];
+    if (chains.length > 0 && !this.registry.get(CHAIN_HINT.key)) {
+      this.registry.set(CHAIN_HINT.key, true);
+      this.showChainHint();
+    }
+    drawSynergyLines(this.fg, chains, CELL, 0, 0);
+    const c = this.boardCam;
+    chains.forEach((chain, i) => {
+      let label = this.chainLabels[i];
+      if (!label) {
+        label = this.ui(
+          this.add
+            .text(0, 0, '', {
+              fontFamily: FONT.family,
+              fontStyle: FONT.bold,
+              fontSize: '14px',
+              color: COLORS.text,
+              backgroundColor: css(COLORS.panel),
+              padding: { x: 6, y: 3 },
+            })
+            .setOrigin(0.5, 1)
+            .setDepth(19),
+        );
+        this.chainLabels.push(label);
+      }
+      // Above the chain's middle, in screen coordinates.
+      const wx = ((chain.x0 + chain.x1) / 2 + 0.5) * CELL;
+      const wy = Math.min(chain.y0, chain.y1) * CELL;
+      label
+        .setText(chainLabel(chain))
+        .setPosition(
+          VIEW.x + VIEW.w / 2 + (wx - c.scrollX - VIEW.w / 2) * c.zoom,
+          VIEW.y + VIEW.h / 2 + (wy - c.scrollY - VIEW.h / 2) * c.zoom - 4,
+        )
+        .setVisible(true);
+    });
+    this.chainLabelsShown = chains.length;
+  }
+
+  private showChainHint(): void {
+    this.hint = this.ui(
+      this.add
+        .text(VIEW.x + VIEW.w / 2, VIEW.y + 12, CHAIN_HINT.text, {
+          fontFamily: FONT.family,
+          fontStyle: FONT.weight,
+          fontSize: '14px',
+          color: COLORS.text,
+          backgroundColor: css(COLORS.panel),
+          padding: { x: 14, y: 10 },
+          lineSpacing: 4,
+          align: 'center',
+          wordWrap: { width: CHAIN_HINT.width },
+        })
+        .setOrigin(0.5, 0)
+        .setDepth(21),
+    );
+  }
+
   private drawHeld(): void {
     const s = this.session;
     if (!s.held) return;
@@ -1092,6 +1205,7 @@ export class BuildScene extends Phaser.Scene {
         fg.lineStyle(3 * w, bad ? COLORS.invalid : COLORS.valid, 1);
         fg.strokeRect(x + 2 * w, y + 2 * w, cs - 4 * w, cs - 4 * w);
       });
+      this.drawChainPreview(c.x, c.y);
       return;
     }
 
@@ -1276,12 +1390,83 @@ export class BuildScene extends Phaser.Scene {
     const i = s.held || s.land ? -1 : this.cardAt(this.pointer.x, this.pointer.y);
     const def = s.offers[i];
     if (!def) {
-      this.tooltip.setVisible(false);
+      const t = this.hoveredTile();
+      if (!t) {
+        this.tooltip.setVisible(false);
+        return;
+      }
+      this.tooltip.setText(tileDetails(this.city, this.syn, t)).setVisible(true);
+      const { x, y } = this.pointer;
+      const tw = this.tooltip.width;
+      const th = this.tooltip.height;
+      this.tooltip.setPosition(
+        Phaser.Math.Clamp(x + 18, VIEW.x, VIEW.x + VIEW.w - tw),
+        Phaser.Math.Clamp(y + 18, VIEW.y, VIEW.y + VIEW.h - th),
+      );
       return;
     }
     const r = cardRect(i);
     this.tooltip.setText(pieceDetails(def, this.city, s.upgrades[i] ?? null)).setVisible(true);
     this.tooltip.setPosition(r.x - this.tooltip.width - 10, r.y);
+  }
+
+  /** The placed tile under the pointer in the board view, when nothing is held. */
+  private hoveredTile(): PlacedTile | undefined {
+    const s = this.session;
+    if (s.held || s.land || this.box || !this.inView(this.pointer.x, this.pointer.y))
+      return undefined;
+    const c = this.cellAt(this.pointer.x, this.pointer.y);
+    return tileAt(this.city, c.x, c.y);
+  }
+
+  /**
+   * Hovering a support tile: the tiles it buffs get a tint in its colour and
+   * a short arrow from it (concept-v2.md §3.3).
+   */
+  private drawBuffTargets(): void {
+    const src = this.hoveredTile();
+    if (!src) return;
+    const links = this.syn.links.filter((l) => l.from === src.id);
+    if (links.length === 0) return;
+    const g = this.fg;
+    const cs = CELL;
+    const px = this.px();
+    const color = TILES[src.type].color;
+    const byId = new Map(this.city.tiles.map((t) => [t.id, t]));
+    const sx = (src.gx + 0.5) * cs;
+    const sy = (src.gy + 0.5) * cs;
+    for (const l of links) {
+      const t = byId.get(l.to);
+      if (!t) continue;
+      g.fillStyle(color, HOVER_BUFF.tint);
+      g.fillRect(t.gx * cs, t.gy * cs, cs, cs);
+      const dx = t.gx - src.gx;
+      const dy = t.gy - src.gy;
+      const len = Math.hypot(dx, dy);
+      const ux = dx / len;
+      const uy = dy / len;
+      const ax = sx + ux * cs * HOVER_BUFF.arrowFrom * len;
+      const ay = sy + uy * cs * HOVER_BUFF.arrowFrom * len;
+      const bx = sx + ux * cs * HOVER_BUFF.arrowTo * len;
+      const by = sy + uy * cs * HOVER_BUFF.arrowTo * len;
+      const head = cs * HOVER_BUFF.head;
+      g.lineStyle(5 * px, COLORS.ink, 0.9);
+      g.lineBetween(ax, ay, bx, by);
+      g.lineStyle(3 * px, color, 1);
+      g.lineBetween(ax, ay, bx, by);
+      g.fillStyle(color, 1);
+      g.lineStyle(1.5 * px, COLORS.ink, 0.9);
+      const tri = [
+        bx + ux * head,
+        by + uy * head,
+        bx - uy * head * 0.7,
+        by + ux * head * 0.7,
+        bx + uy * head * 0.7,
+        by - ux * head * 0.7,
+      ] as const;
+      g.fillTriangle(...tri);
+      g.strokeTriangle(...tri);
+    }
   }
 
   private updateStatus(): void {
@@ -1303,6 +1488,14 @@ export class BuildScene extends Phaser.Scene {
     if (this.flash && this.time.now < this.flash.until) lines.push('', this.flash.text);
     this.statusText.setText(lines.join('\n'));
   }
+}
+
+/** "Chain 3: +50% damage" (concept-v2.md §3.3). */
+function chainLabel(c: Chain): string {
+  const bonus = `+${Math.round(chainBonusFor(c.length) * 100)}%`;
+  const what =
+    c.type === 'generator' ? 'fire rate gift' : c.type === 'engine' ? 'speed bonus' : 'damage';
+  return `Chain ${c.length}: ${bonus} ${what}`;
 }
 
 /** "2× Gatling, Hull" style summary of a piece's tiles. */

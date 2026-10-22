@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { LINES, MOVE, XP } from '../src/config/balance';
+import { LINES, MOVE, UPGRADES } from '../src/config/balance';
 import { ENEMIES } from '../src/config/enemies';
 import { TILES, type TileType } from '../src/config/tiles';
 import { damageTile, healTiles, updateProjectiles, updateWeapons } from '../src/sim/combat';
 import { updateEnemies } from '../src/sim/enemies';
 import { tileAt, turnFacing } from '../src/sim/grid';
+import { buffsReceived } from '../src/sim/synergies';
 import { collectGems } from '../src/sim/progression';
 import { spawnEnemy } from '../src/sim/spawner';
 import { cityChanged, createWorld, modsOf, tileCentre, type World } from '../src/sim/world';
@@ -97,13 +98,43 @@ describe('adjacency buffs', () => {
     expect(hull.hp).toBe(hull.maxHp);
   });
 
-  it('Magnets widen the pickup radius city-wide', () => {
+  it('a Magnet pulse pulls in gems within its radius of the Magnet, once per interval', () => {
     const w = worldOf(['u..', 'C..', '...']);
-    const c = tileCentre(w, tile(w, 0, 1));
-    const edge = c.x + 16;
-    w.gems.push({ x: edge + XP.pickupRadius * 1.2, y: c.y, value: 2 });
-    collectGems(w);
+    const pulse = TILES.magnet.pulse;
+    if (!pulse) throw new Error('no pulse');
+    const m = tileCentre(w, tile(w, 0, 0));
+    w.gems.push({ x: m.x, y: m.y - (pulse.radius - 10), value: 2 });
+    w.gems.push({ x: m.x, y: m.y - (pulse.radius + 40), value: 5 });
+    let pulses = 0;
+    for (let i = 0; i < 60 * (pulse.intervalSec * 3 + 0.5); i++) {
+      collectGems(w, DT);
+      pulses += w.events.filter((e) => e.kind === 'magnetPulse').length;
+      w.events.length = 0;
+    }
+    expect(pulses).toBe(3);
     expect(w.xp).toBe(2);
+    expect(w.gems).toHaveLength(1);
+  });
+
+  it('Magnets keep their own timers; offline Magnets do not pulse', () => {
+    const w = worldOf(['uhu', 'C..', '..u']);
+    expect(w.cache.magnets).toHaveLength(2);
+    collectGems(w, DT);
+    const timers = [...w.magnetTimers.values()];
+    expect(timers).toHaveLength(2);
+    expect(timers[0]).not.toBeCloseTo(timers[1] as number);
+  });
+
+  it('Magnet levels widen the pulse; L3 pulses faster, L5 raises the base radius', () => {
+    const pulse = TILES.magnet.pulse;
+    if (!pulse) throw new Error('no pulse');
+    const l2 = worldOf(['u..', 'C..', '...'], { magnet: 2 }).cache.syn.magnetPulse;
+    expect(l2.radius).toBeCloseTo(pulse.radius * (1 + UPGRADES.effectPerLevel));
+    expect(l2.intervalSec).toBe(pulse.intervalSec);
+    const l3 = worldOf(['u..', 'C..', '...'], { magnet: 3 }).cache.syn.magnetPulse;
+    expect(l3.intervalSec).toBeLessThan(pulse.intervalSec);
+    const l5 = worldOf(['u..', 'C..', '...'], { magnet: 5 }).cache.syn.magnetPulse;
+    expect(l5.radius).toBeGreaterThan(pulse.radius * (1 + 4 * UPGRADES.effectPerLevel));
   });
 
   it('Engines add speed after the size penalty', () => {
@@ -207,6 +238,63 @@ describe('weapon chains', () => {
   it('offline weapons break a chain', () => {
     const w = worldOf(['C..', '...', 'ggg']);
     expect(w.cache.syn.chains).toEqual([]);
+  });
+});
+
+describe('buff links', () => {
+  it('records each adjacency buff from an online support tile', () => {
+    const w = worldOf(['ege.', 'Cd..', '....', '....']);
+    const gun = tile(w, 1, 0);
+    const got = buffsReceived(w.cache.syn, gun.id);
+    expect(got.generator?.count).toBe(2);
+    expect(got.generator?.total).toBeCloseTo(2 * (TILES.generator.support?.amount ?? 0));
+    expect(got.shield).toEqual({ count: 1, total: TILES.shield.support?.amount });
+    expect(got.repair).toBeUndefined();
+    const fromShield = w.cache.syn.links.filter((l) => l.from === tile(w, 1, 1).id);
+    expect(fromShield.map((l) => l.to).sort()).toEqual([tile(w, 0, 1).id, gun.id].sort());
+  });
+
+  it('diagonal perks add diagonal links; offline sources give none', () => {
+    const w = worldOf(['h.h.', 'Cd..', 'h.h.', '....'], { shield: 3 });
+    expect(w.cache.syn.links.filter((l) => l.type === 'shield')).toHaveLength(5);
+    const off = worldOf(['C...', '....', '.dh.', '....']);
+    expect(off.cache.syn.links).toEqual([]);
+  });
+});
+
+describe('support chains', () => {
+  const gen = TILES.generator.support?.amount ?? 0;
+
+  it('3+ Generators in a line multiply the fire rate they give, facing ignored', () => {
+    const w = worldOf(['eee.', 'Cg..', '....', '....']);
+    tile(w, 1, 0).facing = turnFacing(0, 1);
+    cityChanged(w);
+    expect(w.cache.syn.chains).toEqual([
+      { type: 'generator', x0: 0, y0: 0, x1: 2, y1: 0, length: 3 },
+    ]);
+    expect(modsOf(w, tile(w, 1, 1)).fireRate).toBeCloseTo(1 + gen * (1 + LINES.chainBonusStep));
+    expect(modsOf(w, tile(w, 1, 1)).damage).toBe(1);
+  });
+
+  it('chained Generators still respect the receiving tile cap', () => {
+    const w = worldOf(['eeee.', 'eg...', 'eC...', '.....', '.....']);
+    const cap = TILES.generator.support?.cap ?? 0;
+    expect(modsOf(w, tile(w, 1, 1)).fireRate).toBeCloseTo(1 + cap);
+  });
+
+  it('3+ Engines in a line multiply their speed bonus', () => {
+    const chained = worldOf(['nnn.', 'C...', '....', '....']);
+    expect(chained.cache.syn.speedFactor).toBeCloseTo(
+      1 + 3 * MOVE.engineBonus * (1 + LINES.chainBonusStep),
+    );
+    const pair = worldOf(['nn..', 'C...', '....', '....']);
+    expect(pair.cache.syn.speedFactor).toBeCloseTo(1 + 2 * MOVE.engineBonus);
+  });
+
+  it('other support tiles do not chain', () => {
+    expect(worldOf(['ddd.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+    expect(worldOf(['rrr.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+    expect(worldOf(['uuu.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
   });
 });
 

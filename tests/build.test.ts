@@ -11,6 +11,7 @@ import {
   pickUpAt,
   placeLandAt,
   previewAt,
+  previewChains,
   redo,
   reroll,
   rotate,
@@ -27,7 +28,8 @@ import {
 } from '../src/sim/build';
 import { LAND_SHAPES } from '../src/config/land';
 import { createCity, tileAt } from '../src/sim/grid';
-import { cityFrom } from './helpers';
+import { updateOnline } from '../src/sim/connectivity';
+import { cityFrom, typedCity } from './helpers';
 
 const DOMINO: PieceDef = {
   id: 'test-domino',
@@ -329,5 +331,37 @@ describe('build session: undo and redo', () => {
     expect(s.land).toEqual(land);
     redo(s);
     expect(s.city.board.size).toBe(grown);
+  });
+});
+
+describe('chain preview', () => {
+  const GUN: PieceDef = {
+    id: 'test-gun',
+    weight: 1,
+    cells: [{ x: 0, y: 0, tile: 'gatling', facing: 0 }],
+  };
+
+  function gunSession() {
+    const city = typedCity(['gg...', 'C....'], { g: 'gatling', C: 'core' });
+    updateOnline(city);
+    const s = startBuild(city, [GUN]);
+    pickOffer(s, 0);
+    return s;
+  }
+
+  it('lists the chains the held tiles would form or extend', () => {
+    const s = gunSession();
+    expect(previewChains(s, 2, 0)).toEqual([
+      { type: 'gatling', x0: 0, y0: 0, x1: 2, y1: 0, length: 3 },
+    ]);
+    expect(s.city.tiles).toHaveLength(3);
+  });
+
+  it('is empty with a gap, a wrong facing or an invalid spot', () => {
+    const s = gunSession();
+    expect(previewChains(s, 3, 0)).toEqual([]);
+    expect(previewChains(s, 1, 0)).toEqual([]);
+    rotate(s);
+    expect(previewChains(s, 2, 0)).toEqual([]);
   });
 });

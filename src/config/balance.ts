@@ -120,7 +120,7 @@ export const UPGRADES = {
   maxLevel: 5,
 } as const;
 
-/** Weapon chains (concept.md §2.7; filled rows/columns removed in v2). */
+/** Weapon and support chains (concept-v2.md §2.7; filled rows/columns removed in v2). */
 export const LINES = {
   /** Identical weapons in a straight line needed for a chain. */
   chainMin: 3,
@@ -128,4 +128,6 @@ export const LINES = {
   chainBonusStep: 0.5,
   /** …up to this bonus (5+ tiles). */
   chainMaxBonus: 1.5,
+  /** Support types that chain too (facing ignored); the bonus multiplies their own effect. */
+  supportChainTypes: ['generator', 'engine'],
 } as const;

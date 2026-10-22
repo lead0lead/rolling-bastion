@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1 (board and land) and 2 (editing UX) done and **merged into `v2`** (2.0.0-alpha.2). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Between phases; session ended 2026-10-22. |
-| **Next step** | **First ask the user** where the new step "Weapons rework and rebalance" (§11, §2.12) goes in the order (before or after Phase 3), then brainstorm its details with them one question at a time (§2.12 lists their requests). Then build the chosen next phase. |
+| **Status** | Phases 1 (board and land) and 2 (editing UX) merged into `v2` (2.0.0-alpha.2). **Phase 3 (readability and synergies) built** on `v2-phase-3-readability` (2.0.0-alpha.3), handed to the user, not merged yet. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 3 hand-over: the user tries the build (§14, 2026-10-22 "Phase 3"). |
+| **Next step** | User feedback on Phase 3; fix what they ask, then merge into `v2` once they are happy. Then Phase 4, the weapons rework (§2.12): brainstorm its details with the user one question at a time before building. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.2` on `v2`. Phase 3 will be `2.0.0-alpha.3`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.3` on `v2-phase-3-readability` (`2.0.0-alpha.2` on `v2`). Phase 4 will be `2.0.0-alpha.4`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 2 merged, session end) |
+| **Last updated** | 2026-10-22 (Phase 3 built and handed over) |
 
 ---
 
@@ -202,7 +202,7 @@ each). Engine chains (§2.7) are the counterweight to big cities.
 Unchanged from v1 (win: kill the Colossus; enrage at 14:00). Lose: the Core
 is destroyed, also in endless.
 
-### 2.7 Synergies (v2)
+### 2.7 Synergies (v2, as implemented in Phase 3)
 
 1. **Exposure:** unchanged.
 2. **Adjacency buffs:** unchanged rules and caps.
@@ -225,6 +225,15 @@ is destroyed, also in endless.
 How bonuses combine (v1 formula without the filled-line term): weapon damage =
 base × level multiplier × (1 + chain bonus + Generator L3 bonus).
 
+As implemented (Phase 3): `LINES.supportChainTypes` lists the chaining
+support types; `findChains` (`src/sim/synergies.ts`) walks weapons and those
+types alike (`chainsType`), facing ignored for supports. A chained
+Generator's fire rate gift and a chained Engine's speed bonus are multiplied
+by 1 + chain bonus; the Generator L3 damage gift is not. `TileMods.chainBonus`
+holds the bonus for every chained tile; only weapons add it to damage.
+Chain lines use the tile's colour, so support chains look like weapon
+chains.
+
 ### 2.8 XP, levels and offers
 
 Unchanged from v1 (`concept.md` §2.8), plus the land step at land levels
@@ -240,15 +249,25 @@ Unchanged from v1 (`concept.md` §2.9), except:
 | **Generator / Engine** | Can form chains (§2.7). |
 | **Saw** (rework requested, not yet planned) | The user finds Saws underwhelming (2026-10-21): instead of only damaging enemies they touch, a Saw should be the origin of a **blade that rotates around it** with a larger hitbox, to make melee builds fun and viable. Details and the phase to do it in: to plan with the user (§11, §12). |
 
+Magnet as implemented (Phase 3): the pulse replaces v1's pickup radius
+bonus and its L3 drift / L5 recall perks. `TILES.magnet.pulse` holds the
+numbers (8 s, 300 px, gems 600 px/s); perks `pulseInterval` (L3, 6 s) and
+`pulseRadius` (L5, base 450 px); level gain ×(1 + 20% per level) on the
+radius. `pulseMagnets` (`src/sim/progression.ts`) keeps one timer per online
+Magnet in `World.magnetTimers` (first value drawn from the seeded RNG,
+pruned in `cityChanged`) and emits a `magnetPulse` event; the run screen
+draws a teal ring growing to the radius over 0.6 s (`FX.magnetPulse`;
+static fade with reduced motion) and plays the quiet `gem` sound.
+
 ### 2.10 Firing arcs
 
 Unchanged from v1 (`concept.md` §2.10).
 
-### 2.11 Endless (v2, draft for Phase 4)
+### 2.11 Endless (v2, draft for Phase 5)
 
 - The win screen after the boss offers **"Keep going"** and **"End run"**
   (decided 2026-10-21).
-- Keep going (Claude's draft, to confirm in Phase 4, user agreed the
+- Keep going (Claude's draft, to confirm in Phase 5, user agreed the
   outline 2026-10-21): spawns resume at the v1 12:00 budget; enemy HP and
   contact/shot damage grow **×1.12 per minute** past the boss kill
   (compounding, on top of v1's +6%/min HP growth); **the Colossus returns**
@@ -260,7 +279,7 @@ Unchanged from v1 (`concept.md` §2.10).
 - The run ends when the Core is destroyed. The end screen reports time
   survived, "Boss defeated", level and kills.
 
-### 2.12 Weapons rework and rebalance (user request 2026-10-22, not planned in detail)
+### 2.12 Weapons rework and rebalance (Phase 4; user request 2026-10-22, not planned in detail)
 
 The user asked for a new step that reworks and rebalances the weapons and
 other tile designs. Their notes, to be turned into a design with them
@@ -364,7 +383,7 @@ existing style, and sounds from the existing set.
   only pans after a fresh (non-repeat) press during the pause. Line widths
   in the board view stay constant on screen.
 
-### 3.3 Readability (v2 additions; v1 rules still apply; Phase 3)
+### 3.3 Readability (v2 additions; v1 rules still apply; as implemented in Phase 3)
 
 - **Board:** board cells are filled and outlined strongly; cells off the
   board show only faint lines (Phase 1).
@@ -389,6 +408,43 @@ existing style, and sounds from the existing set.
 - **Rules legend** (? / H): one panel listing chains, adjacency buffs,
   bridges and offline tiles, with small drawn examples.
 
+As implemented (Phase 3):
+- Piece outlines: `drawPieceOutlines` (`src/render/lines.ts`), ink at 90%
+  for edges (3 screen px) and 35% for seams (1 px). The build screen draws
+  them every frame (they replace Phase 2's faint group outline); the run
+  screen draws them with the chain lines, redrawn when the city changes or
+  the zoom has drifted 5%, so widths stay constant on screen.
+- Buff links: `computeSynergies` records every adjacency buff as a
+  `BuffLink` (source, target, type, amount before caps) in `Synergies.links`;
+  `buffsReceived` sums them per type for one tile. Hull L3 bracing is a link
+  type too (tooltips), but gets no pip.
+- Buff pips: `drawBuffPips` (`src/render/lines.ts`), one dot per Generator /
+  Shield / Repair type along the tile's bottom left, fixed slot per type,
+  in the support colour with an ink rim; in both screens.
+- Hover (build screen, nothing held): a support tile tints the tiles it
+  buffs (35%) and draws a short arrow to each (`HOVER_BUFF`). Any tile shows
+  a tooltip by the pointer (`tileDetails`, `src/render/buffText.ts`): name,
+  level, HP, offline note, "Receives:" lines per buff type with totals,
+  counts and caps (Generator L3 damage on the same line), chain length and
+  bonus, and how many neighbours it buffs.
+- Chain preview: `previewChains` (`src/sim/build.ts`) drops the held group
+  into a copy of the city and returns the chains that contain a held cell
+  (online tiles only, so a spot not connected to the Core shows none). The
+  build screen memoises it per held group and cell, draws the link lines
+  and a label above each chain ("Chain 3: +50% damage"; "fire rate gift"
+  for Generators, "speed bonus" for Engines). v2 had no live chain line
+  before this (the plan's "as v1" was wrong); it is new.
+- First-time hint: the first chain preview in a browser session shows the
+  §3.3 text as a card at the top of the board view until clicked
+  (`CHAIN_HINT`; remembered in the game registry, not saved).
+- Rules legend: `RulesLegend` (`src/scenes/RulesLegend.ts`), opened and
+  closed with H or ? in the build screen (Esc or a click also close it;
+  other input is ignored while open). Four rows (chains, neighbour buffs,
+  connection / bridges / offline, piece outlines), each with an example
+  city drawn by the real synergy, outline and pip code; numbers in the text
+  come from config. Text is a draft (§5). Not in the run screen, where H
+  stays a debug key.
+
 ---
 
 ## 4. Content & Structure
@@ -412,7 +468,9 @@ Unchanged from v1 (`concept.md` §4.3), except endless scaling (§2.11).
 ## 5. Story, Tone & Text
 
 Unchanged from v1. New draft text (user's to rewrite): "New land!", "Place
-the new land first", "Keep going", "End run", the chain hint in §3.3.
+the new land first", "Keep going", "End run", the chain hint in §3.3, the
+rules legend text, tooltip lines ("Receives:", "Buffs n neighbours") and
+chain labels (Phase 3).
 
 ## 6. Look
 
@@ -422,8 +480,8 @@ readability additions in §3.3 and the Magnet pulse ring.
 ## 7. Audio
 
 Unchanged from v1. New events reuse existing sounds: land placed (the grid
-expansion sound), Magnet pulse (a quiet existing sound, rate-limited).
-Claude's call.
+expansion sound), Magnet pulse (the `gem` sound, rate-limited as usual),
+legend open/close (`ui-toggle`), hint closed (`ui-click`). Claude's call.
 
 ## 8. UI, Progress & Saving
 
@@ -454,7 +512,7 @@ Expected changes to the code structure (rebuilt in phases, not in spikes):
 - `sim/connectivity.ts`: Tarjan bridges.
 - `sim/build.ts`: land step; later selection, group move/rotate, undo.
 - `sim/synergies.ts`: no filled lines; support chains (Phase 3).
-- `bench/balance.sim.ts`: bots place land (Phase 1: simple; Phase 4: as
+- `bench/balance.sim.ts`: bots place land (Phase 1: simple; Phase 5: as
   part of balance).
 
 ---
@@ -517,10 +575,10 @@ these v2 changes:
 | **Spike B2 — land shapes** (built, **kept** 2026-10-21) | Board mask; land shapes at set levels, placed touching the board (§2.1). | Kept; pacing retuned to levels 8/15/22/29/36. |
 | **Phase 1 — board and land** | Rebuild Spikes B + B2 properly with tests: Core fixed at (0, 0), sparse open-ended grid, board of buildable cells, land shapes at levels 8/15/22/29/36 (12 cells, 3 offered), Tarjan bridges, filled rows removed, combat camera framing, build screen pan/zoom/fit with the fresh-key rule; old tests updated to the new rules; balance bots place land. | Plays like Spike B2; all tests pass. |
 | **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
-| **Phase 3 — readability and synergies** | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
-| **Phase 4 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
-| **Phase 5 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
-| **Weapons rework and rebalance** (user request 2026-10-22; position in the order and details to agree with the user) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
+| **Phase 3 — readability and synergies** (built 2026-10-22, in hand-over) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
+| **Phase 4 — weapons rework and rebalance** (user request 2026-10-22; placed here by the user 2026-10-22; details to brainstorm with the user before building) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
+| **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
+| **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
 "waves and shop" is gone). If a spike is dropped, its phase is removed or rewritten with the user, and
@@ -533,10 +591,10 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- **Weapons rework and rebalance** (§2.12, user request 2026-10-22): where
-  it goes in the order, and every design detail (to brainstorm with the
+- **Weapons rework and rebalance** (Phase 4, §2.12, user request
+  2026-10-22): every design detail (to brainstorm with the
   user before building; includes the Saw rework).
-- Endless details (§2.11): scaling numbers, Colossus returns (Phase 4).
+- Endless details (§2.11): scaling numbers, Colossus returns (Phase 5).
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
 - v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
@@ -557,7 +615,17 @@ start early if the user asks.
   framing, build view zoom 0.3–3.
 - Support chains multiply the chained tile's own effect; the receiving
   tile's Generator cap stays +75%. If chains then feel pointless, raise the
-  cap for chain-buffed tiles.
+  cap for chain-buffed tiles. The Generator L3 damage gift is not
+  multiplied by chains.
+- Phase 3 readability calls: pips along the tile's bottom left (Generator,
+  Shield, Repair slots; Hull bracing gets none); edge lines 3 px at 90%
+  ink, seams 1 px at 35%; hover tint 35% with arrows; the hint appears on
+  the first chain *preview* (while holding a piece), once per browser
+  session; the chain preview only counts online tiles (a spot not
+  connected to the Core shows no chain); the legend lives in the build
+  screen only (H is a debug key in combat).
+- Magnet pulse replaces the old pickup radius bonus completely; the base
+  pickup radius (24 px) is now the same with or without Magnets.
 
 **Risks**
 
@@ -565,9 +633,10 @@ start early if the user asks.
   tiles, and the 55% speed floor makes size free after a point. Levers: the
   floor, the per-tile penalty, Engine chains.
 - **Readability at low zoom** with big cities and 600 enemies. *Check:*
-  Phase 1 / Phase 3.
+  Phase 1 / Phase 3. Outlines keep a constant screen width; pips scale
+  with the cell and may get too small at zoom 0.4 (12 px cells).
 - **Performance in endless:** many tiles (enemy→nearest tile queries,
-  synergy and bridge recompute) plus elites. *Check:* Phase 4 bench with
+  synergy and bridge recompute) plus elites. *Check:* Phase 5 bench with
   ~200 tiles; tiles may need their own spatial hash.
 
 **Known issues**
@@ -578,10 +647,10 @@ start early if the user asks.
   a GC observer attached; not seen in 4 runs on `v2` before Phase 1).
   Averages are fine (~6.9 ms/step, as before). Not found yet; the scenario
   (600 enemies on one tile) can't happen in a real run without losing.
-  Look again in the Phase 4 performance check.
+  Look again in the Phase 5 performance check.
 - **`npm run bench` times out on this machine** (Vitest's 5 s test
   timeout; the run takes ~7 s) on `v2` as well as on Phase 1: the check
-  never reports a pass here. Raise the bench's timeout in Phase 4, or run
+  never reports a pass here. Raise the bench's timeout in Phase 5, or run
   on a faster machine.
 - v1 known issues (`concept.md` §12) carry over until the code involved is
   rebuilt.
@@ -614,6 +683,33 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase 3: readability and synergies
+- Built on `v2-phase-3-readability`, one commit per step: Generator and
+  Engine chains; Magnet pulse (replaces the pickup bonus and its perks);
+  piece outlines (both screens); buff links and pips (both screens); hover
+  tint + arrows for support tiles and a tooltip for any placed tile;
+  chain preview with labels while holding; first-time chain hint; rules
+  legend (H / ?). Version 2.0.0-alpha.3. Build, type check, lint and 149
+  tests pass. Balance sim runs (all archetypes as before; Saw wall still
+  loses); bots collect every gem, so it can't judge the Magnet pulse.
+- Changed tuning: Magnet (new) every 8 s, 300 px, gems 600 px/s, L3 6 s,
+  L5 base 450 px; removed: +30% pickup radius per Magnet (cap +150%),
+  L3 gem drift, L5 recall.
+- Checked by screenshots (headless Chromium): outlines, pips, hover,
+  tooltip, chain label, hint, legend. Not seen in a real run yet: the
+  Magnet ring and pips at low combat zoom.
+- Found: v2 had no live chain line while holding pieces (the plan said
+  "as v1"); the preview is new.
+- To try: build Generator and Engine lines of 3+; place Magnets apart and
+  watch the pulse rings pull gems; hover support tiles and any tile for
+  the tooltip; hold a piece next to matching tiles; press H in a pause.
+- Next: user feedback, then merge; then Phase 4 brainstorm.
+
+### 2026-10-22 — Phase order changed
+- Decision (user): the weapons rework becomes **Phase 4**; the old Phase 4
+  (endless and balance) becomes Phase 5, polish and hosting Phase 6.
+  Phase 3 (readability and synergies) is next, unchanged.
 
 ### 2026-10-22 — Weapons rework requested
 - Request (user): add a new step for the Saw rework and a general
