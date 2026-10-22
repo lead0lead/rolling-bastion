@@ -421,6 +421,12 @@ As implemented (Phase 3, in progress):
 - Buff pips: `drawBuffPips` (`src/render/lines.ts`), one dot per Generator /
   Shield / Repair type along the tile's bottom left, fixed slot per type,
   in the support colour with an ink rim; in both screens.
+- Hover (build screen, nothing held): a support tile tints the tiles it
+  buffs (35%) and draws a short arrow to each (`HOVER_BUFF`). Any tile shows
+  a tooltip by the pointer (`tileDetails`, `src/render/buffText.ts`): name,
+  level, HP, offline note, "Receives:" lines per buff type with totals,
+  counts and caps (Generator L3 damage on the same line), chain length and
+  bonus, and how many neighbours it buffs.
 
 ---
 

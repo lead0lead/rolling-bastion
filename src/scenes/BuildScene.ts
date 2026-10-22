@@ -7,6 +7,7 @@ import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
+import { tileDetails } from '../render/buffText';
 import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
 import { COLORS, css, FONT } from '../render/palette';
@@ -116,6 +117,11 @@ const SCRAP = { x: 30, y: 590, w: 250, h: 106 };
 const ARC_PREVIEW_CELLS = 1.6;
 const ARC_FILL_ALPHA = 0.18;
 const ARC_LINE_ALPHA = 0.55;
+/**
+ * Hovered support tile (concept-v2.md §3.3): tint alpha on the tiles it buffs,
+ * arrow start/end along the way to them and head size, in cells.
+ */
+const HOVER_BUFF = { tint: 0.35, arrowFrom: 0.3, arrowTo: 0.62, head: 0.14 };
 const OFFLINE_TINT = COLORS.offline;
 /** Pointer travel (px) that turns a click into a drag. */
 const DRAG_THRESHOLD = 6;
@@ -1010,6 +1016,7 @@ export class BuildScene extends Phaser.Scene {
     drawSynergyLines(this.lines, this.syn, cs, r.x, r.y);
     drawPieceOutlines(this.fg, city.tiles, cs, r.x, r.y, px);
     drawBuffPips(this.fg, city.tiles, this.syn, cs, r.x, r.y);
+    this.drawBuffTargets();
     const selected = new Set(selectedGroups(this.session));
     if (selected.size > 0) {
       const tiles = city.tiles.filter((t) => selected.has(t.groupId));
@@ -1277,12 +1284,83 @@ export class BuildScene extends Phaser.Scene {
     const i = s.held || s.land ? -1 : this.cardAt(this.pointer.x, this.pointer.y);
     const def = s.offers[i];
     if (!def) {
-      this.tooltip.setVisible(false);
+      const t = this.hoveredTile();
+      if (!t) {
+        this.tooltip.setVisible(false);
+        return;
+      }
+      this.tooltip.setText(tileDetails(this.city, this.syn, t)).setVisible(true);
+      const { x, y } = this.pointer;
+      const tw = this.tooltip.width;
+      const th = this.tooltip.height;
+      this.tooltip.setPosition(
+        Phaser.Math.Clamp(x + 18, VIEW.x, VIEW.x + VIEW.w - tw),
+        Phaser.Math.Clamp(y + 18, VIEW.y, VIEW.y + VIEW.h - th),
+      );
       return;
     }
     const r = cardRect(i);
     this.tooltip.setText(pieceDetails(def, this.city, s.upgrades[i] ?? null)).setVisible(true);
     this.tooltip.setPosition(r.x - this.tooltip.width - 10, r.y);
+  }
+
+  /** The placed tile under the pointer in the board view, when nothing is held. */
+  private hoveredTile(): PlacedTile | undefined {
+    const s = this.session;
+    if (s.held || s.land || this.box || !this.inView(this.pointer.x, this.pointer.y))
+      return undefined;
+    const c = this.cellAt(this.pointer.x, this.pointer.y);
+    return tileAt(this.city, c.x, c.y);
+  }
+
+  /**
+   * Hovering a support tile: the tiles it buffs get a tint in its colour and
+   * a short arrow from it (concept-v2.md §3.3).
+   */
+  private drawBuffTargets(): void {
+    const src = this.hoveredTile();
+    if (!src) return;
+    const links = this.syn.links.filter((l) => l.from === src.id);
+    if (links.length === 0) return;
+    const g = this.fg;
+    const cs = CELL;
+    const px = this.px();
+    const color = TILES[src.type].color;
+    const byId = new Map(this.city.tiles.map((t) => [t.id, t]));
+    const sx = (src.gx + 0.5) * cs;
+    const sy = (src.gy + 0.5) * cs;
+    for (const l of links) {
+      const t = byId.get(l.to);
+      if (!t) continue;
+      g.fillStyle(color, HOVER_BUFF.tint);
+      g.fillRect(t.gx * cs, t.gy * cs, cs, cs);
+      const dx = t.gx - src.gx;
+      const dy = t.gy - src.gy;
+      const len = Math.hypot(dx, dy);
+      const ux = dx / len;
+      const uy = dy / len;
+      const ax = sx + ux * cs * HOVER_BUFF.arrowFrom * len;
+      const ay = sy + uy * cs * HOVER_BUFF.arrowFrom * len;
+      const bx = sx + ux * cs * HOVER_BUFF.arrowTo * len;
+      const by = sy + uy * cs * HOVER_BUFF.arrowTo * len;
+      const head = cs * HOVER_BUFF.head;
+      g.lineStyle(5 * px, COLORS.ink, 0.9);
+      g.lineBetween(ax, ay, bx, by);
+      g.lineStyle(3 * px, color, 1);
+      g.lineBetween(ax, ay, bx, by);
+      g.fillStyle(color, 1);
+      g.lineStyle(1.5 * px, COLORS.ink, 0.9);
+      const tri = [
+        bx + ux * head,
+        by + uy * head,
+        bx - uy * head * 0.7,
+        by + ux * head * 0.7,
+        bx + uy * head * 0.7,
+        by - ux * head * 0.7,
+      ] as const;
+      g.fillTriangle(...tri);
+      g.strokeTriangle(...tri);
+    }
   }
 
   private updateStatus(): void {
