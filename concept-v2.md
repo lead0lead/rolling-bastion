@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1 (board and land) and 2 (editing UX) merged into `v2` (2.0.0-alpha.2). **Phase 3 (readability and synergies) built** on `v2-phase-3-readability` (2.0.0-alpha.3), handed to the user, not merged yet. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 3 hand-over: the user tries the build (§14, 2026-10-22 "Phase 3"). |
-| **Next step** | User feedback on Phase 3; fix what they ask, then merge into `v2` once they are happy. Then Phase 4, the weapons rework (§2.12): brainstorm its details with the user one question at a time before building. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
+| **Status** | Phases 1 (board and land), 2 (editing UX) and 3 (readability and synergies) done and **merged into `v2`** (2.0.0-alpha.3). v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 4 (weapons rework and rebalance): measuring the current weapons, then brainstorming the design with the user (§2.12). |
+| **Next step** | Agree the Phase 4 design one question at a time, record it in §2.12, then build it on `v2-phase-4-weapons`. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.3` on `v2-phase-3-readability` (`2.0.0-alpha.2` on `v2`). Phase 4 will be `2.0.0-alpha.4`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.3` on `v2`. Phase 4 will be `2.0.0-alpha.4`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 3 built and handed over) |
+| **Last updated** | 2026-10-22 (Phase 3 merged, Phase 4 started) |
 
 ---
 
@@ -575,7 +575,7 @@ these v2 changes:
 | **Spike B2 — land shapes** (built, **kept** 2026-10-21) | Board mask; land shapes at set levels, placed touching the board (§2.1). | Kept; pacing retuned to levels 8/15/22/29/36. |
 | **Phase 1 — board and land** | Rebuild Spikes B + B2 properly with tests: Core fixed at (0, 0), sparse open-ended grid, board of buildable cells, land shapes at levels 8/15/22/29/36 (12 cells, 3 offered), Tarjan bridges, filled rows removed, combat camera framing, build screen pan/zoom/fit with the fresh-key rule; old tests updated to the new rules; balance bots place land. | Plays like Spike B2; all tests pass. |
 | **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
-| **Phase 3 — readability and synergies** (built 2026-10-22, in hand-over) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
+| **Phase 3 — readability and synergies** (done, merged 2026-10-22) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
 | **Phase 4 — weapons rework and rebalance** (user request 2026-10-22; placed here by the user 2026-10-22; details to brainstorm with the user before building) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
 | **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
 | **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
@@ -683,6 +683,12 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase 3 merged
+- Decision (user): "merge and continue" without change requests; merged
+  `v2-phase-3-readability` into `v2`. Claude's Phase 3 calls (§12) stand
+  until the user says otherwise.
+- Next: Phase 4, weapons rework: measure first, then brainstorm.
 
 ### 2026-10-22 — Phase 3: readability and synergies
 - Built on `v2-phase-3-readability`, one commit per step: Generator and
