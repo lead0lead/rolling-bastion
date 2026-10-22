@@ -408,6 +408,13 @@ existing style, and sounds from the existing set.
 - **Rules legend** (? / H): one panel listing chains, adjacency buffs,
   bridges and offline tiles, with small drawn examples.
 
+As implemented (Phase 3, in progress):
+- Piece outlines: `drawPieceOutlines` (`src/render/lines.ts`), ink at 90%
+  for edges (3 screen px) and 35% for seams (1 px). The build screen draws
+  them every frame (they replace Phase 2's faint group outline); the run
+  screen draws them with the chain lines, redrawn when the city changes or
+  the zoom has drifted 5%, so widths stay constant on screen.
+
 ---
 
 ## 4. Content & Structure

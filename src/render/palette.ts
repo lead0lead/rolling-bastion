@@ -18,8 +18,7 @@ export const COLORS = {
   invalid: 0xf0405a,
   valid: 0x2fbf71,
   bridge: 0xffb703,
-  /** Outlines of piece groups and the hovered group. */
-  groupOutline: 0x2b2f3a,
+  /** Outline of the hovered group. */
   hover: 0x2b2f3a,
   /** Selected groups and the box select (concept-v2.md §3.1). */
   selection: 0x3a86ff,

@@ -1,10 +1,57 @@
 import Phaser from 'phaser';
 import { TILES } from '../config/tiles';
+import { cellId, type PlacedTile } from '../sim/grid';
 import type { Synergies } from '../sim/synergies';
 import { COLORS } from './palette';
 
 /** Look of chain links (dark ink line, white dots) (concept.md §2.7, §6). */
 const CHAIN = { glowWidth: 0.34, glowAlpha: 0.35, coreWidth: 0.09, coreAlpha: 0.95, dot: 0.1 };
+
+/**
+ * Piece outlines (concept-v2.md §3.3): screen px widths of the border where a
+ * tile meets another group or empty space, and of the seam between tiles of
+ * the same group.
+ */
+const OUTLINE = { edge: 3, edgeAlpha: 0.9, seam: 1, seamAlpha: 0.35 };
+
+/**
+ * Draws piece outlines for a grid whose cell (0, 0) has its top-left corner
+ * at (ox, oy), with cells of `cs` px; `px` is one screen pixel in these units.
+ */
+export function drawPieceOutlines(
+  g: Phaser.GameObjects.Graphics,
+  tiles: readonly PlacedTile[],
+  cs: number,
+  ox: number,
+  oy: number,
+  px: number,
+): void {
+  const group = new Map<number, number>();
+  for (const t of tiles) group.set(cellId(t.gx, t.gy), t.groupId);
+  const edge = (t: PlacedTile, dx: number, dy: number) => {
+    const x0 = ox + (t.gx + (dx > 0 ? 1 : 0)) * cs;
+    const y0 = oy + (t.gy + (dy > 0 ? 1 : 0)) * cs;
+    if (dx !== 0) g.lineBetween(x0, y0, x0, y0 + cs);
+    else g.lineBetween(x0, y0, x0 + cs, y0);
+  };
+  // Seams: each shared edge once (right and down neighbours only).
+  g.lineStyle(OUTLINE.seam * px, COLORS.ink, OUTLINE.seamAlpha);
+  for (const t of tiles) {
+    if (group.get(cellId(t.gx + 1, t.gy)) === t.groupId) edge(t, 1, 0);
+    if (group.get(cellId(t.gx, t.gy + 1)) === t.groupId) edge(t, 0, 1);
+  }
+  g.lineStyle(OUTLINE.edge * px, COLORS.ink, OUTLINE.edgeAlpha);
+  for (const t of tiles) {
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      if (group.get(cellId(t.gx + dx, t.gy + dy)) !== t.groupId) edge(t, dx, dy);
+    }
+  }
+}
 
 /**
  * Draws weapon chain links for a grid whose cell (0, 0) has its top-left

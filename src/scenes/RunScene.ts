@@ -9,7 +9,7 @@ import { PHASE3_POOL } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
 import { barrelFor } from '../render/icons';
-import { drawSynergyLines } from '../render/lines';
+import { drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { COLORS } from '../render/palette';
 import { motion, particleCount } from '../render/effects';
 import { Particles } from '../render/particles';
@@ -51,6 +51,8 @@ const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
 const CHARGE_COLOR = COLORS.charge;
 /** Tint of the enraged boss. */
 const ENRAGE_TINT = 0xff6060;
+/** Redraw piece outlines once the zoom has drifted this much (fraction) since the last draw. */
+const OUTLINE_REDRAW_ZOOM = 0.05;
 /** Shell blasts: fade time (s) and colour. */
 const BLAST_FADE = 0.3;
 const BLAST_COLOR = COLORS.blast;
@@ -87,6 +89,8 @@ export class RunScene extends Phaser.Scene {
   /** Chain links, in grid-local coordinates; redrawn when the city changes. */
   private linesGfx!: Phaser.GameObjects.Graphics;
   private linesFor: CityCache | null = null;
+  /** Camera zoom the lines were drawn for (outline widths stay constant on screen). */
+  private linesZoom = 0;
   /** Current drawn barrel angle per weapon tile id. */
   private barrelAngles = new Map<number, number>();
   private enemySprites!: SpritePool;
@@ -417,9 +421,12 @@ export class RunScene extends Phaser.Scene {
     this.barrelSprites.end();
     this.tileSprites.end();
     this.crackSprites.end();
-    if (this.linesFor !== w.cache) {
+    const zoomDrift = Math.abs(this.cam.zoom / this.linesZoom - 1);
+    if (this.linesFor !== w.cache || zoomDrift > OUTLINE_REDRAW_ZOOM) {
       this.linesFor = w.cache;
+      this.linesZoom = this.cam.zoom;
       this.linesGfx.clear();
+      drawPieceOutlines(this.linesGfx, w.city.tiles, cell, 0, 0, 1 / this.cam.zoom);
       drawSynergyLines(this.linesGfx, w.cache.syn, cell, 0, 0);
     }
     this.linesGfx.setPosition(left, top);
