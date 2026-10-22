@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1 (board and land), 2 (editing UX) and 3 (readability and synergies) done and **merged into `v2`** (2.0.0-alpha.3). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 4 (weapons rework and rebalance): measuring the current weapons, then brainstorming the design with the user (§2.12). |
-| **Next step** | Agree the Phase 4 design one question at a time, record it in §2.12, then build it on `v2-phase-4-weapons`. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
+| **Status** | Phases 1–4 merged into `v2` (2.0.0-alpha.4). v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 4 merged into `v2` as is (user decision 2026-10-22); `v2` and the phase branches pushed. |
+| **Next step** | Phase 5 (endless and balance) on `v2-phase-5-endless`, including the Spear/Flamethrower boss gap carried over from Phase 4 (§12). Then Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.3` on `v2`. Phase 4 will be `2.0.0-alpha.4`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.4` on `v2`. Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 3 merged, Phase 4 started) |
+| **Last updated** | 2026-10-22 (Phase 4 merged and pushed) |
 
 ---
 
@@ -302,6 +302,166 @@ other tile designs. Their notes, to be turned into a design with them
 - "Other designs" are in scope too: ask the user which other tiles to
   revisit.
 
+**Measured 2026-10-22** (`bench/weapons.sim.ts`: 8 tiles of one weapon
+ringed around the Core, invulnerable, driving circles through the normal
+spawns; effective damage per tile per second, overkill not counted):
+Gatling 2.7 / 5.8 / 10.5 / 17.3 at 0–3 / 3–6 / 6–9 / 9–12 min, Cannon
+2.1 / 4.9 / 8.5 / 11.1, Mortar 1.8 / 4.7 / 8.2 / 13.8, Saw 0.8 / 1.5 /
+2.6 / 1.0. Mortar shells land on nobody 75% of the time early (35% at
+9–12 min, in dense crowds): a shell flies up to ~1.25 s while
+enemies move 75–175 px, and the blast is 48 px; it is aimed where the
+target was.
+
+**Decisions (user, 2026-10-22):**
+- Phase 4 adds **all three new weapons** (piercing crossbow, close-range
+  flamethrower with damage over time, thrusting spear), next to the
+  reworked Gatling, Cannon, Mortar and Saw.
+- **Synergies between weapon types are enemy effects that combo:** each
+  weapon puts a status on enemies it hits and other weapons profit from it
+  (draft from the brainstorm: Flamethrower → burning, Gatling +X% vs
+  burning; Cannon → stagger, Mortar profits; Saw/Spear → snag (slow),
+  Crossbow profits; Crossbow → mark, Cannon profits). Details still open.
+- **Buff the others, don't nerf the Gatling hard:** "Each weapon should
+  feel powerful." The Gatling stays roughly as is (at most a light trim if
+  it still leads by far); the other weapons are raised to its level. Enemy
+  toughness may have to rise in Phase 5 to keep runs hard.
+
+- **Mortar:** leads the target (aims where it will be when the shell
+  lands), faster shells, bigger blast, more damage (user picked
+  "lead + faster + bigger").
+- **Saw:** the blade circles at **1.5 cells** (~48 px) from the Saw's
+  centre and passes harmlessly over the city's own tiles, so a Saw works on
+  the edge and one row in, behind Plating.
+- **Spear:** thrusts **straight ahead** in its facing (fixed, no aiming),
+  ~3 cells out over its own tiles, about once a second, hitting every
+  enemy along it.
+- **Crossbow:** slow heavy bolt, long range, narrow arc, **pierces every
+  enemy** in its path.
+- **Flamethrower:** sprays a cone (~80 px, 60°) aimed at the nearest enemy
+  in its arc; everything in the cone takes damage and **keeps burning
+  ~3 s**.
+- **Combo table (agreed as proposed):**
+
+  | Status | Applied by | Lasts | Effect | Profits (+50% damage) |
+  |---|---|---|---|---|
+  | Burning | Flamethrower | 3 s | damage over time | Gatling, Saw |
+  | Snagged | Saw, Spear | 1 s | slowed 40% | Mortar, Flamethrower |
+  | Staggered | Cannon, Mortar | 0.4 s | stops moving | Crossbow, Spear |
+  | Marked | Crossbow | 4 s | — | Cannon |
+
+  The Gatling applies nothing; it cashes in on fire.
+- **No other tiles** change in Phase 4 (support and structure stay).
+
+**Phase 4 plan (Claude's draft numbers, to tune by playing and the sim):**
+
+| Weapon | HP | Attack | Applies / profits | L3 perk | L5 perk |
+|---|---|---|---|---|---|
+| Gatling | 35 | unchanged: 4 dmg, 8/s, 270, 180° | — / Burning | unchanged | unchanged |
+| Cannon | 35 | 30 → **45** dmg, 0.8/s, 380, 90°, knockback | Staggered / Marked | unchanged (arc 135°) | unchanged (pierce 3) |
+| Mortar | 35 | 20 → **30** dmg, blast 48 → **64**, shell 280 → **420** px/s, leads the target, 0.5/s, 80–350 | Staggered / Snagged | blast → 96 | unchanged (3-shell salvo) |
+| Saw | 60 | blade at 48 px, blade radius 14 px, **1.5 turns/s**, **18 dmg** per hit, each enemy hit at most every 0.25 s; the body no longer deals contact damage; Generators speed up the spin | Snagged / Burning | second blade opposite | blade reach 48 → 64 px |
+| Crossbow (new) | 35 | **60 dmg**, 0.7/s, range 450, 60° arc, bolt 700 px/s, pierces all | Marked / Staggered | +1 bolt per shot (small spread) | arc 60° → 120° |
+| Flamethrower (new) | 40 | cone 80 px, 60°, aimed in a 180° arc; 10 puffs/s × **2 dmg** to everything in the cone; burn **6 dmg/s** for 3 s (refreshed, not stacked) | Burning / Snagged | reach 80 → 112 px | burn damage ×2 |
+| Spear (new) | 40 | thrust every **1.0 s**, reach 96 px from the centre, 16 px wide, **35 dmg** to every enemy on the line | Snagged / Staggered | reach 96 → 128 px | double thrust (two jabs per cycle) |
+
+- Status details: burn damage uses the Flamethrower's damage multiplier
+  and is credited to it; bonuses don't stack between statuses (×1.5 once
+  if the target has any status the weapon profits from). The Colossus can
+  burn and be marked but ignores snag and stagger (it can't be stopped);
+  elites take them normally.
+- Readability: each status shows on the enemy (Burning orange flicker,
+  Snagged blue ring, Staggered white flash, Marked red reticle); the tile
+  tooltip lists "Applies: … · Profits from: …"; the rules legend gets a
+  combo row.
+- Pieces (new letters: x Crossbow, f Flamethrower, k Spear): domino and one
+  tromino per new weapon in the pool; sandbox pool too.
+- Visuals in the existing style: icon and barrel for each new tile, a bolt
+  projectile, a flame cone, a spear shaft that juts out on each thrust,
+  the Saw's blade as a spinning disc on its orbit. Sounds from the
+  existing set.
+- Steps: (1) measurement bench + enemy statuses and combo bonuses;
+  (2) Cannon and Mortar buffs with stagger and target leading; (3) Saw
+  blade; (4) Crossbow; (5) Flamethrower; (6) Spear; (7) pieces, tooltips,
+  legend, status visuals; (8) balance sim archetypes for every weapon and
+  a combo build, tuning pass; (9) version 2.0.0-alpha.4 and docs.
+- Target: in the measurement bench every weapon within about ±25% of the
+  Gatling's damage per tile; in the balance sim every single-weapon build
+  can win, and the mixed combo build does best.
+
+**As implemented (Phase 4):**
+- Statuses: `src/config/statuses.ts` (`STATUS`: durations, snag speed
+  factor, combo bonus); each tile's `combo` (`applies`, `profitsFrom`,
+  `burnDps`) in `TILES`. `Enemy` has `burnUntil` / `snagUntil` /
+  `staggerUntil` / `markUntil` (game time) and `burnDps`. In
+  `src/sim/combat.ts`: `hitEnemy` applies `comboFactor` (×1.5 once), deals
+  the damage through `damageEnemy` (plain damage, credits `damageBy`), then
+  `applyStatus` with the source's status (burn strength scaled by the hit's
+  damage multiplier); `updateBurns` runs each tick after projectiles and
+  credits the burning-applying type; `statusSpeed` gives 0 / 0.6 / 1 for
+  enemy movement. The Colossus ignores snag and stagger.
+- Cannon 45 dmg; Mortar 30 dmg, blast 64 (L3 96), shells 420 px/s,
+  `leadsTarget`: `leadPoint` solves the intercept from the target's
+  movement over the last tick (exact, falls back to the current position
+  if it can't be caught).
+- Saw: `TILES.saw.blade` (orbit 48, **radius 20** instead of the draft 14,
+  so the blade also reaches an enemy pressed against the Saw itself;
+  1.5 turns/s, 18 dmg, 0.25 s per-blade cooldown per enemy). Perks:
+  `extraBlades` (L3), `bladeOrbit` (L5, 64 px); the old Snag/Guard perks
+  and the Saw's contact damage are gone (`TileMods.slow` and `contactDps`
+  removed; Plating L5 thorns stay). `updateBlades` runs after the weapons,
+  keeps the angle in `WeaponState.aim` and tracks the last blade hit per
+  enemy (`bladeHitAt` / `bladeHitBy`). Run screen: toothed discs on the
+  orbit; build screen: the blade path as a ring with the arcs (hover / V).
+- Crossbow (`crossbow`, letter x, colour 0xe0a43a): `pierceAll` makes
+  `WeaponStats.pierce` Infinity; spread 2° so the L3 twin bolt fans out.
+  Bow barrel, dark bolt sprite rotated to its flight, `shot-cannon` sound.
+  Pieces `domino-crossbow` (0.8), `l3-crossbow` (0.6); sandbox
+  `l3-crossbow`.
+- Flamethrower (`flamethrower`, letter f, colour 0xff5e3a): a weapon
+  with `coneDeg` 60; each shot is `sprayCone` (every enemy within range
+  and the cone around the aim) instead of a projectile; `hitEnemy` takes
+  an optional burn dps (damage multiplier × `burnFactor`, L5 ×2). Perk
+  kinds `range` (L3 112 px) and `burnFactor`. `WeaponState.firedAt`
+  drives the drawn cone (three layered wedges for 0.15 s, flickering).
+  Tank icon, nozzle barrel. Pieces `domino-flamer`, `l3-flamer`; sandbox
+  `l3-flamer`.
+- Spear (`spear`, letter k, colour 0xc8963e): `TILES.spear.thrust`
+  (interval 1 s, reach 96, width 16, 35 dmg, jab gap 0.25 s); perks
+  `thrustReach` (L3 128) and `extraJabs` (L5). `updateThrusts` runs after
+  the blades: fixed along the facing, every enemy within the line, Colossus
+  included; `WeaponState` reused (cooldown to next jab, `aimTimer` = jabs
+  left, `firedAt` for the drawn shaft). Spears chain only with the same
+  facing (`ignoresFacing` is false for thrust tiles). Run screen: a shaft
+  with a white head juts out 0.06 s and pulls back 0.16 s; build screen:
+  the stab line with the arcs. Spearhead barrel, `ui-place` sound. Pieces
+  `domino-spear` (0.8), `i3-spear` (0.5); sandbox `i3-spear`.
+- Readability: burning enemies are tinted orange; snagged get a blue
+  ring, staggered a white ring, marked a red reticle (`drawStatuses`,
+  `STATUS_LOOK`, colours in `COLORS`). Tile tooltips and piece cards add
+  "Applies: … · +50% vs …" (`comboLine`, `src/render/buffText.ts`); the
+  rules legend has a combo row generated from config (panel 620 px tall).
+- Debug: `F4` in a run fills every empty board cell with all weapon types
+  in turn, facing outward (`debugFillWeapons`).
+- **Tuned values (step 8; the draft table above is the starting point):**
+  Cannon 45 dmg at **1.2 shots/s** (a 55-dmg try changed nothing: its
+  shells already overkill the 6–30 HP enemies, so more shots beat bigger
+  ones); Saw HP 60 → **90**, blade **26** dmg, blade radius 20; Spear HP
+  40 → **70**, **80** dmg, a jab every **0.8 s**, line **24** px wide;
+  Flamethrower HP 40 → **60**, **3** dmg per puff, burn **8**/s, reach
+  **96** px (L3 128). Mortar and Crossbow as drafted.
+- Fixed: each Saw blade keeps its own recent hits (`World.bladeHits`,
+  pruned in `cityChanged`); with one "last blade" per enemy, a big enemy
+  under several blades was hit every tick (Saw builds killed the Colossus
+  in 3 s).
+- Sims: `npm run sim:balance` and `npm run sim:weapons` (or `npm run sim`
+  for both). The runs are split over shard files (`bench/balance.shard1–6`,
+  `bench/weapons.shard1–4`, logic in `bench/balance.ts` /
+  `bench/weapons.ts`) so Vitest runs them on several cores: a full balance
+  run takes ~6 min instead of ~30 on 8 cores. Filters: `SIM_SEEDS`,
+  `SIM_XP`, `SIM_ARCH` (parts of build names), `SIM_WEAPONS` (tile types).
+  New builds: Saw grinder, Crossbow lines, Flame ring, Spear wall, Combo
+  mix; melee builds' bot drives into the Colossus instead of fleeing it.
+
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,
 then change numbers and mechanics in config with tests per weapon, and
@@ -492,7 +652,7 @@ legend open/close (`ui-toggle`), hint closed (`ui-click`). Claude's call.
 - **End screen:** as v1; the final city is drawn on its board.
 - **Saving:** none (unchanged). Settings key unchanged.
 - **Debug** (v1 keys, changes): `F2` = level-up with land (was: grow the
-  grid); in the build screen `F2` offers land; `F3` fills every empty board
+  grid); `F4` = fill the board with every weapon type (Phase 4); in the build screen `F2` offers land; `F3` fills every empty board
   cell with Gatlings. `?sandbox=1` opens the build screen alone.
 
 ---
@@ -576,8 +736,8 @@ these v2 changes:
 | **Phase 1 — board and land** | Rebuild Spikes B + B2 properly with tests: Core fixed at (0, 0), sparse open-ended grid, board of buildable cells, land shapes at levels 8/15/22/29/36 (12 cells, 3 offered), Tarjan bridges, filled rows removed, combat camera framing, build screen pan/zoom/fit with the fresh-key rule; old tests updated to the new rules; balance bots place land. | Plays like Spike B2; all tests pass. |
 | **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
 | **Phase 3 — readability and synergies** (done, merged 2026-10-22) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
-| **Phase 4 — weapons rework and rebalance** (user request 2026-10-22; placed here by the user 2026-10-22; details to brainstorm with the user before building) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
-| **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
+| **Phase 4 — weapons rework and rebalance** (done, merged 2026-10-22; Spear/Flame boss gap moved to Phase 5) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
+| **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; Spear and Flamethrower builds able to beat the Colossus (§12); performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
 | **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
@@ -591,9 +751,6 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- **Weapons rework and rebalance** (Phase 4, §2.12, user request
-  2026-10-22): every design detail (to brainstorm with the
-  user before building; includes the Saw rework).
 - Endless details (§2.11): scaling numbers, Colossus returns (Phase 5).
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
@@ -605,6 +762,19 @@ start early if the user asks.
   Generators and Engines, as asked.)
 - Carried over from v1: final title, code licence, piece mirroring,
   meta-progression.
+- **Spear and Flamethrower vs the Colossus** (carried into Phase 5):
+  both builds clear waves but lose to the boss in the sim (boss at
+  67–99% HP). Two tuning passes (2026-10-22, reverted) showed more damage
+  doesn't help: Spear 50–60 dmg every 0.5 s, reach 112, and Flamethrower
+  reach 112, 4 dmg/puff, burn 10/s gave only +10–40% early and still lost
+  (a bot that kites instead of charging the boss lost too). Cause: only
+  the few short-range tiles facing the boss reach it, burns don't stack
+  between Flamethrowers, and the Colossus ignores snag and stagger, so
+  neither weapon gets its combo bonus on it. Mechanic options to decide
+  with the user: burns stack per Flamethrower on the Colossus, Spears
+  that turn toward the boss, a bigger Spear reach vs big enemies.
+- The combo build wins but doesn't beat single-weapon builds yet; the
+  combo bonus (+50%) may need to be larger.
 
 **Claude's calls to check**
 
@@ -683,6 +853,70 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase 4 merged
+- Tried two tuning passes for the Spear and Flamethrower builds (see
+  §12); neither build beat the Colossus, so both were reverted to the
+  values the user played.
+- Decision (user): merge Phase 4 as is; carry the Spear/Flame boss gap
+  into Phase 5. Merged `v2-phase-4-weapons` into `v2`; pushed `v2` and
+  the v2 phase and spike branches to `origin` (deploys run only from
+  `main`, so nothing live changed).
+- Next: Phase 5 (endless and balance).
+
+### 2026-10-22 — Phase 4 playtested, session end
+- Feedback (user): after the freeze fix, "tested it and had a ton of fun";
+  continue in a new session. No change requests yet.
+- State: `v2-phase-4-weapons` at 2.0.0-alpha.4, not merged (the user did
+  not say merge; ask first). Build, lint and 165 tests pass. Nothing
+  pushed.
+- Next: ask about merging / tuning, then Phase 5.
+
+### 2026-10-22 — Phase 4: weapons rework
+- Built on `v2-phase-4-weapons`: enemy statuses and combos; Cannon and
+  Mortar buffs with target leading; Saw blade; Crossbow; Flamethrower;
+  Spear; status visuals, combo tooltips and legend row; sims for every
+  weapon; tuning. Version 2.0.0-alpha.4. Build, type check, lint and 165
+  tests pass.
+- Changed tuning: see §2.12 "Tuned values" (Cannon 45 dmg 1.2/s; Mortar
+  30 dmg, blast 64, 420 px/s, leads; Saw HP 90, blade 26; Spear HP 70,
+  80 dmg every 0.8 s; Flamethrower HP 60, 3/puff, burn 8/s, 96 px;
+  Crossbow 60 dmg 0.7/s). Gatling unchanged, as asked.
+- Measured (single weapon, 9–12 min, effective dmg/s per tile): Gatling
+  17.3, Crossbow 15.8, Mortar 15.4, Saw 14.3 (with an 18-dmg blade),
+  Cannon 12.5, Flamethrower 11.8, Spear 11.4 (60 dmg, before the last
+  buffs).
+- Balance sim (2 seeds): Gatling, Cannon, Crossbow, Mortar, Combo mix,
+  Mixed cluster and Saw grinder win both; Saw wall loses narrowly (boss at
+  3% and 52%); Spear wall and Flame ring lose (Flame ring clears waves
+  best, 2700+ kills, but is worn down to 4–5 tiles by the boss). The
+  combo build wins but doesn't beat the single-weapon builds yet; the
+  "combo does best" target is not met in the sim.
+- Fixed: Saw blade hit memory (a big enemy under several blades was hit
+  every tick). Sims now run in parallel shards (~8½ min instead of ~29).
+- Not verified by playing: flames, status marks and the feel of every
+  weapon at real speed (headless screenshots run too slowly).
+- Next: user plays (F4 in a run fills the board with every weapon), then
+  tuning and merge.
+- Bug (user playtest, Firefox): the game froze when holding a 3-Gatling
+  piece in a later pause ("can't access property drawImage, this.data is
+  null" in `drawChainPreview`). The Build scene object is reused between
+  pauses; Phase 3's chain labels and hint were kept in fields across
+  pauses after Phaser had destroyed them. Fixed by resetting them in
+  `create()`. The preview now shows one summary label above all chains
+  ("Chain 6 ×10: +150% damage · Chain 3 ×2: +50% damage") instead of one
+  label per chain, which overlapped badly with many chains.
+
+### 2026-10-22 — Phase 4 design agreed
+- Measured the weapons (`bench/weapons.sim.ts`, §2.12): Gatling leads,
+  Mortar misses most shells early, Saw far behind.
+- Decisions (user): all three new weapons; synergies as enemy-status
+  combos (table in §2.12, accepted as proposed); buff the others instead of
+  nerfing the Gatling ("Each weapon should feel powerful"); Mortar leads
+  + faster + bigger; Saw blade at 1.5 cells; Spear fixed straight ahead;
+  Crossbow heavy piercing bolt; Flamethrower cone + lingering burn; no
+  other tiles in Phase 4.
+- Numbers, perks and pieces are Claude's drafts (§2.12).
 
 ### 2026-10-22 — Phase 3 merged
 - Decision (user): "merge and continue" without change requests; merged

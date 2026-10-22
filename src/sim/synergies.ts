@@ -1,5 +1,12 @@
 import { LINES, MOVE } from '../config/balance';
-import { TILES, type PulseDef, type TileType, type WeaponDef } from '../config/tiles';
+import {
+  TILES,
+  type BladeDef,
+  type ThrustDef,
+  type PulseDef,
+  type TileType,
+  type WeaponDef,
+} from '../config/tiles';
 import { cellId, type CityState, type PlacedTile } from './grid';
 import { levelDamage, levelEffect, levelHpBonus, perk } from './upgrades';
 
@@ -18,10 +25,8 @@ export interface TileMods {
   /** HP/s the tile regenerates by itself (Hull L5). */
   regen: number;
   maxHp: number;
-  /** Damage per second dealt to touching enemies (Saw, Plating L5). */
+  /** Damage per second dealt to touching enemies (Plating L5). */
   thorns: number;
-  /** Speed factor for touching enemies (1 = no slow). */
-  slow: number;
   /** Fraction of contact damage returned to the attacker. */
   reflect: number;
   /**
@@ -63,10 +68,24 @@ export interface WeaponStats extends WeaponDef {
   pierce: number;
   shells: number;
   shellScatter: number;
+  /** Multiplier on the burn this weapon sets (Flamethrower L5). */
+  burnFactor: number;
+}
+
+/** A thrust type's stats with its perks applied. */
+export interface ThrustStats extends ThrustDef {
+  jabs: number;
+}
+
+/** A blade type's stats with its perks applied. */
+export interface BladeStats extends BladeDef {
+  count: number;
 }
 
 export interface Synergies {
   mods: Map<number, TileMods>;
+  blades: Partial<Record<TileType, BladeStats>>;
+  thrusts: Partial<Record<TileType, ThrustStats>>;
   chains: Chain[];
   /** Every adjacency buff, in tile order of the source. */
   links: BuffLink[];
@@ -176,7 +195,6 @@ export function computeSynergies(city: CityState): Synergies {
   const shieldCap = TILES.shield.support?.cap ?? 0;
   const regen = perk(city, 'hull', 'regen')?.hpPerSec ?? 0;
   const platingThorns = perk(city, 'plating', 'thorns')?.dps ?? 0;
-  const sawSlow = perk(city, 'saw', 'slowTouching')?.speedFactor ?? 1;
 
   const mods = new Map<number, TileMods>();
   for (const t of city.tiles) {
@@ -185,13 +203,7 @@ export function computeSynergies(city: CityState): Synergies {
     const chain = def.family === 'weapon' ? (chainBonus.get(t.id) ?? 0) : 0;
     const fireRate = 1 + Math.min(a.fire, fireCap);
     const damage = levelDamage(city, t.type) * (1 + a.genDamage + chain);
-    let thorns = 0;
-    let slow = 1;
-    if (t.online && def.contactDps) {
-      thorns = def.contactDps * damage * fireRate;
-      slow = sawSlow;
-    }
-    if (t.online && t.type === 'plating') thorns += platingThorns;
+    const thorns = t.online && t.type === 'plating' ? platingThorns : 0;
     mods.set(t.id, {
       damage,
       fireRate,
@@ -201,7 +213,6 @@ export function computeSynergies(city: CityState): Synergies {
       regen: t.type === 'hull' ? regen : 0,
       maxHp: def.maxHp * (1 + levelHpBonus(city, t.type) + a.hpBonus),
       thorns,
-      slow,
       reflect: a.reflect,
       chainBonus: chainBonus.get(t.id) ?? 0,
     });
@@ -222,13 +233,33 @@ export function computeSynergies(city: CityState): Synergies {
   };
 
   const weapons: Synergies['weapons'] = {};
+  const blades: Synergies['blades'] = {};
+  const thrusts: Synergies['thrusts'] = {};
   for (const type of Object.keys(TILES) as TileType[]) {
     const w = weaponStats(city, type);
     if (w) weapons[type] = w;
+    const thrust = TILES[type].thrust;
+    if (thrust) {
+      thrusts[type] = {
+        ...thrust,
+        reach: perk(city, type, 'thrustReach')?.px ?? thrust.reach,
+        jabs: 1 + (perk(city, type, 'extraJabs')?.count ?? 0),
+      };
+    }
+    const blade = TILES[type].blade;
+    if (blade) {
+      blades[type] = {
+        ...blade,
+        orbit: perk(city, type, 'bladeOrbit')?.px ?? blade.orbit,
+        count: 1 + (perk(city, type, 'extraBlades')?.count ?? 0),
+      };
+    }
   }
 
   return {
     mods,
+    blades,
+    thrusts,
     chains,
     links,
     weapons,
@@ -261,8 +292,9 @@ export function chainBonusFor(length: number): number {
 
 /** True if a tile type chains regardless of facing (no firing arc: Mortar, Saw, support tiles). */
 function ignoresFacing(type: TileType): boolean {
-  const w = TILES[type].weapon;
-  return !w || w.arcDeg >= 360;
+  const def = TILES[type];
+  if (def.thrust) return false;
+  return !def.weapon || def.weapon.arcDeg >= 360;
 }
 
 const SUPPORT_CHAINS: readonly TileType[] = LINES.supportChainTypes;
@@ -339,9 +371,11 @@ export function weaponStats(city: CityState, type: TileType): WeaponStats | unde
   return {
     ...base,
     arcDeg: perk(city, type, 'arc')?.deg ?? base.arcDeg,
+    range: perk(city, type, 'range')?.px ?? base.range,
+    burnFactor: perk(city, type, 'burnFactor')?.factor ?? 1,
     blastRadius: perk(city, type, 'blastRadius')?.px ?? base.blastRadius,
     projectiles: 1 + (perk(city, type, 'extraProjectiles')?.count ?? 0),
-    pierce: perk(city, type, 'pierce')?.count ?? 0,
+    pierce: base.pierceAll ? Infinity : (perk(city, type, 'pierce')?.count ?? 0),
     shells: shells?.count ?? 1,
     shellScatter: shells?.scatterPx ?? 0,
   };

@@ -7,7 +7,7 @@ import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, SEED } from '../debug/flags';
 import { barrelFor } from '../render/icons';
-import { tileDetails } from '../render/buffText';
+import { comboLine, tileDetails } from '../render/buffText';
 import { RulesLegend } from './RulesLegend';
 import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { createTextures, TEX } from '../render/textures';
@@ -207,8 +207,9 @@ export class BuildScene extends Phaser.Scene {
   private syn!: Synergies;
   /** Last chain preview, recomputed when the held group or its cell changes. */
   private chainPreview: { held: unknown; x: number; y: number; chains: Chain[] } | null = null;
-  private chainLabels: Phaser.GameObjects.Text[] = [];
-  private chainLabelsShown = 0;
+  /** Summary label of the previewed chains (created per pause). */
+  private chainLabel: Phaser.GameObjects.Text | null = null;
+  private chainLabelShown = false;
   private legend!: RulesLegend;
   /** First-time chain hint card (concept-v2.md §3.3), once per session. */
   private hint: Phaser.GameObjects.Text | null = null;
@@ -250,6 +251,11 @@ export class BuildScene extends Phaser.Scene {
     this.upgradeTexts = [];
     this.midDrag = null;
     this.box = null;
+    // The scene object is reused across pauses; objects of the last pause are destroyed.
+    this.chainPreview = null;
+    this.chainLabel = null;
+    this.chainLabelShown = false;
+    this.hint = null;
     const { width, height } = this.scale;
     this.boardLayer = this.add.layer();
     this.uiLayer = this.add.layer().setDepth(1);
@@ -907,9 +913,9 @@ export class BuildScene extends Phaser.Scene {
     this.drawGrid();
     this.drawCards();
     this.drawPanels();
-    this.chainLabelsShown = 0;
+    this.chainLabelShown = false;
     this.drawHeld();
-    this.chainLabels.forEach((l, i) => l.setVisible(i < this.chainLabelsShown));
+    this.chainLabel?.setVisible(this.chainLabelShown);
     this.drawHeldLand();
     for (const pool of pools) pool.end();
     this.updateTooltip();
@@ -963,6 +969,27 @@ export class BuildScene extends Phaser.Scene {
 
   /** Faint wedge showing an arc weapon's facing and arc width (concept.md §2.10). */
   private drawArc(cx: number, cy: number, cs: number, t: Pick<PlacedTile, 'type' | 'facing'>) {
+    const blade = this.syn.blades[t.type];
+    if (blade) {
+      // Saw: the blade's path (its centre line and hit width).
+      const r = (blade.orbit / GRID.cellPx) * cs;
+      const g = this.arcs;
+      g.lineStyle(((2 * blade.radius) / GRID.cellPx) * cs, TILES[t.type].color, ARC_FILL_ALPHA);
+      g.strokeCircle(cx, cy, r);
+      g.lineStyle(2 * this.px(), TILES[t.type].color, ARC_LINE_ALPHA);
+      g.strokeCircle(cx, cy, r);
+      return;
+    }
+    const thrust = this.syn.thrusts[t.type];
+    if (thrust) {
+      // Spear: the line it stabs along.
+      const a = facingAngle(t.facing);
+      const len = (thrust.reach / GRID.cellPx) * cs;
+      const g = this.arcs;
+      g.lineStyle(((thrust.width + 8) / GRID.cellPx) * cs, TILES[t.type].color, ARC_FILL_ALPHA * 2);
+      g.lineBetween(cx, cy, cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+      return;
+    }
     const weapon = TILES[t.type].weapon;
     if (!weapon || weapon.arcDeg >= 360) return;
     const half = (weapon.arcDeg * Math.PI) / 360;
@@ -1125,37 +1152,43 @@ export class BuildScene extends Phaser.Scene {
       this.showChainHint();
     }
     drawSynergyLines(this.fg, chains, CELL, 0, 0);
+    if (chains.length === 0) return;
+    this.chainLabel ??= this.ui(
+      this.add
+        .text(0, 0, '', {
+          fontFamily: FONT.family,
+          fontStyle: FONT.bold,
+          fontSize: '14px',
+          color: COLORS.text,
+          backgroundColor: css(COLORS.panel),
+          padding: { x: 6, y: 3 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(19),
+    );
+    // One summary label above all the chains, centred on them, kept inside the view.
     const c = this.boardCam;
-    chains.forEach((chain, i) => {
-      let label = this.chainLabels[i];
-      if (!label) {
-        label = this.ui(
-          this.add
-            .text(0, 0, '', {
-              fontFamily: FONT.family,
-              fontStyle: FONT.bold,
-              fontSize: '14px',
-              color: COLORS.text,
-              backgroundColor: css(COLORS.panel),
-              padding: { x: 6, y: 3 },
-            })
-            .setOrigin(0.5, 1)
-            .setDepth(19),
-        );
-        this.chainLabels.push(label);
-      }
-      // Above the chain's middle, in screen coordinates.
-      const wx = ((chain.x0 + chain.x1) / 2 + 0.5) * CELL;
-      const wy = Math.min(chain.y0, chain.y1) * CELL;
-      label
-        .setText(chainLabel(chain))
-        .setPosition(
+    const minX = Math.min(...chains.map((ch) => Math.min(ch.x0, ch.x1)));
+    const maxX = Math.max(...chains.map((ch) => Math.max(ch.x0, ch.x1)));
+    const minY = Math.min(...chains.map((ch) => Math.min(ch.y0, ch.y1)));
+    const wx = ((minX + maxX + 1) / 2) * CELL;
+    const wy = minY * CELL;
+    const label = this.chainLabel.setText(chainSummary(chains));
+    const half = label.width / 2;
+    label
+      .setPosition(
+        Phaser.Math.Clamp(
           VIEW.x + VIEW.w / 2 + (wx - c.scrollX - VIEW.w / 2) * c.zoom,
+          VIEW.x + half,
+          VIEW.x + VIEW.w - half,
+        ),
+        Math.max(
+          VIEW.y + label.height,
           VIEW.y + VIEW.h / 2 + (wy - c.scrollY - VIEW.h / 2) * c.zoom - 4,
-        )
-        .setVisible(true);
-    });
-    this.chainLabelsShown = chains.length;
+        ),
+      )
+      .setVisible(true);
+    this.chainLabelShown = true;
   }
 
   private showChainHint(): void {
@@ -1490,12 +1523,31 @@ export class BuildScene extends Phaser.Scene {
   }
 }
 
-/** "Chain 3: +50% damage" (concept-v2.md §3.3). */
-function chainLabel(c: Chain): string {
-  const bonus = `+${Math.round(chainBonusFor(c.length) * 100)}%`;
-  const what =
-    c.type === 'generator' ? 'fire rate gift' : c.type === 'engine' ? 'speed bonus' : 'damage';
-  return `Chain ${c.length}: ${bonus} ${what}`;
+/**
+ * "Chain 6 ×5: +150% damage · Chain 3: +50% damage" (concept-v2.md §3.3):
+ * chains of the same type and length grouped, longest first.
+ */
+function chainSummary(chains: readonly Chain[]): string {
+  const groups = new Map<string, { chain: Chain; count: number }>();
+  for (const c of chains) {
+    const key = `${c.type}:${c.length}`;
+    const g = groups.get(key);
+    if (g) g.count++;
+    else groups.set(key, { chain: c, count: 1 });
+  }
+  return [...groups.values()]
+    .sort((a, b) => b.chain.length - a.chain.length)
+    .map(({ chain, count }) => {
+      const bonus = `+${Math.round(chainBonusFor(chain.length) * 100)}%`;
+      const what =
+        chain.type === 'generator'
+          ? 'fire rate gift'
+          : chain.type === 'engine'
+            ? 'speed bonus'
+            : 'damage';
+      return `Chain ${chain.length}${count > 1 ? ` ×${count}` : ''}: ${bonus} ${what}`;
+    })
+    .join(' · ');
 }
 
 /** "2× Gatling, Hull" style summary of a piece's tiles. */
@@ -1509,7 +1561,8 @@ function pieceDetails(def: PieceDef, city: CityState, upgrade: TileType | null):
   const lines = countTiles(def).map(([type, n]) => {
     const t = TILES[type];
     const level = typeLevel(city, type);
-    return `${n}× ${t.name} L${level} — ${t.maxHp} HP\n   ${t.description}`;
+    const combo = comboLine(type);
+    return `${n}× ${t.name} L${level} — ${t.maxHp} HP\n   ${t.description}${combo ? `\n   ${combo}` : ''}`;
   });
   if (upgrade) {
     const next = typeLevel(city, upgrade) + 1;

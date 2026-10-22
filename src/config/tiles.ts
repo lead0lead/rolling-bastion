@@ -1,3 +1,5 @@
+import type { StatusType } from './statuses';
+
 export type TileType =
   | 'core'
   | 'hull'
@@ -6,6 +8,9 @@ export type TileType =
   | 'cannon'
   | 'mortar'
   | 'saw'
+  | 'crossbow'
+  | 'flamethrower'
+  | 'spear'
   | 'generator'
   | 'shield'
   | 'repair'
@@ -35,6 +40,58 @@ export interface WeaponDef {
   minRange?: number;
   /** Lobbed shells: fly to the target point and damage every enemy within this radius there. */
   blastRadius?: number;
+  /** Aim where the target will be when the shot arrives (from its current velocity). */
+  leadsTarget?: boolean;
+  /** Shots pass through every enemy in their path (each hit once). */
+  pierceAll?: boolean;
+  /**
+   * Flame cone: instead of a projectile, each shot hits every enemy within
+   * `range` and this many degrees of the aim direction (full cone width).
+   */
+  coneDeg?: number;
+}
+
+/**
+ * Saw blade (concept-v2.md §2.12): circles the tile's centre and hits every
+ * enemy it passes; passes harmlessly over the city's own tiles.
+ */
+export interface BladeDef {
+  /** Distance of the blade's centre from the tile's centre (px). */
+  orbit: number;
+  /** Blade hit radius (px). */
+  radius: number;
+  /** Turns per second at fire rate multiplier 1 (Generators speed it up). */
+  turnsPerSec: number;
+  damage: number;
+  /** The same blade hits the same enemy at most once per this many seconds. */
+  hitCooldown: number;
+}
+
+/**
+ * Spear thrust (concept-v2.md §2.12): stabs straight out along the tile's
+ * facing on a fixed rhythm, hitting every enemy on the line (passes over the
+ * city's own tiles).
+ */
+export interface ThrustDef {
+  /** Seconds per thrust cycle at fire rate multiplier 1. */
+  interval: number;
+  /** Line length from the tile's centre (px). */
+  reach: number;
+  /** Line width (px). */
+  width: number;
+  damage: number;
+  /** With extra jabs, the jabs of one cycle are this far apart (s). */
+  jabGap: number;
+}
+
+/** How a weapon tile takes part in status combos (concept-v2.md §2.12). */
+export interface ComboDef {
+  /** Status put on every enemy this tile's attacks hit. */
+  applies?: StatusType;
+  /** Statuses that make this tile's hits deal STATUS.comboBonus more damage. */
+  profitsFrom?: readonly StatusType[];
+  /** Burn damage per second for `applies: 'burning'`, at damage multiplier 1. */
+  burnDps?: number;
 }
 
 /** Support tile effect at level 1; grows per level (UPGRADES.effectPerLevel). */
@@ -60,7 +117,6 @@ export type PerkEffect =
   | { kind: 'pierce'; count: number }
   | { kind: 'blastRadius'; px: number }
   | { kind: 'shells'; count: number; scatterPx: number }
-  | { kind: 'slowTouching'; speedFactor: number }
   | { kind: 'contactArmour'; damageFactor: number }
   | { kind: 'neighbourDamage'; bonus: number }
   | { kind: 'raiseCap'; cap: number }
@@ -72,7 +128,13 @@ export type PerkEffect =
   | { kind: 'sizePenalty'; factor: number }
   | { kind: 'neighbourHp'; bonus: number }
   | { kind: 'regen'; hpPerSec: number }
-  | { kind: 'thorns'; dps: number };
+  | { kind: 'thorns'; dps: number }
+  | { kind: 'extraBlades'; count: number }
+  | { kind: 'bladeOrbit'; px: number }
+  | { kind: 'range'; px: number }
+  | { kind: 'burnFactor'; factor: number }
+  | { kind: 'thrustReach'; px: number }
+  | { kind: 'extraJabs'; count: number };
 
 export type PerkKind = PerkEffect['kind'];
 
@@ -92,10 +154,11 @@ export interface TileDef {
   /** One-line function description shown in tooltips. */
   description: string;
   weapon?: WeaponDef;
-  /** Damage per second to touching enemies (Saw). */
-  contactDps?: number;
+  blade?: BladeDef;
+  thrust?: ThrustDef;
   support?: SupportDef;
   pulse?: PulseDef;
+  combo?: ComboDef;
   /** Named perks unlocked at type level 3 and 5. */
   perks?: { l3: PerkDef; l5: PerkDef };
 }
@@ -166,6 +229,7 @@ export const TILES: Record<TileType, TileDef> = {
       knockback: 0,
       arcDeg: 180,
     },
+    combo: { profitsFrom: ['burning'] },
     perks: {
       l3: {
         name: 'Twin feed: +1 projectile per shot',
@@ -180,10 +244,10 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 35,
     color: 0xff9933,
     label: 'C',
-    description: '30 dmg, 0.8 shots/s, range 380, fires in a 90° arc, knockback.',
+    description: '45 dmg, 1.2 shots/s, range 380, fires in a 90° arc, knockback.',
     weapon: {
-      damage: 30,
-      fireRate: 0.8,
+      damage: 45,
+      fireRate: 1.2,
       range: 380,
       projectileSpeed: 460,
       projectileRadius: 5,
@@ -191,6 +255,7 @@ export const TILES: Record<TileType, TileDef> = {
       knockback: 220,
       arcDeg: 90,
     },
+    combo: { applies: 'staggered', profitsFrom: ['marked'] },
     perks: {
       l3: { name: 'Wide traverse: arc 90° → 135°', effect: { kind: 'arc', deg: 135 } },
       l5: { name: 'Sabot: shots pierce 3 enemies', effect: { kind: 'pierce', count: 3 } },
@@ -202,21 +267,23 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 35,
     color: 0xf2762e,
     label: 'M',
-    description: '20 dmg in a 48 px blast, 0.5 shots/s, range 80–350, all directions.',
+    description: '30 dmg in a 64 px blast, 0.5 shots/s, range 80–350, all directions; aims ahead.',
     weapon: {
-      damage: 20,
+      damage: 30,
       fireRate: 0.5,
       range: 350,
       minRange: 80,
-      blastRadius: 48,
-      projectileSpeed: 280,
+      blastRadius: 64,
+      leadsTarget: true,
+      projectileSpeed: 420,
       projectileRadius: 4,
       spreadDeg: 0,
       knockback: 0,
       arcDeg: 360,
     },
+    combo: { applies: 'staggered', profitsFrom: ['snagged'] },
     perks: {
-      l3: { name: 'Heavy shells: blast radius 48 → 72', effect: { kind: 'blastRadius', px: 72 } },
+      l3: { name: 'Heavy shells: blast radius 64 → 96', effect: { kind: 'blastRadius', px: 96 } },
       l5: {
         name: 'Salvo: 3 scattered shells per shot',
         effect: { kind: 'shells', count: 3, scatterPx: 40 },
@@ -226,20 +293,81 @@ export const TILES: Record<TileType, TileDef> = {
   saw: {
     name: 'Saw',
     family: 'weapon',
-    maxHp: 60,
+    maxHp: 90,
     color: 0xffe14d,
     label: 'S',
-    description: '25 dmg/s to touching enemies. Must be on the edge.',
-    contactDps: 25,
+    description: 'A blade circles it 48 px out, 26 dmg to every enemy it passes, 1.5 turns/s.',
+    blade: { orbit: 48, radius: 20, turnsPerSec: 1.5, damage: 26, hitCooldown: 0.25 },
+    combo: { applies: 'snagged', profitsFrom: ['burning'] },
     perks: {
       l3: {
-        name: 'Snag: touching enemies slowed 50%',
-        effect: { kind: 'slowTouching', speedFactor: 0.5 },
+        name: 'Twin blade: a second blade opposite',
+        effect: { kind: 'extraBlades', count: 1 },
       },
-      l5: {
-        name: 'Guard: Saws take −50% contact damage',
-        effect: { kind: 'contactArmour', damageFactor: 0.5 },
-      },
+      l5: { name: 'Long arm: blade orbit 48 → 64 px', effect: { kind: 'bladeOrbit', px: 64 } },
+    },
+  },
+  crossbow: {
+    name: 'Crossbow',
+    family: 'weapon',
+    maxHp: 35,
+    color: 0xe0a43a,
+    label: 'X',
+    description: '60 dmg bolt through every enemy in its path, 0.7 shots/s, range 450, 60° arc.',
+    weapon: {
+      damage: 60,
+      fireRate: 0.7,
+      range: 450,
+      projectileSpeed: 700,
+      projectileRadius: 4,
+      spreadDeg: 2,
+      knockback: 0,
+      arcDeg: 60,
+      pierceAll: true,
+    },
+    combo: { applies: 'marked', profitsFrom: ['staggered'] },
+    perks: {
+      l3: { name: 'Twin string: +1 bolt per shot', effect: { kind: 'extraProjectiles', count: 1 } },
+      l5: { name: 'Swivel stock: arc 60° → 120°', effect: { kind: 'arc', deg: 120 } },
+    },
+  },
+  flamethrower: {
+    name: 'Flamethrower',
+    family: 'weapon',
+    maxHp: 60,
+    color: 0xff5e3a,
+    label: 'F',
+    description:
+      'Sprays a 60° cone 96 px out: 3 dmg × 10/s to all in it, and they burn 8 dmg/s for 3 s.',
+    weapon: {
+      damage: 3,
+      fireRate: 10,
+      range: 96,
+      projectileSpeed: 0,
+      projectileRadius: 0,
+      spreadDeg: 0,
+      knockback: 0,
+      arcDeg: 180,
+      coneDeg: 60,
+    },
+    combo: { applies: 'burning', profitsFrom: ['snagged'], burnDps: 8 },
+    perks: {
+      l3: { name: 'Long nozzle: reach 96 → 128 px', effect: { kind: 'range', px: 128 } },
+      l5: { name: 'Napalm: burn damage ×2', effect: { kind: 'burnFactor', factor: 2 } },
+    },
+  },
+  spear: {
+    name: 'Spear',
+    family: 'weapon',
+    maxHp: 70,
+    color: 0xc8963e,
+    label: 'K',
+    description: 'Thrusts straight ahead 96 px every 0.8 s: 80 dmg to every enemy on the line.',
+    thrust: { interval: 0.8, reach: 96, width: 24, damage: 80, jabGap: 0.25 },
+    combo: { applies: 'snagged', profitsFrom: ['staggered'] },
+    perks: {
+      l3: { name: 'Long shaft: reach 96 → 128 px', effect: { kind: 'thrustReach', px: 128 } },
+      l5: { name: 'Double jab: two thrusts per cycle', effect: { kind: 'extraJabs', count: 1 } },
     },
   },
   generator: {

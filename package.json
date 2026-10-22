@@ -1,6 +1,6 @@
 {
   "name": "rolling-bastion",
-  "version": "2.0.0-alpha.3",
+  "version": "2.0.0-alpha.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,9 @@
     "sim": "vitest run -c vitest.sim.config.ts --silent=false",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "sim:balance": "vitest run -c vitest.sim.config.ts --silent=false balance",
+    "sim:weapons": "vitest run -c vitest.sim.config.ts --silent=false weapons"
   },
   "dependencies": {
     "phaser": "3.90.0"

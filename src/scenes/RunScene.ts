@@ -18,6 +18,7 @@ import { damageAlpha, outlineOf, showsCracks, SpritePool } from '../render/tiles
 import {
   debugAddTime,
   debugFillGrid,
+  debugFillWeapons,
   debugHurtBoss,
   debugKillAll,
   debugLayoutJson,
@@ -29,7 +30,14 @@ import { facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
 import { rollLand } from '../sim/land';
 import { step, type MoveInput } from '../sim/step';
-import { bossEnraged, createWorld, type CityCache, type Enemy, type World } from '../sim/world';
+import {
+  bossEnraged,
+  createWorld,
+  tileCentre,
+  type CityCache,
+  type Enemy,
+  type World,
+} from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
 
@@ -46,6 +54,9 @@ const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
   gatling: 'shot-gatling',
   cannon: 'shot-cannon',
   mortar: 'shot-mortar',
+  crossbow: 'shot-cannon',
+  flamethrower: 'shot-gatling',
+  spear: 'ui-place',
 };
 /** Colour of the boss charge telegraph. */
 const CHARGE_COLOR = COLORS.charge;
@@ -53,6 +64,53 @@ const CHARGE_COLOR = COLORS.charge;
 const ENRAGE_TINT = 0xff6060;
 /** Redraw piece outlines once the zoom has drifted this much (fraction) since the last draw. */
 const OUTLINE_REDRAW_ZOOM = 0.05;
+/**
+ * Flame cone look: shown this long (s) after a puff, random reach flicker,
+ * and layers [colour, reach fraction, alpha] from the outside in.
+ */
+const FLAME_LOOK = {
+  linger: 0.15,
+  flicker: 0.15,
+  layers: [
+    [0xff5e3a, 1, 0.45],
+    [0xffa53a, 0.75, 0.55],
+    [0xffe08a, 0.45, 0.7],
+  ] as const,
+};
+
+/** Status marks: gap from the enemy's edge, ring width, reticle tick length (px), ring alpha. */
+const STATUS_LOOK = { gap: 2, ring: 2, tick: 4, alpha: 0.9 };
+
+/** Spear jab look: time out and back (s), shaft width and colour, head length (px). */
+const THRUST_LOOK = { out: 0.06, back: 0.16, shaft: 4, shaftColor: 0xc8963e, head: 12 };
+
+/** Saw blade look: teeth count, tooth depth (fraction of radius), disc spin vs. orbit angle. */
+const BLADE_LOOK = { teeth: 10, tooth: 0.22, spinFactor: 3 };
+
+/** A toothed disc with an ink rim and hub. */
+function drawSawDisc(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  r: number,
+  spin: number,
+  color: number,
+): void {
+  const pts: Phaser.Types.Math.Vector2Like[] = [];
+  const n = BLADE_LOOK.teeth;
+  for (let i = 0; i < n * 2; i++) {
+    const a = spin + (i * Math.PI) / n;
+    const rr = i % 2 === 0 ? r : r * (1 - BLADE_LOOK.tooth);
+    pts.push({ x: x + Math.cos(a) * rr, y: y + Math.sin(a) * rr });
+  }
+  g.fillStyle(color, 1);
+  g.fillPoints(pts, true);
+  g.lineStyle(2, COLORS.ink, 1);
+  g.strokePoints(pts, true);
+  g.fillStyle(COLORS.ink, 1);
+  g.fillCircle(x, y, r * 0.25);
+}
+
 /** Shell blasts: fade time (s) and colour. */
 const BLAST_FADE = 0.3;
 const BLAST_COLOR = COLORS.blast;
@@ -98,6 +156,9 @@ export class RunScene extends Phaser.Scene {
   private gemSprites!: SpritePool;
   private blastGfx!: Phaser.GameObjects.Graphics;
   private pulseGfx!: Phaser.GameObjects.Graphics;
+  private bladeGfx!: Phaser.GameObjects.Graphics;
+  private flameGfx!: Phaser.GameObjects.Graphics;
+  private statusGfx!: Phaser.GameObjects.Graphics;
   private pulseClock = 0;
   private particles!: Particles;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
@@ -146,6 +207,9 @@ export class RunScene extends Phaser.Scene {
     this.shotSprites = new SpritePool(this, 4);
     this.blastGfx = this.add.graphics().setDepth(3.5);
     this.pulseGfx = this.add.graphics().setDepth(1.9);
+    this.bladeGfx = this.add.graphics().setDepth(2.6);
+    this.flameGfx = this.add.graphics().setDepth(2.65);
+    this.statusGfx = this.add.graphics().setDepth(3.4);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
     this.magnetRings = [];
@@ -291,6 +355,10 @@ export class RunScene extends Phaser.Scene {
       case 'F3':
         e.preventDefault();
         debugFillGrid(w, 'gatling');
+        break;
+      case 'F4':
+        e.preventDefault();
+        debugFillWeapons(w);
         break;
       case 'KeyG':
         debugLevelUp(w);
@@ -443,6 +511,7 @@ export class RunScene extends Phaser.Scene {
       const sinceHit = w.time - e.hitTime;
       if (sinceHit < FX.hitFlash) img.setTintFill(0xffffff);
       else if (e === w.boss && bossEnraged(w)) img.setTint(ENRAGE_TINT);
+      else if (w.time < e.burnUntil) img.setTint(COLORS.burning);
       else img.clearTint();
       // Idle wobble plus a squash that springs back after a hit (concept.md §6).
       const wob = Math.sin(this.time.now * 0.001 * FX.wobbleSpeed + this.wobblePhase(e));
@@ -459,11 +528,21 @@ export class RunScene extends Phaser.Scene {
       );
     }
     this.enemySprites.end();
+    this.drawStatuses(w, lerp);
 
     this.shotSprites.begin();
     for (const p of w.projectiles) {
-      const key = p.blast > 0 ? TEX.shell : p.source === 'cannon' ? TEX.shotBig : TEX.shotSmall;
-      this.shotSprites.add(lerp(p.px, p.x), lerp(p.py, p.y), key);
+      const key =
+        p.blast > 0
+          ? TEX.shell
+          : p.source === 'cannon'
+            ? TEX.shotBig
+            : p.source === 'crossbow'
+              ? TEX.bolt
+              : TEX.shotSmall;
+      this.shotSprites
+        .add(lerp(p.px, p.x), lerp(p.py, p.y), key)
+        .setRotation(key === TEX.bolt ? Math.atan2(p.vy, p.vx) : 0);
     }
     for (const s of w.enemyShots) {
       this.shotSprites.add(lerp(s.px, s.x), lerp(s.py, s.y), TEX.enemyShot);
@@ -526,6 +605,129 @@ export class RunScene extends Phaser.Scene {
     this.particles.update(frameDt);
     this.particles.draw();
     this.drawPulses(w, ox, oy, frameDt);
+    this.drawBlades(w, ox - w.x, oy - w.y);
+    this.drawFlames(w, ox - w.x, oy - w.y);
+    this.drawThrusts(w, ox - w.x, oy - w.y);
+  }
+
+  /**
+   * Status marks around enemies (concept-v2.md §2.12): burning shows as the
+   * sprite tint; snagged a blue ring, staggered a white ring, marked a red
+   * reticle.
+   */
+  private drawStatuses(w: World, lerp: (a: number, b: number) => number): void {
+    const g = this.statusGfx;
+    g.clear();
+    const look = STATUS_LOOK;
+    for (const e of w.enemies) {
+      const snag = w.time < e.snagUntil;
+      const stagger = w.time < e.staggerUntil;
+      const mark = w.time < e.markUntil;
+      if (!snag && !stagger && !mark) continue;
+      const x = lerp(e.px, e.x);
+      const y = lerp(e.py, e.y);
+      const r = e.radius + look.gap;
+      if (snag) {
+        g.lineStyle(look.ring, COLORS.snagged, look.alpha);
+        g.strokeCircle(x, y, r);
+      }
+      if (stagger) {
+        g.lineStyle(look.ring + 1, COLORS.staggered, 1);
+        g.strokeCircle(x, y, r + look.ring);
+      }
+      if (mark) {
+        const m = r + look.ring * 2;
+        g.lineStyle(look.ring, COLORS.marked, look.alpha);
+        g.strokeCircle(x, y, m);
+        g.lineBetween(x - m - look.tick, y, x - m + look.tick, y);
+        g.lineBetween(x + m - look.tick, y, x + m + look.tick, y);
+        g.lineBetween(x, y - m - look.tick, x, y - m + look.tick);
+        g.lineBetween(x, y + m - look.tick, x, y + m + look.tick);
+      }
+    }
+  }
+
+  /** Spear shafts jutting out on each jab (concept-v2.md §2.12); drawn with the blades. */
+  private drawThrusts(w: World, dx: number, dy: number): void {
+    const g = this.bladeGfx;
+    const look = THRUST_LOOK;
+    for (const t of w.cache.thrusters) {
+      const thrust = w.cache.syn.thrusts[t.type];
+      const st = w.weapons.get(t.id);
+      if (!thrust || st?.firedAt === undefined) continue;
+      const age = w.time - st.firedAt;
+      if (age > look.out + look.back) continue;
+      const ext = age < look.out ? age / look.out : 1 - (age - look.out) / look.back;
+      const c = tileCentre(w, t);
+      const fx = Math.cos(st.aim);
+      const fy = Math.sin(st.aim);
+      const x0 = c.x + dx;
+      const y0 = c.y + dy;
+      const x1 = x0 + fx * thrust.reach * ext;
+      const y1 = y0 + fy * thrust.reach * ext;
+      g.lineStyle(look.shaft + 2, COLORS.ink, 1);
+      g.lineBetween(x0, y0, x1, y1);
+      g.lineStyle(look.shaft, look.shaftColor, 1);
+      g.lineBetween(x0, y0, x1, y1);
+      const h = look.head;
+      const tip = [
+        { x: x1 + fx * h, y: y1 + fy * h },
+        { x: x1 - fy * h * 0.5, y: y1 + fx * h * 0.5 },
+        { x: x1 + fy * h * 0.5, y: y1 - fx * h * 0.5 },
+      ];
+      g.fillStyle(0xffffff, 1);
+      g.fillPoints(tip, true);
+      g.lineStyle(2, COLORS.ink, 1);
+      g.strokePoints(tip, true);
+    }
+  }
+
+  /** Flame cones of Flamethrowers that fired in the last moment (concept-v2.md §2.12). */
+  private drawFlames(w: World, dx: number, dy: number): void {
+    const g = this.flameGfx;
+    g.clear();
+    for (const t of w.cache.weapons) {
+      const weapon = w.cache.syn.weapons[t.type];
+      const st = w.weapons.get(t.id);
+      if (!weapon?.coneDeg || st?.firedAt === undefined) continue;
+      const age = w.time - st.firedAt;
+      if (age > FLAME_LOOK.linger) continue;
+      const c = tileCentre(w, t);
+      const half = (weapon.coneDeg * Math.PI) / 360;
+      const flicker = 1 - FLAME_LOOK.flicker * motion() * Math.random();
+      const fade = 1 - age / FLAME_LOOK.linger;
+      for (const [color, reach, alpha] of FLAME_LOOK.layers) {
+        g.fillStyle(color, alpha * fade);
+        g.slice(c.x + dx, c.y + dy, weapon.range * reach * flicker, st.aim - half, st.aim + half);
+        g.fillPath();
+      }
+    }
+  }
+
+  /**
+   * Saw blades: a toothed disc per blade on its orbit (concept-v2.md §2.12),
+   * at the sim's angle. (dx, dy) shifts sim positions to the interpolated city.
+   */
+  private drawBlades(w: World, dx: number, dy: number): void {
+    const g = this.bladeGfx;
+    g.clear();
+    for (const t of w.cache.blades) {
+      const blade = w.cache.syn.blades[t.type];
+      const aim = w.weapons.get(t.id)?.aim;
+      if (!blade || aim === undefined) continue;
+      const c = tileCentre(w, t);
+      for (let b = 0; b < blade.count; b++) {
+        const a = aim + (b * Math.PI * 2) / blade.count;
+        drawSawDisc(
+          g,
+          c.x + dx + Math.cos(a) * blade.orbit,
+          c.y + dy + Math.sin(a) * blade.orbit,
+          blade.radius,
+          a * BLADE_LOOK.spinFactor,
+          TILES[t.type].color,
+        );
+      }
+    }
   }
 
   /** Sounds for things the sim counts instead of reporting as events (concept.md §7). */

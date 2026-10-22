@@ -11,6 +11,7 @@ here.
 - `npm run dev` — dev server
 - `npm run build` — type check + production build; `npm run preview` to serve it
 - `npm test` — Vitest (tests live in `tests/`, mirroring `src/sim/`)
+- `npm run sim:balance` / `npm run sim:weapons` — balance and weapon sims (parallel shards, minutes)
 - `npm run lint` / `npm run typecheck` / `npm run format`
 
 ## Rules (summary of concept-v2.md §10 and concept.md §9–§10)

@@ -31,8 +31,13 @@ export interface Enemy {
   kvy: number;
   /** Game time of the last hit (for the hit flash). */
   hitTime: number;
-  /** Speed factor from touching a slowing tile last tick (1 = none). */
-  slow: number;
+  /** Game time each status ends (concept-v2.md §2.12); in the past = not active. */
+  burnUntil: number;
+  snagUntil: number;
+  staggerUntil: number;
+  markUntil: number;
+  /** Burn damage per second while burning. */
+  burnDps: number;
   dead: boolean;
 }
 
@@ -63,6 +68,8 @@ export interface WeaponState {
   cooldown: number;
   aim: number;
   aimTimer: number;
+  /** Game time of the last shot (for flame cones and muzzle effects). */
+  firedAt?: number;
 }
 
 /** A Spitter shot: flies straight and hits the first tile it reaches. */
@@ -109,6 +116,10 @@ export interface CityCache {
   weapons: PlacedTile[];
   /** Online Magnets. */
   magnets: PlacedTile[];
+  /** Online tiles with a blade (Saws). */
+  blades: PlacedTile[];
+  /** Online tiles that thrust (Spears). */
+  thrusters: PlacedTile[];
   /** Bridge tiles (Sapper targets) and their centres relative to the origin. */
   bridges: Set<number>;
   bridgeCentres: { rx: number; ry: number }[];
@@ -139,6 +150,8 @@ export interface World {
   spawn: { budget: number; next: { id: SpawnGroupId; count: number } | null; spikeIndex: number };
   /** Seconds until each Magnet's next pulse, by tile id (concept-v2.md §2.9). */
   magnetTimers: Map<number, number>;
+  /** Per Saw blade (tile id × stride + index): enemies it hit recently and when (concept-v2.md §2.12). */
+  bladeHits: Map<number, Map<Enemy, number>>;
   /** State of each weapon tile, by tile id. */
   weapons: Map<number, WeaponState>;
   xp: number;
@@ -196,6 +209,7 @@ export function createWorld(seed: number): World {
     hash: new SpatialHash(GRID.cellPx),
     spawn: { budget: 0, next: null, spikeIndex: 0 },
     weapons: new Map(),
+    bladeHits: new Map(),
     magnetTimers: new Map(),
     xp: 0,
     level: 1,
@@ -218,12 +232,20 @@ export function createWorld(seed: number): World {
   return world;
 }
 
+/** Blades per tile id, for unique blade ids (`tile id × this + blade index`). */
+export const BLADE_ID_STRIDE = 8;
+
 /** Call after any change to the city's tiles (destruction, build pause). */
 export function cityChanged(w: World): void {
   updateOnline(w.city);
   w.cache = buildCache(w.city);
   for (const id of w.magnetTimers.keys()) {
     if (!w.cache.magnets.some((t) => t.id === id)) w.magnetTimers.delete(id);
+  }
+  // Forget the hit memory of blades whose Saw is gone or offline.
+  for (const id of w.bladeHits.keys()) {
+    const tileId = Math.floor(id / BLADE_ID_STRIDE);
+    if (!w.cache.blades.some((t) => t.id === tileId)) w.bladeHits.delete(id);
   }
 }
 
@@ -274,7 +296,6 @@ const NEUTRAL_MODS: TileMods = {
   regen: 0,
   maxHp: 0,
   thorns: 0,
-  slow: 1,
   reflect: 0,
   chainBonus: 0,
 };
@@ -285,6 +306,8 @@ function buildCache(city: CityState): CityCache {
   const centres: CityCache['centres'] = [];
   const weapons: PlacedTile[] = [];
   const magnets: PlacedTile[] = [];
+  const blades: PlacedTile[] = [];
+  const thrusters: PlacedTile[] = [];
   let minRx = Infinity;
   let maxRx = -Infinity;
   let minRy = Infinity;
@@ -305,6 +328,8 @@ function buildCache(city: CityState): CityCache {
     if (!t.online) continue;
     if (TILES[t.type].weapon) weapons.push(t);
     if (t.type === 'magnet') magnets.push(t);
+    if (TILES[t.type].blade) blades.push(t);
+    if (TILES[t.type].thrust) thrusters.push(t);
     if (bridges.has(t.id)) bridgeCentres.push({ rx, ry });
   }
   if (centres.length === 0) minRx = maxRx = minRy = maxRy = 0;
@@ -317,6 +342,8 @@ function buildCache(city: CityState): CityCache {
     maxRy,
     weapons,
     magnets,
+    blades,
+    thrusters,
     bridges,
     bridgeCentres,
     syn,

@@ -47,6 +47,11 @@ export const COLORS = {
   blast: 0xff9f1c,
   /** The boss charge telegraph. */
   charge: 0xf0405a,
+  /** Enemy statuses (concept-v2.md §2.12): burning tint, snag ring, stagger ring, mark reticle. */
+  burning: 0xffa060,
+  snagged: 0x3a86ff,
+  staggered: 0xffffff,
+  marked: 0xf0405a,
   text: '#2b2f3a',
   textDim: '#6b7385',
   textWarn: '#e0344b',

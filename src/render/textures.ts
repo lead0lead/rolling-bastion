@@ -13,6 +13,8 @@ export const TEX = {
   shotSmall: 'shot-small',
   shotBig: 'shot-big',
   shell: 'shell',
+  /** Crossbow bolt, drawn pointing right (rotated to its flight direction). */
+  bolt: 'bolt',
   enemy: (type: string, elite = false) => `enemy-${type}${elite ? '-elite' : ''}`,
   /** Colossus look per phase (1 = the plain enemy texture). */
   boss: (phase: number) => (phase <= 1 ? 'enemy-colossus' : `enemy-colossus-p${phase}`),
@@ -69,6 +71,16 @@ export function createTextures(scene: Phaser.Scene): void {
     g.generateTexture(key, size, size);
     g.clear();
   }
+
+  // Crossbow bolt: a dark shaft with a light head, pointing right.
+  g.fillStyle(COLORS.ink, 1);
+  g.fillRect(0, 3, 18, 3);
+  g.fillStyle(COLORS.shot, 1);
+  g.lineStyle(1.5, COLORS.ink, 1);
+  g.fillTriangle(16, 0, 24, 4.5, 16, 9);
+  g.strokeTriangle(16, 0, 24, 4.5, 16, 9);
+  g.generateTexture(TEX.bolt, 25, 9);
+  g.clear();
 
   // White particle shapes, tinted per particle.
   g.fillStyle(0xffffff, 1);

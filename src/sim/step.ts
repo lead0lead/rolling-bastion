@@ -1,6 +1,14 @@
 import { MOVE } from '../config/balance';
 import { updateBoss } from './boss';
-import { healTiles, removeDead, updateProjectiles, updateWeapons } from './combat';
+import {
+  healTiles,
+  removeDead,
+  updateBlades,
+  updateThrusts,
+  updateBurns,
+  updateProjectiles,
+  updateWeapons,
+} from './combat';
 import { updateEnemies } from './enemies';
 import { collectGems } from './progression';
 import { updateSpawner } from './spawner';
@@ -22,7 +30,10 @@ export function step(w: World, input: MoveInput, dt: number): void {
   updateEnemies(w, dt);
   if (w.over) return;
   updateWeapons(w, dt);
+  updateBlades(w, dt);
+  updateThrusts(w, dt);
   updateProjectiles(w, dt);
+  updateBurns(w, dt);
   healTiles(w, dt);
   removeDead(w);
   collectGems(w, dt);
