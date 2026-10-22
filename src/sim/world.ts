@@ -31,8 +31,6 @@ export interface Enemy {
   kvy: number;
   /** Game time of the last hit (for the hit flash). */
   hitTime: number;
-  /** Speed factor from touching a slowing tile last tick (1 = none). */
-  slow: number;
   /** Game time each status ends (concept-v2.md §2.12); in the past = not active. */
   burnUntil: number;
   snagUntil: number;
@@ -40,6 +38,9 @@ export interface Enemy {
   markUntil: number;
   /** Burn damage per second while burning. */
   burnDps: number;
+  /** Last Saw blade hit: when, and which blade (so each blade hits it once per pass). */
+  bladeHitAt: number;
+  bladeHitBy: number;
   dead: boolean;
 }
 
@@ -116,6 +117,8 @@ export interface CityCache {
   weapons: PlacedTile[];
   /** Online Magnets. */
   magnets: PlacedTile[];
+  /** Online tiles with a blade (Saws). */
+  blades: PlacedTile[];
   /** Bridge tiles (Sapper targets) and their centres relative to the origin. */
   bridges: Set<number>;
   bridgeCentres: { rx: number; ry: number }[];
@@ -281,7 +284,6 @@ const NEUTRAL_MODS: TileMods = {
   regen: 0,
   maxHp: 0,
   thorns: 0,
-  slow: 1,
   reflect: 0,
   chainBonus: 0,
 };
@@ -292,6 +294,7 @@ function buildCache(city: CityState): CityCache {
   const centres: CityCache['centres'] = [];
   const weapons: PlacedTile[] = [];
   const magnets: PlacedTile[] = [];
+  const blades: PlacedTile[] = [];
   let minRx = Infinity;
   let maxRx = -Infinity;
   let minRy = Infinity;
@@ -312,6 +315,7 @@ function buildCache(city: CityState): CityCache {
     if (!t.online) continue;
     if (TILES[t.type].weapon) weapons.push(t);
     if (t.type === 'magnet') magnets.push(t);
+    if (TILES[t.type].blade) blades.push(t);
     if (bridges.has(t.id)) bridgeCentres.push({ rx, ry });
   }
   if (centres.length === 0) minRx = maxRx = minRy = maxRy = 0;
@@ -324,6 +328,7 @@ function buildCache(city: CityState): CityCache {
     maxRy,
     weapons,
     magnets,
+    blades,
     bridges,
     bridgeCentres,
     syn,

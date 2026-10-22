@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { UPGRADES } from '../src/config/balance';
 import { TILES, type TileType } from '../src/config/tiles';
-import { hasStatus, leadPoint, updateProjectiles, updateWeapons } from '../src/sim/combat';
+import {
+  hasStatus,
+  leadPoint,
+  updateBlades,
+  updateProjectiles,
+  updateWeapons,
+} from '../src/sim/combat';
 import { updateEnemies } from '../src/sim/enemies';
 import { tileAt } from '../src/sim/grid';
 import { spawnEnemy } from '../src/sim/spawner';
@@ -8,7 +15,13 @@ import { cityChanged, createWorld, tileCentre, type World } from '../src/sim/wor
 import { typedCity } from './helpers';
 
 const DT = 1 / 60;
-const LEGEND: Record<string, TileType> = { C: 'core', m: 'mortar', c: 'cannon', h: 'hull' };
+const LEGEND: Record<string, TileType> = {
+  C: 'core',
+  m: 'mortar',
+  c: 'cannon',
+  h: 'hull',
+  s: 'saw',
+};
 
 function worldOf(rows: string[]): World {
   const w = createWorld(1);
@@ -26,6 +39,7 @@ function run(w: World, ticks: number): void {
     w.time += DT;
     updateEnemies(w, DT);
     updateWeapons(w, DT);
+    updateBlades(w, DT);
     updateProjectiles(w, DT);
     for (const t of w.city.tiles) t.hp = t.maxHp;
   }
@@ -57,5 +71,59 @@ describe('Mortar', () => {
     }
     expect(w.damageBy.mortar).toBeGreaterThan(0);
     expect(staggered).toBe(true);
+  });
+});
+
+describe('Saw blade', () => {
+  const blade = TILES.saw.blade;
+  if (!blade) throw new Error('no blade');
+
+  /** A Saw at (1, 1) with the Core below it, and a parked enemy at `dist` px from the Saw. */
+  function sawWith(dist: number, type: 'runner' | 'brute' = 'brute') {
+    const w = worldOf(['...', '.s.', '.C.']);
+    const saw = tileAt(w.city, 1, 1);
+    if (!saw) throw new Error('no saw');
+    const c = tileCentre(w, saw);
+    const e = spawnEnemy(w, type, c.x, c.y - dist);
+    e.hp = e.maxHp = 1e6;
+    return { w, e };
+  }
+
+  /** Blades only (enemies stay where they are). */
+  function spin(w: World, seconds: number) {
+    for (let i = 0; i < seconds / DT; i++) {
+      w.time += DT;
+      w.hash.clear();
+      w.enemies.forEach((e, idx) => w.hash.insert(idx, e.x, e.y));
+      updateBlades(w, DT);
+    }
+  }
+
+  it('hits an enemy on its path once per pass, and snags it', () => {
+    const { w, e } = sawWith(blade.orbit);
+    spin(w, 2 / blade.turnsPerSec);
+    expect(w.damageBy.saw).toBeCloseTo(2 * blade.damage);
+    expect(hasStatus(w, e, 'snagged')).toBe(true);
+  });
+
+  it('reaches an enemy touching the Saw, but not one far outside the orbit', () => {
+    const close = sawWith(16 + 6 + 1, 'runner');
+    spin(close.w, 1 / blade.turnsPerSec);
+    expect(close.w.damageBy.saw).toBeGreaterThan(0);
+    const far = sawWith(blade.orbit + blade.radius + 40);
+    spin(far.w, 1 / blade.turnsPerSec);
+    expect(far.w.damageBy.saw ?? 0).toBe(0);
+  });
+
+  it('L3 adds a second blade; L5 lengthens the orbit', () => {
+    const { w } = sawWith(blade.orbit);
+    w.city.typeLevels.saw = 3;
+    cityChanged(w);
+    expect(w.cache.syn.blades.saw?.count).toBe(2);
+    spin(w, 2 / blade.turnsPerSec);
+    expect(w.damageBy.saw).toBeCloseTo(4 * blade.damage * (1 + 2 * UPGRADES.damagePerLevel));
+    w.city.typeLevels.saw = 5;
+    cityChanged(w);
+    expect(w.cache.syn.blades.saw?.orbit).toBeGreaterThan(blade.orbit);
   });
 });

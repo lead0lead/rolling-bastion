@@ -41,6 +41,22 @@ export interface WeaponDef {
   leadsTarget?: boolean;
 }
 
+/**
+ * Saw blade (concept-v2.md §2.12): circles the tile's centre and hits every
+ * enemy it passes; passes harmlessly over the city's own tiles.
+ */
+export interface BladeDef {
+  /** Distance of the blade's centre from the tile's centre (px). */
+  orbit: number;
+  /** Blade hit radius (px). */
+  radius: number;
+  /** Turns per second at fire rate multiplier 1 (Generators speed it up). */
+  turnsPerSec: number;
+  damage: number;
+  /** The same blade hits the same enemy at most once per this many seconds. */
+  hitCooldown: number;
+}
+
 /** How a weapon tile takes part in status combos (concept-v2.md §2.12). */
 export interface ComboDef {
   /** Status put on every enemy this tile's attacks hit. */
@@ -74,7 +90,6 @@ export type PerkEffect =
   | { kind: 'pierce'; count: number }
   | { kind: 'blastRadius'; px: number }
   | { kind: 'shells'; count: number; scatterPx: number }
-  | { kind: 'slowTouching'; speedFactor: number }
   | { kind: 'contactArmour'; damageFactor: number }
   | { kind: 'neighbourDamage'; bonus: number }
   | { kind: 'raiseCap'; cap: number }
@@ -86,7 +101,9 @@ export type PerkEffect =
   | { kind: 'sizePenalty'; factor: number }
   | { kind: 'neighbourHp'; bonus: number }
   | { kind: 'regen'; hpPerSec: number }
-  | { kind: 'thorns'; dps: number };
+  | { kind: 'thorns'; dps: number }
+  | { kind: 'extraBlades'; count: number }
+  | { kind: 'bladeOrbit'; px: number };
 
 export type PerkKind = PerkEffect['kind'];
 
@@ -106,8 +123,7 @@ export interface TileDef {
   /** One-line function description shown in tooltips. */
   description: string;
   weapon?: WeaponDef;
-  /** Damage per second to touching enemies (Saw). */
-  contactDps?: number;
+  blade?: BladeDef;
   support?: SupportDef;
   pulse?: PulseDef;
   combo?: ComboDef;
@@ -248,18 +264,15 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 60,
     color: 0xffe14d,
     label: 'S',
-    description: '25 dmg/s to touching enemies. Must be on the edge.',
-    contactDps: 25,
+    description: 'A blade circles it 48 px out, 18 dmg to every enemy it passes, 1.5 turns/s.',
+    blade: { orbit: 48, radius: 20, turnsPerSec: 1.5, damage: 18, hitCooldown: 0.25 },
     combo: { applies: 'snagged', profitsFrom: ['burning'] },
     perks: {
       l3: {
-        name: 'Snag: touching enemies slowed 50%',
-        effect: { kind: 'slowTouching', speedFactor: 0.5 },
+        name: 'Twin blade: a second blade opposite',
+        effect: { kind: 'extraBlades', count: 1 },
       },
-      l5: {
-        name: 'Guard: Saws take −50% contact damage',
-        effect: { kind: 'contactArmour', damageFactor: 0.5 },
-      },
+      l5: { name: 'Long arm: blade orbit 48 → 64 px', effect: { kind: 'bladeOrbit', px: 64 } },
     },
   },
   generator: {

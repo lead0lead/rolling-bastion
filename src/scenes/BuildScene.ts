@@ -963,6 +963,17 @@ export class BuildScene extends Phaser.Scene {
 
   /** Faint wedge showing an arc weapon's facing and arc width (concept.md §2.10). */
   private drawArc(cx: number, cy: number, cs: number, t: Pick<PlacedTile, 'type' | 'facing'>) {
+    const blade = this.syn.blades[t.type];
+    if (blade) {
+      // Saw: the blade's path (its centre line and hit width).
+      const r = (blade.orbit / GRID.cellPx) * cs;
+      const g = this.arcs;
+      g.lineStyle(((2 * blade.radius) / GRID.cellPx) * cs, TILES[t.type].color, ARC_FILL_ALPHA);
+      g.strokeCircle(cx, cy, r);
+      g.lineStyle(2 * this.px(), TILES[t.type].color, ARC_LINE_ALPHA);
+      g.strokeCircle(cx, cy, r);
+      return;
+    }
     const weapon = TILES[t.type].weapon;
     if (!weapon || weapon.arcDeg >= 360) return;
     const half = (weapon.arcDeg * Math.PI) / 360;

@@ -157,6 +157,54 @@ export function leadPoint(
   return { x: e.x + vx * t, y: e.y + vy * t };
 }
 
+/** Blades per tile id, for unique blade ids (`tile id × this + blade index`). */
+const BLADE_ID_STRIDE = 8;
+
+/**
+ * Saw blades (concept-v2.md §2.12): each online Saw's blades circle its
+ * centre (Generators speed the spin up) and hit every enemy they pass, each
+ * blade at most once per `hitCooldown` per enemy. The angle lives in the
+ * tile's `WeaponState.aim` for the renderer. Uses the enemy hash built this tick.
+ */
+export function updateBlades(w: World, dt: number): void {
+  for (const t of w.cache.blades) {
+    const blade = w.cache.syn.blades[t.type];
+    if (!blade) continue;
+    const mods = modsOf(w, t);
+    let st = w.weapons.get(t.id);
+    if (!st) {
+      st = { cooldown: 0, aim: w.rng.next() * Math.PI * 2, aimTimer: 0 };
+      w.weapons.set(t.id, st);
+    }
+    st.aim = (st.aim + Math.PI * 2 * blade.turnsPerSec * mods.fireRate * dt) % (Math.PI * 2);
+    const c = tileCentre(w, t);
+    const damage = blade.damage * mods.damage;
+    let hits = 0;
+    for (let b = 0; b < blade.count; b++) {
+      const a = st.aim + (b * Math.PI * 2) / blade.count;
+      const bx = c.x + Math.cos(a) * blade.orbit;
+      const by = c.y + Math.sin(a) * blade.orbit;
+      const id = t.id * BLADE_ID_STRIDE + b;
+      const strike = (e: Enemy) => {
+        if (e.dead) return;
+        const r = blade.radius + e.radius;
+        if ((e.x - bx) ** 2 + (e.y - by) ** 2 > r * r) return;
+        if (e.bladeHitBy === id && w.time - e.bladeHitAt < blade.hitCooldown) return;
+        e.bladeHitBy = id;
+        e.bladeHitAt = w.time;
+        hitEnemy(w, e, damage, 0, 0, 0, t.type);
+        hits++;
+      };
+      w.hash.query(bx, by, blade.radius + MAX_ENEMY_RADIUS, (i) => {
+        const e = w.enemies[i];
+        if (e && e !== w.boss) strike(e);
+      });
+      if (w.boss) strike(w.boss);
+    }
+    if (hits > 0) w.tally.shots[t.type] = (w.tally.shots[t.type] ?? 0) + 1;
+  }
+}
+
 function newProjectile(w: World, t: PlacedTile, x: number, y: number): Projectile {
   const p = w.projectilePool.pop() ?? ({ hits: [] } as unknown as Projectile);
   p.x = p.px = x;

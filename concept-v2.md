@@ -403,6 +403,15 @@ target was.
   `leadsTarget`: `leadPoint` solves the intercept from the target's
   movement over the last tick (exact, falls back to the current position
   if it can't be caught).
+- Saw: `TILES.saw.blade` (orbit 48, **radius 20** instead of the draft 14,
+  so the blade also reaches an enemy pressed against the Saw itself;
+  1.5 turns/s, 18 dmg, 0.25 s per-blade cooldown per enemy). Perks:
+  `extraBlades` (L3), `bladeOrbit` (L5, 64 px); the old Snag/Guard perks
+  and the Saw's contact damage are gone (`TileMods.slow` and `contactDps`
+  removed; Plating L5 thorns stay). `updateBlades` runs after the weapons,
+  keeps the angle in `WeaponState.aim` and tracks the last blade hit per
+  enemy (`bladeHitAt` / `bladeHitBy`). Run screen: toothed discs on the
+  orbit; build screen: the blade path as a ring with the arcs (hover / V).
 
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,

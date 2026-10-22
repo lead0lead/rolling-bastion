@@ -1,5 +1,11 @@
 import { LINES, MOVE } from '../config/balance';
-import { TILES, type PulseDef, type TileType, type WeaponDef } from '../config/tiles';
+import {
+  TILES,
+  type BladeDef,
+  type PulseDef,
+  type TileType,
+  type WeaponDef,
+} from '../config/tiles';
 import { cellId, type CityState, type PlacedTile } from './grid';
 import { levelDamage, levelEffect, levelHpBonus, perk } from './upgrades';
 
@@ -18,10 +24,8 @@ export interface TileMods {
   /** HP/s the tile regenerates by itself (Hull L5). */
   regen: number;
   maxHp: number;
-  /** Damage per second dealt to touching enemies (Saw, Plating L5). */
+  /** Damage per second dealt to touching enemies (Plating L5). */
   thorns: number;
-  /** Speed factor for touching enemies (1 = no slow). */
-  slow: number;
   /** Fraction of contact damage returned to the attacker. */
   reflect: number;
   /**
@@ -65,8 +69,14 @@ export interface WeaponStats extends WeaponDef {
   shellScatter: number;
 }
 
+/** A blade type's stats with its perks applied. */
+export interface BladeStats extends BladeDef {
+  count: number;
+}
+
 export interface Synergies {
   mods: Map<number, TileMods>;
+  blades: Partial<Record<TileType, BladeStats>>;
   chains: Chain[];
   /** Every adjacency buff, in tile order of the source. */
   links: BuffLink[];
@@ -176,7 +186,6 @@ export function computeSynergies(city: CityState): Synergies {
   const shieldCap = TILES.shield.support?.cap ?? 0;
   const regen = perk(city, 'hull', 'regen')?.hpPerSec ?? 0;
   const platingThorns = perk(city, 'plating', 'thorns')?.dps ?? 0;
-  const sawSlow = perk(city, 'saw', 'slowTouching')?.speedFactor ?? 1;
 
   const mods = new Map<number, TileMods>();
   for (const t of city.tiles) {
@@ -185,13 +194,7 @@ export function computeSynergies(city: CityState): Synergies {
     const chain = def.family === 'weapon' ? (chainBonus.get(t.id) ?? 0) : 0;
     const fireRate = 1 + Math.min(a.fire, fireCap);
     const damage = levelDamage(city, t.type) * (1 + a.genDamage + chain);
-    let thorns = 0;
-    let slow = 1;
-    if (t.online && def.contactDps) {
-      thorns = def.contactDps * damage * fireRate;
-      slow = sawSlow;
-    }
-    if (t.online && t.type === 'plating') thorns += platingThorns;
+    const thorns = t.online && t.type === 'plating' ? platingThorns : 0;
     mods.set(t.id, {
       damage,
       fireRate,
@@ -201,7 +204,6 @@ export function computeSynergies(city: CityState): Synergies {
       regen: t.type === 'hull' ? regen : 0,
       maxHp: def.maxHp * (1 + levelHpBonus(city, t.type) + a.hpBonus),
       thorns,
-      slow,
       reflect: a.reflect,
       chainBonus: chainBonus.get(t.id) ?? 0,
     });
@@ -222,13 +224,23 @@ export function computeSynergies(city: CityState): Synergies {
   };
 
   const weapons: Synergies['weapons'] = {};
+  const blades: Synergies['blades'] = {};
   for (const type of Object.keys(TILES) as TileType[]) {
     const w = weaponStats(city, type);
     if (w) weapons[type] = w;
+    const blade = TILES[type].blade;
+    if (blade) {
+      blades[type] = {
+        ...blade,
+        orbit: perk(city, type, 'bladeOrbit')?.px ?? blade.orbit,
+        count: 1 + (perk(city, type, 'extraBlades')?.count ?? 0),
+      };
+    }
   }
 
   return {
     mods,
+    blades,
     chains,
     links,
     weapons,

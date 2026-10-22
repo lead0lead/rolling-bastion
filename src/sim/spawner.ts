@@ -158,9 +158,10 @@ export function spawnEnemy(
   if (def.boss) w.boss = e;
   e.kvx = e.kvy = 0;
   e.hitTime = -Infinity;
-  e.slow = 1;
   e.burnUntil = e.snagUntil = e.staggerUntil = e.markUntil = -Infinity;
   e.burnDps = 0;
+  e.bladeHitAt = -Infinity;
+  e.bladeHitBy = -1;
   e.dead = false;
   w.enemies.push(e);
   return e;

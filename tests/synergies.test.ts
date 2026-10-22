@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LINES, MOVE, UPGRADES } from '../src/config/balance';
-import { ENEMIES } from '../src/config/enemies';
 import { TILES, type TileType } from '../src/config/tiles';
 import { damageTile, healTiles, updateProjectiles, updateWeapons } from '../src/sim/combat';
-import { updateEnemies } from '../src/sim/enemies';
 import { tileAt, turnFacing } from '../src/sim/grid';
 import { buffsReceived } from '../src/sim/synergies';
 import { collectGems } from '../src/sim/progression';
@@ -157,15 +155,6 @@ describe('new weapons', () => {
     expect(a.hp).toBeLessThan(a.maxHp);
     expect(b.hp).toBeLessThan(b.maxHp);
     expect(w.events).toContainEqual(expect.objectContaining({ kind: 'blast' }));
-  });
-
-  it('Saws damage touching enemies', () => {
-    const w = worldOf(['s..', 'C..', '...']);
-    const c = tileCentre(w, tile(w, 0, 0));
-    const e = spawnEnemy(w, 'swarmer', c.x, c.y - 16 - ENEMIES.swarmer.radius);
-    updateEnemies(w, DT);
-    updateEnemies(w, DT);
-    expect(e.hp).toBeLessThan(e.maxHp);
   });
 });
 

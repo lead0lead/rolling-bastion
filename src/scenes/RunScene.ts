@@ -29,7 +29,14 @@ import { facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
 import { rollLand } from '../sim/land';
 import { step, type MoveInput } from '../sim/step';
-import { bossEnraged, createWorld, type CityCache, type Enemy, type World } from '../sim/world';
+import {
+  bossEnraged,
+  createWorld,
+  tileCentre,
+  type CityCache,
+  type Enemy,
+  type World,
+} from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
 
@@ -53,6 +60,33 @@ const CHARGE_COLOR = COLORS.charge;
 const ENRAGE_TINT = 0xff6060;
 /** Redraw piece outlines once the zoom has drifted this much (fraction) since the last draw. */
 const OUTLINE_REDRAW_ZOOM = 0.05;
+/** Saw blade look: teeth count, tooth depth (fraction of radius), disc spin vs. orbit angle. */
+const BLADE_LOOK = { teeth: 10, tooth: 0.22, spinFactor: 3 };
+
+/** A toothed disc with an ink rim and hub. */
+function drawSawDisc(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  r: number,
+  spin: number,
+  color: number,
+): void {
+  const pts: Phaser.Types.Math.Vector2Like[] = [];
+  const n = BLADE_LOOK.teeth;
+  for (let i = 0; i < n * 2; i++) {
+    const a = spin + (i * Math.PI) / n;
+    const rr = i % 2 === 0 ? r : r * (1 - BLADE_LOOK.tooth);
+    pts.push({ x: x + Math.cos(a) * rr, y: y + Math.sin(a) * rr });
+  }
+  g.fillStyle(color, 1);
+  g.fillPoints(pts, true);
+  g.lineStyle(2, COLORS.ink, 1);
+  g.strokePoints(pts, true);
+  g.fillStyle(COLORS.ink, 1);
+  g.fillCircle(x, y, r * 0.25);
+}
+
 /** Shell blasts: fade time (s) and colour. */
 const BLAST_FADE = 0.3;
 const BLAST_COLOR = COLORS.blast;
@@ -98,6 +132,7 @@ export class RunScene extends Phaser.Scene {
   private gemSprites!: SpritePool;
   private blastGfx!: Phaser.GameObjects.Graphics;
   private pulseGfx!: Phaser.GameObjects.Graphics;
+  private bladeGfx!: Phaser.GameObjects.Graphics;
   private pulseClock = 0;
   private particles!: Particles;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
@@ -146,6 +181,7 @@ export class RunScene extends Phaser.Scene {
     this.shotSprites = new SpritePool(this, 4);
     this.blastGfx = this.add.graphics().setDepth(3.5);
     this.pulseGfx = this.add.graphics().setDepth(1.9);
+    this.bladeGfx = this.add.graphics().setDepth(2.6);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
     this.magnetRings = [];
@@ -526,6 +562,33 @@ export class RunScene extends Phaser.Scene {
     this.particles.update(frameDt);
     this.particles.draw();
     this.drawPulses(w, ox, oy, frameDt);
+    this.drawBlades(w, ox - w.x, oy - w.y);
+  }
+
+  /**
+   * Saw blades: a toothed disc per blade on its orbit (concept-v2.md §2.12),
+   * at the sim's angle. (dx, dy) shifts sim positions to the interpolated city.
+   */
+  private drawBlades(w: World, dx: number, dy: number): void {
+    const g = this.bladeGfx;
+    g.clear();
+    for (const t of w.cache.blades) {
+      const blade = w.cache.syn.blades[t.type];
+      const aim = w.weapons.get(t.id)?.aim;
+      if (!blade || aim === undefined) continue;
+      const c = tileCentre(w, t);
+      for (let b = 0; b < blade.count; b++) {
+        const a = aim + (b * Math.PI * 2) / blade.count;
+        drawSawDisc(
+          g,
+          c.x + dx + Math.cos(a) * blade.orbit,
+          c.y + dy + Math.sin(a) * blade.orbit,
+          blade.radius,
+          a * BLADE_LOOK.spinFactor,
+          TILES[t.type].color,
+        );
+      }
+    }
   }
 
   /** Sounds for things the sim counts instead of reporting as events (concept.md §7). */
