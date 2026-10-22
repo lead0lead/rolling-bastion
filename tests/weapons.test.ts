@@ -21,6 +21,7 @@ const LEGEND: Record<string, TileType> = {
   c: 'cannon',
   h: 'hull',
   s: 'saw',
+  x: 'crossbow',
 };
 
 function worldOf(rows: string[]): World {
@@ -125,5 +126,32 @@ describe('Saw blade', () => {
     w.city.typeLevels.saw = 5;
     cityChanged(w);
     expect(w.cache.syn.blades.saw?.orbit).toBeGreaterThan(blade.orbit);
+  });
+});
+
+describe('Crossbow', () => {
+  it('fires a bolt through every enemy in a line and marks them', () => {
+    const w = worldOf(['x..', 'C..', '...']);
+    const bow = tileAt(w.city, 0, 0);
+    if (!bow) throw new Error('no crossbow');
+    w.weapons.set(bow.id, { cooldown: 0, aim: 0, aimTimer: 0 });
+    const c = tileCentre(w, bow);
+    const line = [100, 150, 200, 250].map((d) => {
+      const e = spawnEnemy(w, 'brute', c.x, c.y - d);
+      e.hp = e.maxHp = 1e6;
+      return e;
+    });
+    for (let i = 0; i < 0.5 / DT; i++) {
+      w.time += DT;
+      w.hash.clear();
+      w.enemies.forEach((e, idx) => w.hash.insert(idx, e.x, e.y));
+      updateWeapons(w, DT);
+      updateProjectiles(w, DT);
+    }
+    const dmg = TILES.crossbow.weapon?.damage ?? 0;
+    for (const e of line) {
+      expect(e.maxHp - e.hp).toBeCloseTo(dmg);
+      expect(hasStatus(w, e, 'marked')).toBe(true);
+    }
   });
 });

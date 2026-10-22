@@ -353,7 +353,7 @@ export function weaponStats(city: CityState, type: TileType): WeaponStats | unde
     arcDeg: perk(city, type, 'arc')?.deg ?? base.arcDeg,
     blastRadius: perk(city, type, 'blastRadius')?.px ?? base.blastRadius,
     projectiles: 1 + (perk(city, type, 'extraProjectiles')?.count ?? 0),
-    pierce: perk(city, type, 'pierce')?.count ?? 0,
+    pierce: base.pierceAll ? Infinity : (perk(city, type, 'pierce')?.count ?? 0),
     shells: shells?.count ?? 1,
     shellScatter: shells?.scatterPx ?? 0,
   };

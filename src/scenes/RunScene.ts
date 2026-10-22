@@ -53,6 +53,7 @@ const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
   gatling: 'shot-gatling',
   cannon: 'shot-cannon',
   mortar: 'shot-mortar',
+  crossbow: 'shot-cannon',
 };
 /** Colour of the boss charge telegraph. */
 const CHARGE_COLOR = COLORS.charge;
@@ -498,8 +499,17 @@ export class RunScene extends Phaser.Scene {
 
     this.shotSprites.begin();
     for (const p of w.projectiles) {
-      const key = p.blast > 0 ? TEX.shell : p.source === 'cannon' ? TEX.shotBig : TEX.shotSmall;
-      this.shotSprites.add(lerp(p.px, p.x), lerp(p.py, p.y), key);
+      const key =
+        p.blast > 0
+          ? TEX.shell
+          : p.source === 'cannon'
+            ? TEX.shotBig
+            : p.source === 'crossbow'
+              ? TEX.bolt
+              : TEX.shotSmall;
+      this.shotSprites
+        .add(lerp(p.px, p.x), lerp(p.py, p.y), key)
+        .setRotation(key === TEX.bolt ? Math.atan2(p.vy, p.vx) : 0);
     }
     for (const s of w.enemyShots) {
       this.shotSprites.add(lerp(s.px, s.x), lerp(s.py, s.y), TEX.enemyShot);

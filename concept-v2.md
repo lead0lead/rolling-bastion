@@ -412,6 +412,11 @@ target was.
   keeps the angle in `WeaponState.aim` and tracks the last blade hit per
   enemy (`bladeHitAt` / `bladeHitBy`). Run screen: toothed discs on the
   orbit; build screen: the blade path as a ring with the arcs (hover / V).
+- Crossbow (`crossbow`, letter x, colour 0xe0a43a): `pierceAll` makes
+  `WeaponStats.pierce` Infinity; spread 2° so the L3 twin bolt fans out.
+  Bow barrel, dark bolt sprite rotated to its flight, `shot-cannon` sound.
+  Pieces `domino-crossbow` (0.8), `l3-crossbow` (0.6); sandbox
+  `l3-crossbow`.
 
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,

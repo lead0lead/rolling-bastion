@@ -8,6 +8,7 @@ export type TileType =
   | 'cannon'
   | 'mortar'
   | 'saw'
+  | 'crossbow'
   | 'generator'
   | 'shield'
   | 'repair'
@@ -39,6 +40,8 @@ export interface WeaponDef {
   blastRadius?: number;
   /** Aim where the target will be when the shot arrives (from its current velocity). */
   leadsTarget?: boolean;
+  /** Shots pass through every enemy in their path (each hit once). */
+  pierceAll?: boolean;
 }
 
 /**
@@ -273,6 +276,30 @@ export const TILES: Record<TileType, TileDef> = {
         effect: { kind: 'extraBlades', count: 1 },
       },
       l5: { name: 'Long arm: blade orbit 48 → 64 px', effect: { kind: 'bladeOrbit', px: 64 } },
+    },
+  },
+  crossbow: {
+    name: 'Crossbow',
+    family: 'weapon',
+    maxHp: 35,
+    color: 0xe0a43a,
+    label: 'X',
+    description: '60 dmg bolt through every enemy in its path, 0.7 shots/s, range 450, 60° arc.',
+    weapon: {
+      damage: 60,
+      fireRate: 0.7,
+      range: 450,
+      projectileSpeed: 700,
+      projectileRadius: 4,
+      spreadDeg: 2,
+      knockback: 0,
+      arcDeg: 60,
+      pierceAll: true,
+    },
+    combo: { applies: 'marked', profitsFrom: ['staggered'] },
+    perks: {
+      l3: { name: 'Twin string: +1 bolt per shot', effect: { kind: 'extraProjectiles', count: 1 } },
+      l5: { name: 'Swivel stock: arc 60° → 120°', effect: { kind: 'arc', deg: 120 } },
     },
   },
   generator: {

@@ -47,6 +47,12 @@ export function drawIcon(
       g.strokeCircle(c, c, r);
       break;
     }
+    case 'crossbow':
+      g.fillStyle(shade, 1);
+      g.fillCircle(c, c, 13 * s);
+      g.lineStyle(3 * s, ink, 1);
+      g.strokeCircle(c, c, 13 * s);
+      break;
     case 'mortar':
       g.lineStyle(4 * s, ink, 1);
       g.strokeCircle(c, c, 16 * s);
@@ -119,8 +125,8 @@ function rivets(g: Phaser.GameObjects.Graphics, s: number, color: number): void 
 }
 
 /** Barrel shapes, drawn pointing right with the pivot at the box centre. */
-export type BarrelType = 'core' | 'gatling' | 'cannon';
-export const BARREL_TYPES: readonly BarrelType[] = ['core', 'gatling', 'cannon'];
+export type BarrelType = 'core' | 'gatling' | 'cannon' | 'crossbow';
+export const BARREL_TYPES: readonly BarrelType[] = ['core', 'gatling', 'cannon', 'crossbow'];
 
 /** Tiles with a turning barrel (aimed weapons). */
 export function barrelFor(type: TileType): BarrelType | null {
@@ -148,6 +154,20 @@ export function drawBarrel(g: Phaser.GameObjects.Graphics, type: BarrelType, siz
     g.strokeRect(c + 24 * s, c - 8 * s, 6 * s, 16 * s);
     g.fillCircle(c, c, 11 * s);
     g.strokeCircle(c, c, 11 * s);
+  } else if (type === 'crossbow') {
+    // Stock along the aim, a bow across its front, the string and a loaded bolt.
+    g.fillRect(c - 6 * s, c - 3 * s, 30 * s, 6 * s);
+    g.strokeRect(c - 6 * s, c - 3 * s, 30 * s, 6 * s);
+    g.lineStyle(4 * s, edge, 1);
+    g.beginPath();
+    g.arc(c + 10 * s, c, 18 * s, -1.0, 1.0, false);
+    g.strokePath();
+    g.lineStyle(1.5 * s, edge, 1);
+    g.lineBetween(c + 10 * s + Math.cos(-1) * 18 * s, c + Math.sin(-1) * 18 * s, c + 2 * s, c);
+    g.lineBetween(c + 10 * s + Math.cos(1) * 18 * s, c + Math.sin(1) * 18 * s, c + 2 * s, c);
+    g.fillCircle(c, c, 7 * s);
+    g.lineStyle(2 * s, edge, 1);
+    g.strokeCircle(c, c, 7 * s);
   } else {
     g.fillRect(c, c - 3 * s, 20 * s, 6 * s);
     g.fillCircle(c, c, 6 * s);
