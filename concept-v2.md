@@ -62,14 +62,14 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1 (board and land) and 2 (editing UX) done and **merged into `v2`** (2.0.0-alpha.2). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Between phases; session ended 2026-10-22. |
-| **Next step** | **First ask the user** where the new step "Weapons rework and rebalance" (§11, §2.12) goes in the order (before or after Phase 3), then brainstorm its details with them one question at a time (§2.12 lists their requests). Then build the chosen next phase. |
+| **Current step** | Phase 3 (readability and synergies) starting on `v2-phase-3-readability`. |
+| **Next step** | Finish Phase 3 and hand it over. Then Phase 4, the weapons rework (§2.12): brainstorm its details with the user one question at a time before building. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.2` on `v2`. Phase 3 will be `2.0.0-alpha.3`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 2 merged, session end) |
+| **Last updated** | 2026-10-22 (phase order changed, Phase 3 started) |
 
 ---
 
@@ -244,11 +244,11 @@ Unchanged from v1 (`concept.md` §2.9), except:
 
 Unchanged from v1 (`concept.md` §2.10).
 
-### 2.11 Endless (v2, draft for Phase 4)
+### 2.11 Endless (v2, draft for Phase 5)
 
 - The win screen after the boss offers **"Keep going"** and **"End run"**
   (decided 2026-10-21).
-- Keep going (Claude's draft, to confirm in Phase 4, user agreed the
+- Keep going (Claude's draft, to confirm in Phase 5, user agreed the
   outline 2026-10-21): spawns resume at the v1 12:00 budget; enemy HP and
   contact/shot damage grow **×1.12 per minute** past the boss kill
   (compounding, on top of v1's +6%/min HP growth); **the Colossus returns**
@@ -260,7 +260,7 @@ Unchanged from v1 (`concept.md` §2.10).
 - The run ends when the Core is destroyed. The end screen reports time
   survived, "Boss defeated", level and kills.
 
-### 2.12 Weapons rework and rebalance (user request 2026-10-22, not planned in detail)
+### 2.12 Weapons rework and rebalance (Phase 4; user request 2026-10-22, not planned in detail)
 
 The user asked for a new step that reworks and rebalances the weapons and
 other tile designs. Their notes, to be turned into a design with them
@@ -454,7 +454,7 @@ Expected changes to the code structure (rebuilt in phases, not in spikes):
 - `sim/connectivity.ts`: Tarjan bridges.
 - `sim/build.ts`: land step; later selection, group move/rotate, undo.
 - `sim/synergies.ts`: no filled lines; support chains (Phase 3).
-- `bench/balance.sim.ts`: bots place land (Phase 1: simple; Phase 4: as
+- `bench/balance.sim.ts`: bots place land (Phase 1: simple; Phase 5: as
   part of balance).
 
 ---
@@ -518,9 +518,9 @@ these v2 changes:
 | **Phase 1 — board and land** | Rebuild Spikes B + B2 properly with tests: Core fixed at (0, 0), sparse open-ended grid, board of buildable cells, land shapes at levels 8/15/22/29/36 (12 cells, 3 offered), Tarjan bridges, filled rows removed, combat camera framing, build screen pan/zoom/fit with the fresh-key rule; old tests updated to the new rules; balance bots place land. | Plays like Spike B2; all tests pass. |
 | **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
 | **Phase 3 — readability and synergies** | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
-| **Phase 4 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
-| **Phase 5 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
-| **Weapons rework and rebalance** (user request 2026-10-22; position in the order and details to agree with the user) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
+| **Phase 4 — weapons rework and rebalance** (user request 2026-10-22; placed here by the user 2026-10-22; details to brainstorm with the user before building) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
+| **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
+| **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
 "waves and shop" is gone). If a spike is dropped, its phase is removed or rewritten with the user, and
@@ -533,10 +533,10 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- **Weapons rework and rebalance** (§2.12, user request 2026-10-22): where
-  it goes in the order, and every design detail (to brainstorm with the
+- **Weapons rework and rebalance** (Phase 4, §2.12, user request
+  2026-10-22): every design detail (to brainstorm with the
   user before building; includes the Saw rework).
-- Endless details (§2.11): scaling numbers, Colossus returns (Phase 4).
+- Endless details (§2.11): scaling numbers, Colossus returns (Phase 5).
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
 - v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
@@ -567,7 +567,7 @@ start early if the user asks.
 - **Readability at low zoom** with big cities and 600 enemies. *Check:*
   Phase 1 / Phase 3.
 - **Performance in endless:** many tiles (enemy→nearest tile queries,
-  synergy and bridge recompute) plus elites. *Check:* Phase 4 bench with
+  synergy and bridge recompute) plus elites. *Check:* Phase 5 bench with
   ~200 tiles; tiles may need their own spatial hash.
 
 **Known issues**
@@ -578,10 +578,10 @@ start early if the user asks.
   a GC observer attached; not seen in 4 runs on `v2` before Phase 1).
   Averages are fine (~6.9 ms/step, as before). Not found yet; the scenario
   (600 enemies on one tile) can't happen in a real run without losing.
-  Look again in the Phase 4 performance check.
+  Look again in the Phase 5 performance check.
 - **`npm run bench` times out on this machine** (Vitest's 5 s test
   timeout; the run takes ~7 s) on `v2` as well as on Phase 1: the check
-  never reports a pass here. Raise the bench's timeout in Phase 4, or run
+  never reports a pass here. Raise the bench's timeout in Phase 5, or run
   on a faster machine.
 - v1 known issues (`concept.md` §12) carry over until the code involved is
   rebuilt.
@@ -614,6 +614,11 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase order changed
+- Decision (user): the weapons rework becomes **Phase 4**; the old Phase 4
+  (endless and balance) becomes Phase 5, polish and hosting Phase 6.
+  Phase 3 (readability and synergies) is next, unchanged.
 
 ### 2026-10-22 — Weapons rework requested
 - Request (user): add a new step for the Saw rework and a general
