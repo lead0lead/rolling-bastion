@@ -4,6 +4,7 @@ import { TILES, type TileType } from '../src/config/tiles';
 import {
   hasStatus,
   updateBurns,
+  updateThrusts,
   leadPoint,
   updateBlades,
   updateProjectiles,
@@ -24,6 +25,7 @@ const LEGEND: Record<string, TileType> = {
   s: 'saw',
   x: 'crossbow',
   f: 'flamethrower',
+  k: 'spear',
 };
 
 function worldOf(rows: string[]): World {
@@ -205,5 +207,64 @@ describe('Flamethrower', () => {
       updateBurns(w, DT);
     }
     expect(before - e.hp).toBeCloseTo(TILES.flamethrower.combo?.burnDps ?? 0, 0);
+  });
+});
+
+describe('Spear', () => {
+  const thrust = TILES.spear.thrust;
+  if (!thrust) throw new Error('no thrust');
+
+  function spearWorld() {
+    const w = worldOf(['k..', 'C..', '...']);
+    const spear = tileAt(w.city, 0, 0);
+    if (!spear) throw new Error('no spear');
+    const c = tileCentre(w, spear);
+    const spawn = (dx: number, dy: number) => {
+      const e = spawnEnemy(w, 'brute', c.x + dx, c.y + dy);
+      e.hp = e.maxHp = 1e6;
+      return e;
+    };
+    const jab = (seconds: number) => {
+      for (let i = 0; i < seconds / DT; i++) {
+        w.time += DT;
+        w.hash.clear();
+        w.enemies.forEach((e, idx) => w.hash.insert(idx, e.x, e.y));
+        updateThrusts(w, DT);
+      }
+    };
+    return { w, spawn, jab };
+  }
+
+  it('stabs every enemy on the line ahead once per cycle, and snags them', () => {
+    const { w, spawn, jab } = spearWorld();
+    const line = [30, 60, 90].map((d) => spawn(0, -d));
+    const aside = spawn(40, -50);
+    const behind = spawn(0, 60);
+    jab(2 * thrust.interval);
+    for (const e of line) {
+      expect(e.maxHp - e.hp).toBeCloseTo(2 * thrust.damage);
+      expect(hasStatus(w, e, 'snagged')).toBe(true);
+    }
+    expect(aside.hp).toBe(aside.maxHp);
+    expect(behind.hp).toBe(behind.maxHp);
+  });
+
+  it('L5 jabs twice per cycle; L3 reaches further', () => {
+    const { w, spawn, jab } = spearWorld();
+    const far = spawn(0, -120);
+    w.city.typeLevels.spear = 5;
+    cityChanged(w);
+    jab(thrust.interval);
+    const level = 1 + 4 * UPGRADES.damagePerLevel;
+    expect(far.maxHp - far.hp).toBeCloseTo(2 * thrust.damage * level);
+  });
+
+  it('chains only with the same facing', () => {
+    const w = worldOf(['kkk', 'C..', '...']);
+    expect(w.cache.syn.chains.map((c) => c.type)).toEqual(['spear']);
+    const t = tileAt(w.city, 1, 0);
+    if (t) t.facing = 1;
+    cityChanged(w);
+    expect(w.cache.syn.chains).toEqual([]);
   });
 });

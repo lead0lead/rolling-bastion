@@ -4,6 +4,7 @@ import {
   healTiles,
   removeDead,
   updateBlades,
+  updateThrusts,
   updateBurns,
   updateProjectiles,
   updateWeapons,
@@ -30,6 +31,7 @@ export function step(w: World, input: MoveInput, dt: number): void {
   if (w.over) return;
   updateWeapons(w, dt);
   updateBlades(w, dt);
+  updateThrusts(w, dt);
   updateProjectiles(w, dt);
   updateBurns(w, dt);
   healTiles(w, dt);

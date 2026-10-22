@@ -22,9 +22,11 @@ describe('Phase 3 pool', () => {
         'l3-crossbow',
         'domino-flamer',
         'l3-flamer',
+        'domino-spear',
+        'i3-spear',
       ]),
     );
-    expect(ids).toHaveLength(32);
+    expect(ids).toHaveLength(34);
   });
 
   it('contains every tile type except the Core', () => {

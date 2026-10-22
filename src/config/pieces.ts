@@ -51,6 +51,7 @@ const L = {
   s: 'saw',
   x: 'crossbow',
   f: 'flamethrower',
+  k: 'spear',
   e: 'generator',
   d: 'shield',
   r: 'repair',
@@ -78,6 +79,7 @@ export const SANDBOX_POOL: PieceDef[] = [
   piece('l3-engine', ['n.', 'hu'], L),
   piece('l3-crossbow', ['x.', 'hx'], L),
   piece('l3-flamer', ['f.', 'hf'], L),
+  piece('i3-spear', ['kkk'], L),
 ];
 
 /** Phase 2 pool (concept.md §4.2): Gatling and Cannon pieces plus pure Hull. */
@@ -119,6 +121,8 @@ export const PHASE3_POOL: PieceDef[] = [
   piece('l3-crossbow', ['x.', 'hh'], L, 0.6),
   piece('domino-flamer', ['fh'], L, 0.8),
   piece('l3-flamer', ['f.', 'hh'], L, 0.6),
+  piece('domino-spear', ['kh'], L, 0.8),
+  piece('i3-spear', ['kkk'], L, 0.5),
   // Structure
   piece('l3-plating', ['p.', 'pp'], L, 0.6),
   piece('i3-plating', ['ppp'], L, 0.4),

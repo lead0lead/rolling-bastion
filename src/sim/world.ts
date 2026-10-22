@@ -121,6 +121,8 @@ export interface CityCache {
   magnets: PlacedTile[];
   /** Online tiles with a blade (Saws). */
   blades: PlacedTile[];
+  /** Online tiles that thrust (Spears). */
+  thrusters: PlacedTile[];
   /** Bridge tiles (Sapper targets) and their centres relative to the origin. */
   bridges: Set<number>;
   bridgeCentres: { rx: number; ry: number }[];
@@ -297,6 +299,7 @@ function buildCache(city: CityState): CityCache {
   const weapons: PlacedTile[] = [];
   const magnets: PlacedTile[] = [];
   const blades: PlacedTile[] = [];
+  const thrusters: PlacedTile[] = [];
   let minRx = Infinity;
   let maxRx = -Infinity;
   let minRy = Infinity;
@@ -318,6 +321,7 @@ function buildCache(city: CityState): CityCache {
     if (TILES[t.type].weapon) weapons.push(t);
     if (t.type === 'magnet') magnets.push(t);
     if (TILES[t.type].blade) blades.push(t);
+    if (TILES[t.type].thrust) thrusters.push(t);
     if (bridges.has(t.id)) bridgeCentres.push({ rx, ry });
   }
   if (centres.length === 0) minRx = maxRx = minRy = maxRy = 0;
@@ -331,6 +335,7 @@ function buildCache(city: CityState): CityCache {
     weapons,
     magnets,
     blades,
+    thrusters,
     bridges,
     bridgeCentres,
     syn,

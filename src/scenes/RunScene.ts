@@ -55,6 +55,7 @@ const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
   mortar: 'shot-mortar',
   crossbow: 'shot-cannon',
   flamethrower: 'shot-gatling',
+  spear: 'ui-place',
 };
 /** Colour of the boss charge telegraph. */
 const CHARGE_COLOR = COLORS.charge;
@@ -75,6 +76,9 @@ const FLAME_LOOK = {
     [0xffe08a, 0.45, 0.7],
   ] as const,
 };
+
+/** Spear jab look: time out and back (s), shaft width and colour, head length (px). */
+const THRUST_LOOK = { out: 0.06, back: 0.16, shaft: 4, shaftColor: 0xc8963e, head: 12 };
 
 /** Saw blade look: teeth count, tooth depth (fraction of radius), disc spin vs. orbit angle. */
 const BLADE_LOOK = { teeth: 10, tooth: 0.22, spinFactor: 3 };
@@ -591,6 +595,42 @@ export class RunScene extends Phaser.Scene {
     this.drawPulses(w, ox, oy, frameDt);
     this.drawBlades(w, ox - w.x, oy - w.y);
     this.drawFlames(w, ox - w.x, oy - w.y);
+    this.drawThrusts(w, ox - w.x, oy - w.y);
+  }
+
+  /** Spear shafts jutting out on each jab (concept-v2.md §2.12); drawn with the blades. */
+  private drawThrusts(w: World, dx: number, dy: number): void {
+    const g = this.bladeGfx;
+    const look = THRUST_LOOK;
+    for (const t of w.cache.thrusters) {
+      const thrust = w.cache.syn.thrusts[t.type];
+      const st = w.weapons.get(t.id);
+      if (!thrust || st?.firedAt === undefined) continue;
+      const age = w.time - st.firedAt;
+      if (age > look.out + look.back) continue;
+      const ext = age < look.out ? age / look.out : 1 - (age - look.out) / look.back;
+      const c = tileCentre(w, t);
+      const fx = Math.cos(st.aim);
+      const fy = Math.sin(st.aim);
+      const x0 = c.x + dx;
+      const y0 = c.y + dy;
+      const x1 = x0 + fx * thrust.reach * ext;
+      const y1 = y0 + fy * thrust.reach * ext;
+      g.lineStyle(look.shaft + 2, COLORS.ink, 1);
+      g.lineBetween(x0, y0, x1, y1);
+      g.lineStyle(look.shaft, look.shaftColor, 1);
+      g.lineBetween(x0, y0, x1, y1);
+      const h = look.head;
+      const tip = [
+        { x: x1 + fx * h, y: y1 + fy * h },
+        { x: x1 - fy * h * 0.5, y: y1 + fx * h * 0.5 },
+        { x: x1 + fy * h * 0.5, y: y1 - fx * h * 0.5 },
+      ];
+      g.fillStyle(0xffffff, 1);
+      g.fillPoints(tip, true);
+      g.lineStyle(2, COLORS.ink, 1);
+      g.strokePoints(tip, true);
+    }
   }
 
   /** Flame cones of Flamethrowers that fired in the last moment (concept-v2.md §2.12). */

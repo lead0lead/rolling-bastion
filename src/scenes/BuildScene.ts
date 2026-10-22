@@ -974,6 +974,16 @@ export class BuildScene extends Phaser.Scene {
       g.strokeCircle(cx, cy, r);
       return;
     }
+    const thrust = this.syn.thrusts[t.type];
+    if (thrust) {
+      // Spear: the line it stabs along.
+      const a = facingAngle(t.facing);
+      const len = (thrust.reach / GRID.cellPx) * cs;
+      const g = this.arcs;
+      g.lineStyle(((thrust.width + 8) / GRID.cellPx) * cs, TILES[t.type].color, ARC_FILL_ALPHA * 2);
+      g.lineBetween(cx, cy, cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+      return;
+    }
     const weapon = TILES[t.type].weapon;
     if (!weapon || weapon.arcDeg >= 360) return;
     const half = (weapon.arcDeg * Math.PI) / 360;

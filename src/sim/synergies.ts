@@ -2,6 +2,7 @@ import { LINES, MOVE } from '../config/balance';
 import {
   TILES,
   type BladeDef,
+  type ThrustDef,
   type PulseDef,
   type TileType,
   type WeaponDef,
@@ -71,6 +72,11 @@ export interface WeaponStats extends WeaponDef {
   burnFactor: number;
 }
 
+/** A thrust type's stats with its perks applied. */
+export interface ThrustStats extends ThrustDef {
+  jabs: number;
+}
+
 /** A blade type's stats with its perks applied. */
 export interface BladeStats extends BladeDef {
   count: number;
@@ -79,6 +85,7 @@ export interface BladeStats extends BladeDef {
 export interface Synergies {
   mods: Map<number, TileMods>;
   blades: Partial<Record<TileType, BladeStats>>;
+  thrusts: Partial<Record<TileType, ThrustStats>>;
   chains: Chain[];
   /** Every adjacency buff, in tile order of the source. */
   links: BuffLink[];
@@ -227,9 +234,18 @@ export function computeSynergies(city: CityState): Synergies {
 
   const weapons: Synergies['weapons'] = {};
   const blades: Synergies['blades'] = {};
+  const thrusts: Synergies['thrusts'] = {};
   for (const type of Object.keys(TILES) as TileType[]) {
     const w = weaponStats(city, type);
     if (w) weapons[type] = w;
+    const thrust = TILES[type].thrust;
+    if (thrust) {
+      thrusts[type] = {
+        ...thrust,
+        reach: perk(city, type, 'thrustReach')?.px ?? thrust.reach,
+        jabs: 1 + (perk(city, type, 'extraJabs')?.count ?? 0),
+      };
+    }
     const blade = TILES[type].blade;
     if (blade) {
       blades[type] = {
@@ -243,6 +259,7 @@ export function computeSynergies(city: CityState): Synergies {
   return {
     mods,
     blades,
+    thrusts,
     chains,
     links,
     weapons,
@@ -275,8 +292,9 @@ export function chainBonusFor(length: number): number {
 
 /** True if a tile type chains regardless of facing (no firing arc: Mortar, Saw, support tiles). */
 function ignoresFacing(type: TileType): boolean {
-  const w = TILES[type].weapon;
-  return !w || w.arcDeg >= 360;
+  const def = TILES[type];
+  if (def.thrust) return false;
+  return !def.weapon || def.weapon.arcDeg >= 360;
 }
 
 const SUPPORT_CHAINS: readonly TileType[] = LINES.supportChainTypes;

@@ -194,6 +194,58 @@ function sprayCone(
   if (w.boss) hit(w.boss);
 }
 
+/**
+ * Spears (concept-v2.md §2.12): each online Spear thrusts along its facing
+ * every `interval` (Generators shorten it), with `jabs` jabs `jabGap` apart
+ * per cycle, hitting every enemy within the line. `WeaponState.cooldown`
+ * counts down to the next jab, `aimTimer` holds the jabs left in the cycle,
+ * `firedAt` the last jab (for the drawn shaft).
+ */
+export function updateThrusts(w: World, dt: number): void {
+  for (const t of w.cache.thrusters) {
+    const thrust = w.cache.syn.thrusts[t.type];
+    if (!thrust) continue;
+    const mods = modsOf(w, t);
+    const interval = thrust.interval / mods.fireRate;
+    const aim = facingAngle(t.facing);
+    let st = w.weapons.get(t.id);
+    if (!st) {
+      st = { cooldown: w.rng.next() * interval, aim, aimTimer: 0 };
+      w.weapons.set(t.id, st);
+    }
+    st.aim = aim;
+    st.cooldown -= dt;
+    if (st.cooldown > 0) continue;
+    st.firedAt = w.time;
+    if (st.aimTimer <= 0) st.aimTimer = thrust.jabs;
+    st.aimTimer--;
+    const gap = Math.min(thrust.jabGap, interval / thrust.jabs);
+    st.cooldown += st.aimTimer > 0 ? gap : interval - gap * (thrust.jabs - 1);
+    const c = tileCentre(w, t);
+    const fx = Math.cos(aim);
+    const fy = Math.sin(aim);
+    const damage = thrust.damage * mods.damage;
+    const midX = c.x + (fx * thrust.reach) / 2;
+    const midY = c.y + (fy * thrust.reach) / 2;
+    const stab = (e: Enemy) => {
+      if (e.dead) return;
+      const dx = e.x - c.x;
+      const dy = e.y - c.y;
+      const along = dx * fx + dy * fy;
+      const across = Math.abs(dx * fy - dy * fx);
+      if (along < -e.radius || along > thrust.reach + e.radius) return;
+      if (across > thrust.width / 2 + e.radius) return;
+      hitEnemy(w, e, damage, 0, 0, 0, t.type);
+    };
+    w.hash.query(midX, midY, thrust.reach / 2 + MAX_ENEMY_RADIUS, (i) => {
+      const e = w.enemies[i];
+      if (e && e !== w.boss) stab(e);
+    });
+    if (w.boss) stab(w.boss);
+    w.tally.shots[t.type] = (w.tally.shots[t.type] ?? 0) + 1;
+  }
+}
+
 /** Blades per tile id, for unique blade ids (`tile id × this + blade index`). */
 const BLADE_ID_STRIDE = 8;
 

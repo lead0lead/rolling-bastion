@@ -425,6 +425,16 @@ target was.
   drives the drawn cone (three layered wedges for 0.15 s, flickering).
   Tank icon, nozzle barrel. Pieces `domino-flamer`, `l3-flamer`; sandbox
   `l3-flamer`.
+- Spear (`spear`, letter k, colour 0xc8963e): `TILES.spear.thrust`
+  (interval 1 s, reach 96, width 16, 35 dmg, jab gap 0.25 s); perks
+  `thrustReach` (L3 128) and `extraJabs` (L5). `updateThrusts` runs after
+  the blades: fixed along the facing, every enemy within the line, Colossus
+  included; `WeaponState` reused (cooldown to next jab, `aimTimer` = jabs
+  left, `firedAt` for the drawn shaft). Spears chain only with the same
+  facing (`ignoresFacing` is false for thrust tiles). Run screen: a shaft
+  with a white head juts out 0.06 s and pulls back 0.16 s; build screen:
+  the stab line with the arcs. Spearhead barrel, `ui-place` sound. Pieces
+  `domino-spear` (0.8), `i3-spear` (0.5); sandbox `i3-spear`.
 
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,

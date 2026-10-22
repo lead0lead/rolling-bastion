@@ -10,6 +10,7 @@ export type TileType =
   | 'saw'
   | 'crossbow'
   | 'flamethrower'
+  | 'spear'
   | 'generator'
   | 'shield'
   | 'repair'
@@ -66,6 +67,23 @@ export interface BladeDef {
   hitCooldown: number;
 }
 
+/**
+ * Spear thrust (concept-v2.md §2.12): stabs straight out along the tile's
+ * facing on a fixed rhythm, hitting every enemy on the line (passes over the
+ * city's own tiles).
+ */
+export interface ThrustDef {
+  /** Seconds per thrust cycle at fire rate multiplier 1. */
+  interval: number;
+  /** Line length from the tile's centre (px). */
+  reach: number;
+  /** Line width (px). */
+  width: number;
+  damage: number;
+  /** With extra jabs, the jabs of one cycle are this far apart (s). */
+  jabGap: number;
+}
+
 /** How a weapon tile takes part in status combos (concept-v2.md §2.12). */
 export interface ComboDef {
   /** Status put on every enemy this tile's attacks hit. */
@@ -114,7 +132,9 @@ export type PerkEffect =
   | { kind: 'extraBlades'; count: number }
   | { kind: 'bladeOrbit'; px: number }
   | { kind: 'range'; px: number }
-  | { kind: 'burnFactor'; factor: number };
+  | { kind: 'burnFactor'; factor: number }
+  | { kind: 'thrustReach'; px: number }
+  | { kind: 'extraJabs'; count: number };
 
 export type PerkKind = PerkEffect['kind'];
 
@@ -135,6 +155,7 @@ export interface TileDef {
   description: string;
   weapon?: WeaponDef;
   blade?: BladeDef;
+  thrust?: ThrustDef;
   support?: SupportDef;
   pulse?: PulseDef;
   combo?: ComboDef;
@@ -333,6 +354,20 @@ export const TILES: Record<TileType, TileDef> = {
     perks: {
       l3: { name: 'Long nozzle: reach 80 → 112 px', effect: { kind: 'range', px: 112 } },
       l5: { name: 'Napalm: burn damage ×2', effect: { kind: 'burnFactor', factor: 2 } },
+    },
+  },
+  spear: {
+    name: 'Spear',
+    family: 'weapon',
+    maxHp: 40,
+    color: 0xc8963e,
+    label: 'K',
+    description: 'Thrusts straight ahead 96 px every 1 s: 35 dmg to every enemy on the line.',
+    thrust: { interval: 1, reach: 96, width: 16, damage: 35, jabGap: 0.25 },
+    combo: { applies: 'snagged', profitsFrom: ['staggered'] },
+    perks: {
+      l3: { name: 'Long shaft: reach 96 → 128 px', effect: { kind: 'thrustReach', px: 128 } },
+      l5: { name: 'Double jab: two thrusts per cycle', effect: { kind: 'extraJabs', count: 1 } },
     },
   },
   generator: {
