@@ -427,6 +427,13 @@ As implemented (Phase 3, in progress):
   level, HP, offline note, "Receives:" lines per buff type with totals,
   counts and caps (Generator L3 damage on the same line), chain length and
   bonus, and how many neighbours it buffs.
+- Chain preview: `previewChains` (`src/sim/build.ts`) drops the held group
+  into a copy of the city and returns the chains that contain a held cell
+  (online tiles only, so a spot not connected to the Core shows none). The
+  build screen memoises it per held group and cell, draws the link lines
+  and a label above each chain ("Chain 3: +50% damage"; "fire rate gift"
+  for Generators, "speed bonus" for Engines). v2 had no live chain line
+  before this (the plan's "as v1" was wrong); it is new.
 
 ---
 

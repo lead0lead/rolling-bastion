@@ -427,7 +427,7 @@ export class RunScene extends Phaser.Scene {
       this.linesZoom = this.cam.zoom;
       this.linesGfx.clear();
       drawPieceOutlines(this.linesGfx, w.city.tiles, cell, 0, 0, 1 / this.cam.zoom);
-      drawSynergyLines(this.linesGfx, w.cache.syn, cell, 0, 0);
+      drawSynergyLines(this.linesGfx, w.cache.syn.chains, cell, 0, 0);
       drawBuffPips(this.linesGfx, w.city.tiles, w.cache.syn, cell, 0, 0);
     }
     this.linesGfx.setPosition(left, top);

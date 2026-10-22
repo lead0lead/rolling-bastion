@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TILES } from '../config/tiles';
 import { cellId, type PlacedTile } from '../sim/grid';
-import type { BuffType, Synergies } from '../sim/synergies';
+import type { BuffType, Chain, Synergies } from '../sim/synergies';
 import { COLORS } from './palette';
 
 /** Look of chain links (dark ink line, white dots) (concept.md §2.7, §6). */
@@ -97,12 +97,12 @@ export function drawBuffPips(
  */
 export function drawSynergyLines(
   g: Phaser.GameObjects.Graphics,
-  syn: Synergies,
+  chains: readonly Chain[],
   cs: number,
   ox: number,
   oy: number,
 ): void {
-  for (const c of syn.chains) {
+  for (const c of chains) {
     const color = TILES[c.type].color;
     const x0 = ox + (c.x0 + 0.5) * cs;
     const y0 = oy + (c.y0 + 0.5) * cs;

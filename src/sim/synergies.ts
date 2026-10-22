@@ -253,6 +253,12 @@ export function buffsReceived(
   return out;
 }
 
+/** Chain bonus for a chain of `length` tiles (0 below LINES.chainMin). */
+export function chainBonusFor(length: number): number {
+  if (length < LINES.chainMin) return 0;
+  return Math.min(LINES.chainMaxBonus, LINES.chainBonusStep * (length - LINES.chainMin + 1));
+}
+
 /** True if a tile type chains regardless of facing (no firing arc: Mortar, Saw, support tiles). */
 function ignoresFacing(type: TileType): boolean {
   const w = TILES[type].weapon;
@@ -300,10 +306,7 @@ function findChains(
       }
       const length = run.length;
       if (length < LINES.chainMin) continue;
-      const bonus = Math.min(
-        LINES.chainMaxBonus,
-        LINES.chainBonusStep * (length - LINES.chainMin + 1),
-      );
+      const bonus = chainBonusFor(length);
       for (const t of run) chainBonus.set(t.id, Math.max(chainBonus.get(t.id) ?? 0, bonus));
       const last = run[length - 1] as PlacedTile;
       chains.push({

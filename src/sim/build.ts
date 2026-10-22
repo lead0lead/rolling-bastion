@@ -3,6 +3,7 @@ import type { PieceDef } from '../config/pieces';
 import type { TileType } from '../config/tiles';
 import { updateOnline } from './connectivity';
 import {
+  cellId,
   destroyTile,
   dropGroup,
   heldCellsAt,
@@ -20,6 +21,7 @@ import {
   type PlacedTile,
 } from './grid';
 import { addLand, landCells, landProblems } from './land';
+import { computeSynergies, type Chain } from './synergies';
 import { canUpgrade, upgradeType } from './upgrades';
 
 /** Where the held group came from, so a cancelled move can be undone. */
@@ -270,6 +272,28 @@ export function previewAt(
   const o = heldOrigin(s.held, x, y);
   const cells = heldCellsAt(s.held, o.x, o.y);
   return { cells, problems: placementProblems(s.city, cells) };
+}
+
+/**
+ * Chains the held group would form or extend if dropped with its anchor over
+ * (x, y) (concept-v2.md §3.3); empty if the spot is invalid.
+ */
+export function previewChains(s: BuildSession, x: number, y: number): Chain[] {
+  const preview = previewAt(s, x, y);
+  if (!s.held || !preview || preview.problems.size > 0) return [];
+  const o = heldOrigin(s.held, x, y);
+  const city: CityState = { ...s.city, tiles: s.city.tiles.map((t) => ({ ...t })) };
+  dropGroup(city, s.held, o.x, o.y);
+  updateOnline(city);
+  const held = new Set(preview.cells.map((c) => cellId(c.x, c.y)));
+  return computeSynergies(city).chains.filter((c) => {
+    for (let i = 0; i < c.length; i++) {
+      const gx = c.x0 + Math.sign(c.x1 - c.x0) * i;
+      const gy = c.y0 + Math.sign(c.y1 - c.y0) * i;
+      if (held.has(cellId(gx, gy))) return true;
+    }
+    return false;
+  });
 }
 
 /** Drops the held group with its anchor over (x, y). False if the spot is invalid. */

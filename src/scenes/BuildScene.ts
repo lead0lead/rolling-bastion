@@ -26,6 +26,7 @@ import {
   pickOffer,
   pickUpAt,
   previewAt,
+  previewChains,
   redo,
   reroll,
   rotate,
@@ -59,7 +60,7 @@ import type { BuildResult } from '../sim/progression';
 import { rollOffers } from '../sim/progression';
 import { rollLand } from '../sim/land';
 import { createRng, type Rng } from '../sim/rng';
-import { computeSynergies, type Synergies } from '../sim/synergies';
+import { chainBonusFor, computeSynergies, type Chain, type Synergies } from '../sim/synergies';
 import { typeLevel } from '../sim/upgrades';
 
 /** Data for a build pause inside a run. Without it the scene runs as a sandbox. */
@@ -194,6 +195,10 @@ export class BuildScene extends Phaser.Scene {
   /** Chain links, between tile bodies and barrels. */
   private lines!: Phaser.GameObjects.Graphics;
   private syn!: Synergies;
+  /** Last chain preview, recomputed when the held group or its cell changes. */
+  private chainPreview: { held: unknown; x: number; y: number; chains: Chain[] } | null = null;
+  private chainLabels: Phaser.GameObjects.Text[] = [];
+  private chainLabelsShown = 0;
   private tileImgs!: SpritePool;
   private crackImgs!: SpritePool;
   private barrelImgs!: SpritePool;
@@ -872,7 +877,9 @@ export class BuildScene extends Phaser.Scene {
     this.drawGrid();
     this.drawCards();
     this.drawPanels();
+    this.chainLabelsShown = 0;
     this.drawHeld();
+    this.chainLabels.forEach((l, i) => l.setVisible(i < this.chainLabelsShown));
     this.drawHeldLand();
     for (const pool of pools) pool.end();
     this.updateTooltip();
@@ -1013,7 +1020,7 @@ export class BuildScene extends Phaser.Scene {
         fg.strokeCircle(tx + cs / 2, ty + cs / 2, cs * 0.34);
       }
     }
-    drawSynergyLines(this.lines, this.syn, cs, r.x, r.y);
+    drawSynergyLines(this.lines, this.syn.chains, cs, r.x, r.y);
     drawPieceOutlines(this.fg, city.tiles, cs, r.x, r.y, px);
     drawBuffPips(this.fg, city.tiles, this.syn, cs, r.x, r.y);
     this.drawBuffTargets();
@@ -1072,6 +1079,51 @@ export class BuildScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Chains the held tiles would form or extend at (x, y): the link line plus
+   * a floating label per chain (concept-v2.md §3.3).
+   */
+  private drawChainPreview(x: number, y: number): void {
+    const s = this.session;
+    const memo = this.chainPreview;
+    if (!memo || memo.held !== s.held || memo.x !== x || memo.y !== y) {
+      this.chainPreview = { held: s.held, x, y, chains: previewChains(s, x, y) };
+    }
+    const chains = this.chainPreview?.chains ?? [];
+    drawSynergyLines(this.fg, chains, CELL, 0, 0);
+    const c = this.boardCam;
+    chains.forEach((chain, i) => {
+      let label = this.chainLabels[i];
+      if (!label) {
+        label = this.ui(
+          this.add
+            .text(0, 0, '', {
+              fontFamily: FONT.family,
+              fontStyle: FONT.bold,
+              fontSize: '14px',
+              color: COLORS.text,
+              backgroundColor: css(COLORS.panel),
+              padding: { x: 6, y: 3 },
+            })
+            .setOrigin(0.5, 1)
+            .setDepth(19),
+        );
+        this.chainLabels.push(label);
+      }
+      // Above the chain's middle, in screen coordinates.
+      const wx = ((chain.x0 + chain.x1) / 2 + 0.5) * CELL;
+      const wy = Math.min(chain.y0, chain.y1) * CELL;
+      label
+        .setText(chainLabel(chain))
+        .setPosition(
+          VIEW.x + VIEW.w / 2 + (wx - c.scrollX - VIEW.w / 2) * c.zoom,
+          VIEW.y + VIEW.h / 2 + (wy - c.scrollY - VIEW.h / 2) * c.zoom - 4,
+        )
+        .setVisible(true);
+    });
+    this.chainLabelsShown = chains.length;
+  }
+
   private drawHeld(): void {
     const s = this.session;
     if (!s.held) return;
@@ -1100,6 +1152,7 @@ export class BuildScene extends Phaser.Scene {
         fg.lineStyle(3 * w, bad ? COLORS.invalid : COLORS.valid, 1);
         fg.strokeRect(x + 2 * w, y + 2 * w, cs - 4 * w, cs - 4 * w);
       });
+      this.drawChainPreview(c.x, c.y);
       return;
     }
 
@@ -1382,6 +1435,14 @@ export class BuildScene extends Phaser.Scene {
     if (this.flash && this.time.now < this.flash.until) lines.push('', this.flash.text);
     this.statusText.setText(lines.join('\n'));
   }
+}
+
+/** "Chain 3: +50% damage" (concept-v2.md §3.3). */
+function chainLabel(c: Chain): string {
+  const bonus = `+${Math.round(chainBonusFor(c.length) * 100)}%`;
+  const what =
+    c.type === 'generator' ? 'fire rate gift' : c.type === 'engine' ? 'speed bonus' : 'damage';
+  return `Chain ${c.length}: ${bonus} ${what}`;
 }
 
 /** "2× Gatling, Hull" style summary of a piece's tiles. */
