@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1 (board and land), 2 (editing UX) and 3 (readability and synergies) done and **merged into `v2`** (2.0.0-alpha.3). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 4 (weapons rework and rebalance) on `v2-phase-4-weapons`: design agreed (§2.12), building step by step. |
-| **Next step** | Finish the Phase 4 steps (§2.12) and hand the build over. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
+| **Status** | Phases 1–3 merged into `v2` (2.0.0-alpha.3). **Phase 4 (weapons rework) built** on `v2-phase-4-weapons` (2.0.0-alpha.4), handed to the user, not merged yet. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 4 hand-over: the user plays the new weapons (§14, 2026-10-22 "Phase 4"). |
+| **Next step** | User feedback on Phase 4 (feel of each weapon; Spear and Flamethrower builds still lose in the sim); tune, then merge into `v2`. Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.3` on `v2`. Phase 4 will be `2.0.0-alpha.4`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.4` on `v2-phase-4-weapons` (`2.0.0-alpha.3` on `v2`). Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 3 merged, Phase 4 started) |
+| **Last updated** | 2026-10-22 (Phase 4 built and handed over) |
 
 ---
 
@@ -388,7 +388,7 @@ target was.
   Gatling's damage per tile; in the balance sim every single-weapon build
   can win, and the mixed combo build does best.
 
-**As implemented (Phase 4, in progress):**
+**As implemented (Phase 4):**
 - Statuses: `src/config/statuses.ts` (`STATUS`: durations, snag speed
   factor, combo bonus); each tile's `combo` (`applies`, `profitsFrom`,
   `burnDps`) in `TILES`. `Enemy` has `burnUntil` / `snagUntil` /
@@ -442,6 +442,25 @@ target was.
   rules legend has a combo row generated from config (panel 620 px tall).
 - Debug: `F4` in a run fills every empty board cell with all weapon types
   in turn, facing outward (`debugFillWeapons`).
+- **Tuned values (step 8; the draft table above is the starting point):**
+  Cannon 45 dmg at **1.2 shots/s** (a 55-dmg try changed nothing: its
+  shells already overkill the 6–30 HP enemies, so more shots beat bigger
+  ones); Saw HP 60 → **90**, blade **26** dmg, blade radius 20; Spear HP
+  40 → **70**, **80** dmg, a jab every **0.8 s**, line **24** px wide;
+  Flamethrower HP 40 → **60**, **3** dmg per puff, burn **8**/s, reach
+  **96** px (L3 128). Mortar and Crossbow as drafted.
+- Fixed: each Saw blade keeps its own recent hits (`World.bladeHits`,
+  pruned in `cityChanged`); with one "last blade" per enemy, a big enemy
+  under several blades was hit every tick (Saw builds killed the Colossus
+  in 3 s).
+- Sims: `npm run sim:balance` and `npm run sim:weapons` (or `npm run sim`
+  for both). The runs are split over shard files (`bench/balance.shard1–6`,
+  `bench/weapons.shard1–4`, logic in `bench/balance.ts` /
+  `bench/weapons.ts`) so Vitest runs them on several cores: a full balance
+  run takes ~6 min instead of ~30 on 8 cores. Filters: `SIM_SEEDS`,
+  `SIM_XP`, `SIM_ARCH` (parts of build names), `SIM_WEAPONS` (tile types).
+  New builds: Saw grinder, Crossbow lines, Flame ring, Spear wall, Combo
+  mix; melee builds' bot drives into the Colossus instead of fleeing it.
 
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,
@@ -717,7 +736,7 @@ these v2 changes:
 | **Phase 1 — board and land** | Rebuild Spikes B + B2 properly with tests: Core fixed at (0, 0), sparse open-ended grid, board of buildable cells, land shapes at levels 8/15/22/29/36 (12 cells, 3 offered), Tarjan bridges, filled rows removed, combat camera framing, build screen pan/zoom/fit with the fresh-key rule; old tests updated to the new rules; balance bots place land. | Plays like Spike B2; all tests pass. |
 | **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
 | **Phase 3 — readability and synergies** (done, merged 2026-10-22) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
-| **Phase 4 — weapons rework and rebalance** (user request 2026-10-22; placed here by the user 2026-10-22; details to brainstorm with the user before building) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
+| **Phase 4 — weapons rework and rebalance** (user request 2026-10-22; designed with the user and built 2026-10-22, in hand-over) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
 | **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
 | **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
@@ -746,6 +765,9 @@ start early if the user asks.
   Generators and Engines, as asked.)
 - Carried over from v1: final title, code licence, piece mirroring,
   meta-progression.
+- Phase 4 feel: does each weapon feel powerful? Spear and Flamethrower
+  builds still lose in the sim; the combo bonus (+50%) may need to be
+  larger for mixed builds to come out on top.
 
 **Claude's calls to check**
 
@@ -824,6 +846,33 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase 4: weapons rework
+- Built on `v2-phase-4-weapons`: enemy statuses and combos; Cannon and
+  Mortar buffs with target leading; Saw blade; Crossbow; Flamethrower;
+  Spear; status visuals, combo tooltips and legend row; sims for every
+  weapon; tuning. Version 2.0.0-alpha.4. Build, type check, lint and 165
+  tests pass.
+- Changed tuning: see §2.12 "Tuned values" (Cannon 45 dmg 1.2/s; Mortar
+  30 dmg, blast 64, 420 px/s, leads; Saw HP 90, blade 26; Spear HP 70,
+  80 dmg every 0.8 s; Flamethrower HP 60, 3/puff, burn 8/s, 96 px;
+  Crossbow 60 dmg 0.7/s). Gatling unchanged, as asked.
+- Measured (single weapon, 9–12 min, effective dmg/s per tile): Gatling
+  17.3, Crossbow 15.8, Mortar 15.4, Saw 14.3 (with an 18-dmg blade),
+  Cannon 12.5, Flamethrower 11.8, Spear 11.4 (60 dmg, before the last
+  buffs).
+- Balance sim (2 seeds): Gatling, Cannon, Crossbow, Mortar, Combo mix,
+  Mixed cluster and Saw grinder win both; Saw wall loses narrowly (boss at
+  3% and 52%); Spear wall and Flame ring lose (Flame ring clears waves
+  best, 2700+ kills, but is worn down to 4–5 tiles by the boss). The
+  combo build wins but doesn't beat the single-weapon builds yet; the
+  "combo does best" target is not met in the sim.
+- Fixed: Saw blade hit memory (a big enemy under several blades was hit
+  every tick). Sims now run in parallel shards (~8½ min instead of ~29).
+- Not verified by playing: flames, status marks and the feel of every
+  weapon at real speed (headless screenshots run too slowly).
+- Next: user plays (F4 in a run fills the board with every weapon), then
+  tuning and merge.
 
 ### 2026-10-22 — Phase 4 design agreed
 - Measured the weapons (`bench/weapons.sim.ts`, §2.12): Gatling leads,
