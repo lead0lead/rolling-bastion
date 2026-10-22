@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1–3 merged into `v2` (2.0.0-alpha.3). **Phase 4 (weapons rework) built** on `v2-phase-4-weapons` (2.0.0-alpha.4), handed to the user, not merged yet. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 4 played by the user ("had a ton of fun", 2026-10-22); session ended. Not merged yet. |
-| **Next step** | **Ask the user** whether to merge `v2-phase-4-weapons` into `v2` as is or tune first (Spear and Flamethrower builds still lose in the sim; the combo build doesn't beat single-weapon builds). Then Phase 5 (endless and balance). Then Phase 5 (endless and balance), Phase 6 (polish and hosting). |
+| **Status** | Phases 1–4 merged into `v2` (2.0.0-alpha.4). v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 4 merged into `v2` as is (user decision 2026-10-22); `v2` and the phase branches pushed. |
+| **Next step** | Phase 5 (endless and balance) on `v2-phase-5-endless`, including the Spear/Flamethrower boss gap carried over from Phase 4 (§12). Then Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.4` on `v2-phase-4-weapons` (`2.0.0-alpha.3` on `v2`). Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.4` on `v2`. Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 4 playtested, session end) |
+| **Last updated** | 2026-10-22 (Phase 4 merged and pushed) |
 
 ---
 
@@ -736,8 +736,8 @@ these v2 changes:
 | **Phase 1 — board and land** | Rebuild Spikes B + B2 properly with tests: Core fixed at (0, 0), sparse open-ended grid, board of buildable cells, land shapes at levels 8/15/22/29/36 (12 cells, 3 offered), Tarjan bridges, filled rows removed, combat camera framing, build screen pan/zoom/fit with the fresh-key rule; old tests updated to the new rules; balance bots place land. | Plays like Spike B2; all tests pass. |
 | **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
 | **Phase 3 — readability and synergies** (done, merged 2026-10-22) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
-| **Phase 4 — weapons rework and rebalance** (user request 2026-10-22; designed with the user and built 2026-10-22, in hand-over) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
-| **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
+| **Phase 4 — weapons rework and rebalance** (done, merged 2026-10-22; Spear/Flame boss gap moved to Phase 5) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
+| **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; Spear and Flamethrower builds able to beat the Colossus (§12); performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
 | **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
@@ -751,9 +751,6 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- **Weapons rework and rebalance** (Phase 4, §2.12, user request
-  2026-10-22): every design detail (to brainstorm with the
-  user before building; includes the Saw rework).
 - Endless details (§2.11): scaling numbers, Colossus returns (Phase 5).
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
@@ -765,9 +762,19 @@ start early if the user asks.
   Generators and Engines, as asked.)
 - Carried over from v1: final title, code licence, piece mirroring,
   meta-progression.
-- Phase 4 feel: does each weapon feel powerful? Spear and Flamethrower
-  builds still lose in the sim; the combo bonus (+50%) may need to be
-  larger for mixed builds to come out on top.
+- **Spear and Flamethrower vs the Colossus** (carried into Phase 5):
+  both builds clear waves but lose to the boss in the sim (boss at
+  67–99% HP). Two tuning passes (2026-10-22, reverted) showed more damage
+  doesn't help: Spear 50–60 dmg every 0.5 s, reach 112, and Flamethrower
+  reach 112, 4 dmg/puff, burn 10/s gave only +10–40% early and still lost
+  (a bot that kites instead of charging the boss lost too). Cause: only
+  the few short-range tiles facing the boss reach it, burns don't stack
+  between Flamethrowers, and the Colossus ignores snag and stagger, so
+  neither weapon gets its combo bonus on it. Mechanic options to decide
+  with the user: burns stack per Flamethrower on the Colossus, Spears
+  that turn toward the boss, a bigger Spear reach vs big enemies.
+- The combo build wins but doesn't beat single-weapon builds yet; the
+  combo bonus (+50%) may need to be larger.
 
 **Claude's calls to check**
 
@@ -846,6 +853,16 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-22 — Phase 4 merged
+- Tried two tuning passes for the Spear and Flamethrower builds (see
+  §12); neither build beat the Colossus, so both were reverted to the
+  values the user played.
+- Decision (user): merge Phase 4 as is; carry the Spear/Flame boss gap
+  into Phase 5. Merged `v2-phase-4-weapons` into `v2`; pushed `v2` and
+  the v2 phase and spike branches to `origin` (deploys run only from
+  `main`, so nothing live changed).
+- Next: Phase 5 (endless and balance).
 
 ### 2026-10-22 — Phase 4 playtested, session end
 - Feedback (user): after the freeze fix, "tested it and had a ton of fun";
