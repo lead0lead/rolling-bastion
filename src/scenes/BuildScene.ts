@@ -118,6 +118,15 @@ const SCRAP = { x: 30, y: 590, w: 250, h: 106 };
 const ARC_PREVIEW_CELLS = 1.6;
 const ARC_FILL_ALPHA = 0.18;
 const ARC_LINE_ALPHA = 0.55;
+/** First-time chain hint (concept-v2.md §3.3; draft text, the user's to rewrite). Not saved. */
+const CHAIN_HINT = {
+  key: 'chainHintShown',
+  width: 420,
+  text:
+    'Chains: line up 3 or more identical tiles facing the same way: each gets +50% damage. ' +
+    'Generators and Engines chain too.\n(click to close)',
+};
+
 /**
  * Hovered support tile (concept-v2.md §3.3): tint alpha on the tiles it buffs,
  * arrow start/end along the way to them and head size, in cells.
@@ -199,6 +208,8 @@ export class BuildScene extends Phaser.Scene {
   private chainPreview: { held: unknown; x: number; y: number; chains: Chain[] } | null = null;
   private chainLabels: Phaser.GameObjects.Text[] = [];
   private chainLabelsShown = 0;
+  /** First-time chain hint card (concept-v2.md §3.3), once per session. */
+  private hint: Phaser.GameObjects.Text | null = null;
   private tileImgs!: SpritePool;
   private crackImgs!: SpritePool;
   private barrelImgs!: SpritePool;
@@ -568,6 +579,11 @@ export class BuildScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
+      if (this.hint?.visible && this.hint.getBounds().contains(p.x, p.y)) {
+        this.hint.setVisible(false);
+        playSfx(this, 'ui-click');
+        return;
+      }
       if (p.middleButtonDown()) {
         const c = this.boardCam;
         this.midDrag = { x: p.x, y: p.y, scrollX: c.scrollX, scrollY: c.scrollY };
@@ -1090,6 +1106,10 @@ export class BuildScene extends Phaser.Scene {
       this.chainPreview = { held: s.held, x, y, chains: previewChains(s, x, y) };
     }
     const chains = this.chainPreview?.chains ?? [];
+    if (chains.length > 0 && !this.registry.get(CHAIN_HINT.key)) {
+      this.registry.set(CHAIN_HINT.key, true);
+      this.showChainHint();
+    }
     drawSynergyLines(this.fg, chains, CELL, 0, 0);
     const c = this.boardCam;
     chains.forEach((chain, i) => {
@@ -1122,6 +1142,25 @@ export class BuildScene extends Phaser.Scene {
         .setVisible(true);
     });
     this.chainLabelsShown = chains.length;
+  }
+
+  private showChainHint(): void {
+    this.hint = this.ui(
+      this.add
+        .text(VIEW.x + VIEW.w / 2, VIEW.y + 12, CHAIN_HINT.text, {
+          fontFamily: FONT.family,
+          fontStyle: FONT.weight,
+          fontSize: '14px',
+          color: COLORS.text,
+          backgroundColor: css(COLORS.panel),
+          padding: { x: 14, y: 10 },
+          lineSpacing: 4,
+          align: 'center',
+          wordWrap: { width: CHAIN_HINT.width },
+        })
+        .setOrigin(0.5, 0)
+        .setDepth(21),
+    );
   }
 
   private drawHeld(): void {

@@ -434,6 +434,9 @@ As implemented (Phase 3, in progress):
   and a label above each chain ("Chain 3: +50% damage"; "fire rate gift"
   for Generators, "speed bonus" for Engines). v2 had no live chain line
   before this (the plan's "as v1" was wrong); it is new.
+- First-time hint: the first chain preview in a browser session shows the
+  §3.3 text as a card at the top of the board view until clicked
+  (`CHAIN_HINT`; remembered in the game registry, not saved).
 
 ---
 
