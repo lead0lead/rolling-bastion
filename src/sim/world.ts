@@ -71,6 +71,8 @@ export interface WeaponState {
   cooldown: number;
   aim: number;
   aimTimer: number;
+  /** Game time of the last shot (for flame cones and muzzle effects). */
+  firedAt?: number;
 }
 
 /** A Spitter shot: flies straight and hits the first tile it reaches. */

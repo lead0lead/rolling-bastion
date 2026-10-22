@@ -9,6 +9,7 @@ export type TileType =
   | 'mortar'
   | 'saw'
   | 'crossbow'
+  | 'flamethrower'
   | 'generator'
   | 'shield'
   | 'repair'
@@ -42,6 +43,11 @@ export interface WeaponDef {
   leadsTarget?: boolean;
   /** Shots pass through every enemy in their path (each hit once). */
   pierceAll?: boolean;
+  /**
+   * Flame cone: instead of a projectile, each shot hits every enemy within
+   * `range` and this many degrees of the aim direction (full cone width).
+   */
+  coneDeg?: number;
 }
 
 /**
@@ -106,7 +112,9 @@ export type PerkEffect =
   | { kind: 'regen'; hpPerSec: number }
   | { kind: 'thorns'; dps: number }
   | { kind: 'extraBlades'; count: number }
-  | { kind: 'bladeOrbit'; px: number };
+  | { kind: 'bladeOrbit'; px: number }
+  | { kind: 'range'; px: number }
+  | { kind: 'burnFactor'; factor: number };
 
 export type PerkKind = PerkEffect['kind'];
 
@@ -300,6 +308,31 @@ export const TILES: Record<TileType, TileDef> = {
     perks: {
       l3: { name: 'Twin string: +1 bolt per shot', effect: { kind: 'extraProjectiles', count: 1 } },
       l5: { name: 'Swivel stock: arc 60° → 120°', effect: { kind: 'arc', deg: 120 } },
+    },
+  },
+  flamethrower: {
+    name: 'Flamethrower',
+    family: 'weapon',
+    maxHp: 40,
+    color: 0xff5e3a,
+    label: 'F',
+    description:
+      'Sprays a 60° cone 80 px out: 2 dmg × 10/s to all in it, and they burn 6 dmg/s for 3 s.',
+    weapon: {
+      damage: 2,
+      fireRate: 10,
+      range: 80,
+      projectileSpeed: 0,
+      projectileRadius: 0,
+      spreadDeg: 0,
+      knockback: 0,
+      arcDeg: 180,
+      coneDeg: 60,
+    },
+    combo: { applies: 'burning', profitsFrom: ['snagged'], burnDps: 6 },
+    perks: {
+      l3: { name: 'Long nozzle: reach 80 → 112 px', effect: { kind: 'range', px: 112 } },
+      l5: { name: 'Napalm: burn damage ×2', effect: { kind: 'burnFactor', factor: 2 } },
     },
   },
   generator: {

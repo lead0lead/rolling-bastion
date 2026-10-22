@@ -67,6 +67,8 @@ export interface WeaponStats extends WeaponDef {
   pierce: number;
   shells: number;
   shellScatter: number;
+  /** Multiplier on the burn this weapon sets (Flamethrower L5). */
+  burnFactor: number;
 }
 
 /** A blade type's stats with its perks applied. */
@@ -351,6 +353,8 @@ export function weaponStats(city: CityState, type: TileType): WeaponStats | unde
   return {
     ...base,
     arcDeg: perk(city, type, 'arc')?.deg ?? base.arcDeg,
+    range: perk(city, type, 'range')?.px ?? base.range,
+    burnFactor: perk(city, type, 'burnFactor')?.factor ?? 1,
     blastRadius: perk(city, type, 'blastRadius')?.px ?? base.blastRadius,
     projectiles: 1 + (perk(city, type, 'extraProjectiles')?.count ?? 0),
     pierce: base.pierceAll ? Infinity : (perk(city, type, 'pierce')?.count ?? 0),

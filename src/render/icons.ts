@@ -47,6 +47,13 @@ export function drawIcon(
       g.strokeCircle(c, c, r);
       break;
     }
+    case 'flamethrower':
+      // Fuel tank under the nozzle.
+      g.fillStyle(shade, 1);
+      g.fillRoundedRect(17 * s, 17 * s, 30 * s, 30 * s, 8 * s);
+      g.lineStyle(3 * s, ink, 1);
+      g.strokeRoundedRect(17 * s, 17 * s, 30 * s, 30 * s, 8 * s);
+      break;
     case 'crossbow':
       g.fillStyle(shade, 1);
       g.fillCircle(c, c, 13 * s);
@@ -125,8 +132,14 @@ function rivets(g: Phaser.GameObjects.Graphics, s: number, color: number): void 
 }
 
 /** Barrel shapes, drawn pointing right with the pivot at the box centre. */
-export type BarrelType = 'core' | 'gatling' | 'cannon' | 'crossbow';
-export const BARREL_TYPES: readonly BarrelType[] = ['core', 'gatling', 'cannon', 'crossbow'];
+export type BarrelType = 'core' | 'gatling' | 'cannon' | 'crossbow' | 'flamethrower';
+export const BARREL_TYPES: readonly BarrelType[] = [
+  'core',
+  'gatling',
+  'cannon',
+  'crossbow',
+  'flamethrower',
+];
 
 /** Tiles with a turning barrel (aimed weapons). */
 export function barrelFor(type: TileType): BarrelType | null {
@@ -154,6 +167,20 @@ export function drawBarrel(g: Phaser.GameObjects.Graphics, type: BarrelType, siz
     g.strokeRect(c + 24 * s, c - 8 * s, 6 * s, 16 * s);
     g.fillCircle(c, c, 11 * s);
     g.strokeCircle(c, c, 11 * s);
+  } else if (type === 'flamethrower') {
+    // Short nozzle widening to a flared mouth.
+    g.fillRect(c, c - 4 * s, 18 * s, 8 * s);
+    g.strokeRect(c, c - 4 * s, 18 * s, 8 * s);
+    const mouth = [
+      { x: c + 16 * s, y: c - 5 * s },
+      { x: c + 26 * s, y: c - 9 * s },
+      { x: c + 26 * s, y: c + 9 * s },
+      { x: c + 16 * s, y: c + 5 * s },
+    ];
+    g.fillPoints(mouth, true);
+    g.strokePoints(mouth, true);
+    g.fillCircle(c, c, 8 * s);
+    g.strokeCircle(c, c, 8 * s);
   } else if (type === 'crossbow') {
     // Stock along the aim, a bow across its front, the string and a loaded bolt.
     g.fillRect(c - 6 * s, c - 3 * s, 30 * s, 6 * s);

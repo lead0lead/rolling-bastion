@@ -3,6 +3,7 @@ import { UPGRADES } from '../src/config/balance';
 import { TILES, type TileType } from '../src/config/tiles';
 import {
   hasStatus,
+  updateBurns,
   leadPoint,
   updateBlades,
   updateProjectiles,
@@ -22,6 +23,7 @@ const LEGEND: Record<string, TileType> = {
   h: 'hull',
   s: 'saw',
   x: 'crossbow',
+  f: 'flamethrower',
 };
 
 function worldOf(rows: string[]): World {
@@ -153,5 +155,55 @@ describe('Crossbow', () => {
       expect(e.maxHp - e.hp).toBeCloseTo(dmg);
       expect(hasStatus(w, e, 'marked')).toBe(true);
     }
+  });
+});
+
+describe('Flamethrower', () => {
+  it('burns every enemy in its cone, not the ones beside or behind it', () => {
+    const w = worldOf(['...', 'f..', 'C..']);
+    const flamer = tileAt(w.city, 0, 1);
+    if (!flamer) throw new Error('no flamethrower');
+    const c = tileCentre(w, flamer);
+    const spawn = (dx: number, dy: number) => {
+      const e = spawnEnemy(w, 'brute', c.x + dx, c.y + dy);
+      e.hp = e.maxHp = 1e6;
+      return e;
+    };
+    // Facing up: the cone opens upward toward the nearest enemy.
+    const near = spawn(0, -40);
+    const inCone = spawn(10, -70);
+    const beside = spawn(70, -10);
+    for (let i = 0; i < 1 / DT; i++) {
+      w.time += DT;
+      w.hash.clear();
+      w.enemies.forEach((e, idx) => w.hash.insert(idx, e.x, e.y));
+      updateWeapons(w, DT);
+      updateBurns(w, DT);
+    }
+    for (const e of [near, inCone]) {
+      expect(e.hp).toBeLessThan(e.maxHp);
+      expect(hasStatus(w, e, 'burning')).toBe(true);
+    }
+    expect(beside.hp).toBe(beside.maxHp);
+    expect(w.damageBy.flamethrower).toBeGreaterThan(0);
+  });
+
+  it('keeps burning enemies after they leave the cone', () => {
+    const w = worldOf(['f..', 'C..', '...']);
+    const flamer = tileAt(w.city, 0, 0);
+    if (!flamer) throw new Error('no flamethrower');
+    const c = tileCentre(w, flamer);
+    const e = spawnEnemy(w, 'brute', c.x, c.y - 40);
+    e.hp = e.maxHp = 1e6;
+    w.weapons.set(flamer.id, { cooldown: 0, aim: 0, aimTimer: 0 });
+    w.hash.insert(0, e.x, e.y);
+    updateWeapons(w, DT);
+    e.x += 1000;
+    const before = e.hp;
+    for (let i = 0; i < 1 / DT; i++) {
+      w.time += DT;
+      updateBurns(w, DT);
+    }
+    expect(before - e.hp).toBeCloseTo(TILES.flamethrower.combo?.burnDps ?? 0, 0);
   });
 });

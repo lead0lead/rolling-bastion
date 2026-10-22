@@ -110,7 +110,10 @@ export function updateWeapons(w: World, dt: number): void {
     }
 
     const damage = weapon.damage * mods.damage;
-    if (weapon.blastRadius) {
+    st.firedAt = w.time;
+    if (weapon.coneDeg) {
+      sprayCone(w, t.type, weapon, damage, c.x, c.y, st.aim);
+    } else if (weapon.blastRadius) {
       const aim = weapon.leadsTarget
         ? leadPoint(target, c.x, c.y, weapon.projectileSpeed, dt)
         : target;
@@ -155,6 +158,40 @@ export function leadPoint(
   if (a >= 0 || disc < 0) return { x: e.x, y: e.y };
   const t = (-b - Math.sqrt(disc)) / (2 * a);
   return { x: e.x + vx * t, y: e.y + vy * t };
+}
+
+/**
+ * A flame puff: hits every enemy within `range` and half the cone angle of
+ * `aim`, setting it burning (burn scaled by the hit's damage multiplier and
+ * the weapon's burn factor).
+ */
+function sprayCone(
+  w: World,
+  source: TileType,
+  weapon: WeaponStats,
+  damage: number,
+  x: number,
+  y: number,
+  aim: number,
+): void {
+  const cosHalf = Math.cos(((weapon.coneDeg ?? 0) * Math.PI) / 360);
+  const fx = Math.cos(aim);
+  const fy = Math.sin(aim);
+  const burn = (TILES[source].combo?.burnDps ?? 0) * (damage / weapon.damage) * weapon.burnFactor;
+  const hit = (e: Enemy) => {
+    if (e.dead) return;
+    const dx = e.x - x;
+    const dy = e.y - y;
+    const d = Math.hypot(dx, dy);
+    if (d > weapon.range + e.radius) return;
+    if (d > e.radius && (dx * fx + dy * fy) / d < cosHalf) return;
+    hitEnemy(w, e, damage, 0, 0, 0, source, burn);
+  };
+  w.hash.query(x, y, weapon.range + MAX_ENEMY_RADIUS, (i) => {
+    const e = w.enemies[i];
+    if (e && e !== w.boss) hit(e);
+  });
+  if (w.boss) hit(w.boss);
 }
 
 /** Blades per tile id, for unique blade ids (`tile id × this + blade index`). */
@@ -390,13 +427,14 @@ export function hitEnemy(
   dirX: number,
   dirY: number,
   source?: TileType,
+  burnDps?: number,
 ): void {
   const combo = source && TILES[source].combo;
   damageEnemy(w, e, damage * comboFactor(w, e, source), source);
   if (source && combo?.applies && !e.dead) {
     // Burn strength follows the hit's damage multiplier (levels, buffs), not the combo bonus.
     const base = TILES[source].weapon?.damage ?? 0;
-    const burn = (combo.burnDps ?? 0) * (base > 0 ? damage / base : 1);
+    const burn = burnDps ?? (combo.burnDps ?? 0) * (base > 0 ? damage / base : 1);
     applyStatus(w, e, combo.applies, burn);
   }
   if (!ENEMIES[e.type].boss) {

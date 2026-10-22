@@ -54,6 +54,7 @@ const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
   cannon: 'shot-cannon',
   mortar: 'shot-mortar',
   crossbow: 'shot-cannon',
+  flamethrower: 'shot-gatling',
 };
 /** Colour of the boss charge telegraph. */
 const CHARGE_COLOR = COLORS.charge;
@@ -61,6 +62,20 @@ const CHARGE_COLOR = COLORS.charge;
 const ENRAGE_TINT = 0xff6060;
 /** Redraw piece outlines once the zoom has drifted this much (fraction) since the last draw. */
 const OUTLINE_REDRAW_ZOOM = 0.05;
+/**
+ * Flame cone look: shown this long (s) after a puff, random reach flicker,
+ * and layers [colour, reach fraction, alpha] from the outside in.
+ */
+const FLAME_LOOK = {
+  linger: 0.15,
+  flicker: 0.15,
+  layers: [
+    [0xff5e3a, 1, 0.45],
+    [0xffa53a, 0.75, 0.55],
+    [0xffe08a, 0.45, 0.7],
+  ] as const,
+};
+
 /** Saw blade look: teeth count, tooth depth (fraction of radius), disc spin vs. orbit angle. */
 const BLADE_LOOK = { teeth: 10, tooth: 0.22, spinFactor: 3 };
 
@@ -134,6 +149,7 @@ export class RunScene extends Phaser.Scene {
   private blastGfx!: Phaser.GameObjects.Graphics;
   private pulseGfx!: Phaser.GameObjects.Graphics;
   private bladeGfx!: Phaser.GameObjects.Graphics;
+  private flameGfx!: Phaser.GameObjects.Graphics;
   private pulseClock = 0;
   private particles!: Particles;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
@@ -183,6 +199,7 @@ export class RunScene extends Phaser.Scene {
     this.blastGfx = this.add.graphics().setDepth(3.5);
     this.pulseGfx = this.add.graphics().setDepth(1.9);
     this.bladeGfx = this.add.graphics().setDepth(2.6);
+    this.flameGfx = this.add.graphics().setDepth(2.65);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
     this.magnetRings = [];
@@ -573,6 +590,29 @@ export class RunScene extends Phaser.Scene {
     this.particles.draw();
     this.drawPulses(w, ox, oy, frameDt);
     this.drawBlades(w, ox - w.x, oy - w.y);
+    this.drawFlames(w, ox - w.x, oy - w.y);
+  }
+
+  /** Flame cones of Flamethrowers that fired in the last moment (concept-v2.md §2.12). */
+  private drawFlames(w: World, dx: number, dy: number): void {
+    const g = this.flameGfx;
+    g.clear();
+    for (const t of w.cache.weapons) {
+      const weapon = w.cache.syn.weapons[t.type];
+      const st = w.weapons.get(t.id);
+      if (!weapon?.coneDeg || st?.firedAt === undefined) continue;
+      const age = w.time - st.firedAt;
+      if (age > FLAME_LOOK.linger) continue;
+      const c = tileCentre(w, t);
+      const half = (weapon.coneDeg * Math.PI) / 360;
+      const flicker = 1 - FLAME_LOOK.flicker * motion() * Math.random();
+      const fade = 1 - age / FLAME_LOOK.linger;
+      for (const [color, reach, alpha] of FLAME_LOOK.layers) {
+        g.fillStyle(color, alpha * fade);
+        g.slice(c.x + dx, c.y + dy, weapon.range * reach * flicker, st.aim - half, st.aim + half);
+        g.fillPath();
+      }
+    }
   }
 
   /**

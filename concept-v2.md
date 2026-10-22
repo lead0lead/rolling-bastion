@@ -417,6 +417,14 @@ target was.
   Bow barrel, dark bolt sprite rotated to its flight, `shot-cannon` sound.
   Pieces `domino-crossbow` (0.8), `l3-crossbow` (0.6); sandbox
   `l3-crossbow`.
+- Flamethrower (`flamethrower`, letter f, colour 0xff5e3a): a weapon
+  with `coneDeg` 60; each shot is `sprayCone` (every enemy within range
+  and the cone around the aim) instead of a projectile; `hitEnemy` takes
+  an optional burn dps (damage multiplier × `burnFactor`, L5 ×2). Perk
+  kinds `range` (L3 112 px) and `burnFactor`. `WeaponState.firedAt`
+  drives the drawn cone (three layered wedges for 0.15 s, flickering).
+  Tank icon, nozzle barrel. Pieces `domino-flamer`, `l3-flamer`; sandbox
+  `l3-flamer`.
 
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,
