@@ -2,7 +2,7 @@ import { ENEMY_PHYSICS, GRID } from '../config/balance';
 import { ENEMIES, type EnemyDef, type RangedDef } from '../config/enemies';
 import type { PlacedTile } from './grid';
 import { bossContactFactor, bossMove } from './boss';
-import { damageTile, fireEnemyShot, hitEnemy, MAX_ENEMY_RADIUS } from './combat';
+import { damageTile, fireEnemyShot, hitEnemy, MAX_ENEMY_RADIUS, statusSpeed } from './combat';
 import { cellOrigin, modsOf, tileAtCell, type Enemy, type World } from './world';
 
 /** What an enemy touched this tick (reused, no allocation). */
@@ -47,8 +47,9 @@ export function updateEnemies(w: World, dt: number): void {
       if (def.ranged) rangedAttack(w, e, def.ranged, target, d, dt);
       const holds = def.ranged && d <= def.ranged.keepDistance;
       if (d > 0 && !holds) {
-        mx = (dx / d) * def.speed * e.slow;
-        my = (dy / d) * def.speed * e.slow;
+        const speed = def.speed * e.slow * statusSpeed(w, e);
+        mx = (dx / d) * speed;
+        my = (dy / d) * speed;
       }
     }
     e.slow = 1;

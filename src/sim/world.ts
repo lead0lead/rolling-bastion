@@ -33,6 +33,13 @@ export interface Enemy {
   hitTime: number;
   /** Speed factor from touching a slowing tile last tick (1 = none). */
   slow: number;
+  /** Game time each status ends (concept-v2.md §2.12); in the past = not active. */
+  burnUntil: number;
+  snagUntil: number;
+  staggerUntil: number;
+  markUntil: number;
+  /** Burn damage per second while burning. */
+  burnDps: number;
   dead: boolean;
 }
 

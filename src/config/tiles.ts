@@ -1,3 +1,5 @@
+import type { StatusType } from './statuses';
+
 export type TileType =
   | 'core'
   | 'hull'
@@ -35,6 +37,16 @@ export interface WeaponDef {
   minRange?: number;
   /** Lobbed shells: fly to the target point and damage every enemy within this radius there. */
   blastRadius?: number;
+}
+
+/** How a weapon tile takes part in status combos (concept-v2.md §2.12). */
+export interface ComboDef {
+  /** Status put on every enemy this tile's attacks hit. */
+  applies?: StatusType;
+  /** Statuses that make this tile's hits deal STATUS.comboBonus more damage. */
+  profitsFrom?: readonly StatusType[];
+  /** Burn damage per second for `applies: 'burning'`, at damage multiplier 1. */
+  burnDps?: number;
 }
 
 /** Support tile effect at level 1; grows per level (UPGRADES.effectPerLevel). */
@@ -96,6 +108,7 @@ export interface TileDef {
   contactDps?: number;
   support?: SupportDef;
   pulse?: PulseDef;
+  combo?: ComboDef;
   /** Named perks unlocked at type level 3 and 5. */
   perks?: { l3: PerkDef; l5: PerkDef };
 }
@@ -166,6 +179,7 @@ export const TILES: Record<TileType, TileDef> = {
       knockback: 0,
       arcDeg: 180,
     },
+    combo: { profitsFrom: ['burning'] },
     perks: {
       l3: {
         name: 'Twin feed: +1 projectile per shot',
@@ -191,6 +205,7 @@ export const TILES: Record<TileType, TileDef> = {
       knockback: 220,
       arcDeg: 90,
     },
+    combo: { applies: 'staggered', profitsFrom: ['marked'] },
     perks: {
       l3: { name: 'Wide traverse: arc 90° → 135°', effect: { kind: 'arc', deg: 135 } },
       l5: { name: 'Sabot: shots pierce 3 enemies', effect: { kind: 'pierce', count: 3 } },
@@ -215,6 +230,7 @@ export const TILES: Record<TileType, TileDef> = {
       knockback: 0,
       arcDeg: 360,
     },
+    combo: { applies: 'staggered', profitsFrom: ['snagged'] },
     perks: {
       l3: { name: 'Heavy shells: blast radius 48 → 72', effect: { kind: 'blastRadius', px: 72 } },
       l5: {
@@ -231,6 +247,7 @@ export const TILES: Record<TileType, TileDef> = {
     label: 'S',
     description: '25 dmg/s to touching enemies. Must be on the edge.',
     contactDps: 25,
+    combo: { applies: 'snagged', profitsFrom: ['burning'] },
     perks: {
       l3: {
         name: 'Snag: touching enemies slowed 50%',

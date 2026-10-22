@@ -388,6 +388,18 @@ target was.
   Gatling's damage per tile; in the balance sim every single-weapon build
   can win, and the mixed combo build does best.
 
+**As implemented (Phase 4, in progress):**
+- Statuses: `src/config/statuses.ts` (`STATUS`: durations, snag speed
+  factor, combo bonus); each tile's `combo` (`applies`, `profitsFrom`,
+  `burnDps`) in `TILES`. `Enemy` has `burnUntil` / `snagUntil` /
+  `staggerUntil` / `markUntil` (game time) and `burnDps`. In
+  `src/sim/combat.ts`: `hitEnemy` applies `comboFactor` (×1.5 once), deals
+  the damage through `damageEnemy` (plain damage, credits `damageBy`), then
+  `applyStatus` with the source's status (burn strength scaled by the hit's
+  damage multiplier); `updateBurns` runs each tick after projectiles and
+  credits the burning-applying type; `statusSpeed` gives 0 / 0.6 / 1 for
+  enemy movement. The Colossus ignores snag and stagger.
+
 Approach to propose: measure the current state first (balance sim damage
 shares, kills per weapon, Mortar hit rate), agree targets with the user,
 then change numbers and mechanics in config with tests per weapon, and

@@ -1,6 +1,7 @@
 import { COMBAT } from '../config/balance';
+import { STATUS, type StatusType } from '../config/statuses';
 import { ELITE, ENEMIES } from '../config/enemies';
-import type { TileType, WeaponDef } from '../config/tiles';
+import { TILES, type TileType, type WeaponDef } from '../config/tiles';
 import { destroyTile, facingAngle, type PlacedTile } from './grid';
 import { dropGem } from './progression';
 import type { WeaponStats } from './synergies';
@@ -255,7 +256,56 @@ export function explode(
   w.events.push({ kind: 'blast', x, y, radius, bomb: false });
 }
 
-/** Damages an enemy; `source` is the tile type credited in `w.damageBy` (only damage up to its HP counts). */
+/** True if the enemy has the status right now. */
+export function hasStatus(w: World, e: Enemy, status: StatusType): boolean {
+  const until =
+    status === 'burning'
+      ? e.burnUntil
+      : status === 'snagged'
+        ? e.snagUntil
+        : status === 'staggered'
+          ? e.staggerUntil
+          : e.markUntil;
+  return w.time < until;
+}
+
+/**
+ * Puts a status on an enemy (refreshing it, never stacking). The Colossus
+ * can't be snagged or staggered. `burnDps` sets the burn strength.
+ */
+export function applyStatus(w: World, e: Enemy, status: StatusType, burnDps = 0): void {
+  const boss = ENEMIES[e.type].boss;
+  switch (status) {
+    case 'burning':
+      // A refresh keeps the stronger burn.
+      e.burnDps = w.time < e.burnUntil ? Math.max(e.burnDps, burnDps) : burnDps;
+      e.burnUntil = w.time + STATUS.burning.duration;
+      break;
+    case 'snagged':
+      if (!boss) e.snagUntil = w.time + STATUS.snagged.duration;
+      break;
+    case 'staggered':
+      if (!boss) e.staggerUntil = w.time + STATUS.staggered.duration;
+      break;
+    case 'marked':
+      e.markUntil = w.time + STATUS.marked.duration;
+      break;
+  }
+}
+
+/** Damage multiplier for a hit from `source` on `e`: the combo bonus if it has a status the source profits from. */
+export function comboFactor(w: World, e: Enemy, source: TileType | undefined): number {
+  const profits = source && TILES[source].combo?.profitsFrom;
+  if (!profits) return 1;
+  for (const s of profits) if (hasStatus(w, e, s)) return 1 + STATUS.comboBonus;
+  return 1;
+}
+
+/**
+ * A weapon hit: applies the combo bonus, deals the damage, then puts the
+ * source's status on the enemy (concept-v2.md §2.12). `source` is the tile
+ * type credited in `w.damageBy`.
+ */
 export function hitEnemy(
   w: World,
   e: Enemy,
@@ -265,14 +315,44 @@ export function hitEnemy(
   dirY: number,
   source?: TileType,
 ): void {
-  if (source) w.damageBy[source] = (w.damageBy[source] ?? 0) + Math.min(damage, Math.max(0, e.hp));
-  e.hp -= damage;
-  e.hitTime = w.time;
+  const combo = source && TILES[source].combo;
+  damageEnemy(w, e, damage * comboFactor(w, e, source), source);
+  if (source && combo?.applies && !e.dead) {
+    // Burn strength follows the hit's damage multiplier (levels, buffs), not the combo bonus.
+    const base = TILES[source].weapon?.damage ?? 0;
+    const burn = (combo.burnDps ?? 0) * (base > 0 ? damage / base : 1);
+    applyStatus(w, e, combo.applies, burn);
+  }
   if (!ENEMIES[e.type].boss) {
     e.kvx += dirX * knockback;
     e.kvy += dirY * knockback;
   }
+}
+
+/** Plain damage, no combos or statuses (burn ticks); credits `source` with damage up to the enemy's HP. */
+export function damageEnemy(w: World, e: Enemy, damage: number, source?: TileType): void {
+  if (source) w.damageBy[source] = (w.damageBy[source] ?? 0) + Math.min(damage, Math.max(0, e.hp));
+  e.hp -= damage;
+  e.hitTime = w.time;
   if (e.hp <= 0) e.dead = true;
+}
+
+/** The tile type whose hits set enemies burning; burn damage is credited to it. */
+const BURN_SOURCE = (Object.keys(TILES) as TileType[]).find(
+  (t) => TILES[t].combo?.applies === 'burning',
+);
+
+/** Burning enemies take their burn damage (concept-v2.md §2.12). */
+export function updateBurns(w: World, dt: number): void {
+  for (const e of w.enemies) {
+    if (!e.dead && w.time < e.burnUntil) damageEnemy(w, e, e.burnDps * dt, BURN_SOURCE);
+  }
+}
+
+/** Movement speed factor from statuses: 0 while staggered, slower while snagged. */
+export function statusSpeed(w: World, e: Enemy): number {
+  if (w.time < e.staggerUntil) return 0;
+  return w.time < e.snagUntil ? STATUS.snagged.speedFactor : 1;
 }
 
 /**
