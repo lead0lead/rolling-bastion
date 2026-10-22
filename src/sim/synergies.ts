@@ -24,11 +24,14 @@ export interface TileMods {
   slow: number;
   /** Fraction of contact damage returned to the attacker. */
   reflect: number;
-  /** Damage bonus from the best weapon chain the tile is in (0 = none). */
+  /**
+   * Bonus from the best chain the tile is in (0 = none): extra damage for a
+   * weapon, a multiplier on its own effect for a Generator or Engine.
+   */
   chainBonus: number;
 }
 
-/** A weapon chain: identical online weapons in a straight line, from (x0, y0) to (x1, y1). */
+/** A chain: identical online weapons or support tiles in a straight line, from (x0, y0) to (x1, y1). */
 export interface Chain {
   type: TileType;
   x0: number;
@@ -113,16 +116,20 @@ export function computeSynergies(city: CityState): Synergies {
   const hullBonus = perk(city, 'hull', 'neighbourHp')?.bonus ?? 0;
   let magnets = 0;
   let engines = 0;
+  const { chains, chainBonus } = findChains(city, at);
+  const own = (t: PlacedTile) => 1 + (chainBonus.get(t.id) ?? 0);
 
   for (const t of city.tiles) {
     if (!t.online) continue;
     switch (t.type) {
-      case 'generator':
+      case 'generator': {
+        const fire = genAmount * own(t);
         around(t, false, (a) => {
-          a.fire += genAmount;
+          a.fire += fire;
           a.genDamage += genDamage;
         });
         break;
+      }
       case 'shield':
         around(t, shieldDiag, (a) => {
           a.shield += shieldAmount;
@@ -139,7 +146,7 @@ export function computeSynergies(city: CityState): Synergies {
         magnets++;
         break;
       case 'engine':
-        engines++;
+        engines += own(t);
         break;
     }
   }
@@ -150,13 +157,11 @@ export function computeSynergies(city: CityState): Synergies {
   const platingThorns = perk(city, 'plating', 'thorns')?.dps ?? 0;
   const sawSlow = perk(city, 'saw', 'slowTouching')?.speedFactor ?? 1;
 
-  const { chains, chainBonus } = findChains(city, at);
-
   const mods = new Map<number, TileMods>();
   for (const t of city.tiles) {
     const a = acc.get(t.id) as Acc;
     const def = TILES[t.type];
-    const chain = chainBonus.get(t.id) ?? 0;
+    const chain = def.family === 'weapon' ? (chainBonus.get(t.id) ?? 0) : 0;
     const fireRate = 1 + Math.min(a.fire, fireCap);
     const damage = levelDamage(city, t.type) * (1 + a.genDamage + chain);
     let thorns = 0;
@@ -177,7 +182,7 @@ export function computeSynergies(city: CityState): Synergies {
       thorns,
       slow,
       reflect: a.reflect,
-      chainBonus: chain,
+      chainBonus: chainBonus.get(t.id) ?? 0,
     });
   }
 
@@ -212,15 +217,23 @@ export function computeSynergies(city: CityState): Synergies {
   };
 }
 
-/** True if a weapon type chains regardless of facing (no firing arc: Mortar, Saw). */
+/** True if a tile type chains regardless of facing (no firing arc: Mortar, Saw, support tiles). */
 function ignoresFacing(type: TileType): boolean {
   const w = TILES[type].weapon;
   return !w || w.arcDeg >= 360;
 }
 
+const SUPPORT_CHAINS: readonly TileType[] = LINES.supportChainTypes;
+
+/** True if a tile type can form chains: weapons and the support types in LINES.supportChainTypes. */
+export function chainsType(type: TileType): boolean {
+  return TILES[type].family === 'weapon' || SUPPORT_CHAINS.includes(type);
+}
+
 /**
- * Weapon chains (concept.md §2.7): 3+ identical online weapon tiles in an
- * unbroken straight line, with the same facing unless the weapon has no arc.
+ * Chains (concept-v2.md §2.7): 3+ identical online weapon tiles in an
+ * unbroken straight line, with the same facing unless the weapon has no arc;
+ * Generators and Engines chain the same way, facing ignored.
  * A tile in a horizontal and a vertical chain keeps the higher bonus.
  */
 function findChains(
@@ -231,8 +244,7 @@ function findChains(
   const chainBonus = new Map<number, number>();
   const links = (a: PlacedTile | undefined, b: PlacedTile | undefined) =>
     !!a && !!b && b.online && a.type === b.type && (a.facing === b.facing || ignoresFacing(a.type));
-  const chainable = (t: PlacedTile | undefined) =>
-    !!t && t.online && TILES[t.type].family === 'weapon';
+  const chainable = (t: PlacedTile | undefined) => !!t && t.online && chainsType(t.type);
 
   // The grid is open-ended: walk each run from its first tile (one whose
   // predecessor in the line doesn't link to it).

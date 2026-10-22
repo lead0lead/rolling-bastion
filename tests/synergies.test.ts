@@ -210,6 +210,42 @@ describe('weapon chains', () => {
   });
 });
 
+describe('support chains', () => {
+  const gen = TILES.generator.support?.amount ?? 0;
+
+  it('3+ Generators in a line multiply the fire rate they give, facing ignored', () => {
+    const w = worldOf(['eee.', 'Cg..', '....', '....']);
+    tile(w, 1, 0).facing = turnFacing(0, 1);
+    cityChanged(w);
+    expect(w.cache.syn.chains).toEqual([
+      { type: 'generator', x0: 0, y0: 0, x1: 2, y1: 0, length: 3 },
+    ]);
+    expect(modsOf(w, tile(w, 1, 1)).fireRate).toBeCloseTo(1 + gen * (1 + LINES.chainBonusStep));
+    expect(modsOf(w, tile(w, 1, 1)).damage).toBe(1);
+  });
+
+  it('chained Generators still respect the receiving tile cap', () => {
+    const w = worldOf(['eeee.', 'eg...', 'eC...', '.....', '.....']);
+    const cap = TILES.generator.support?.cap ?? 0;
+    expect(modsOf(w, tile(w, 1, 1)).fireRate).toBeCloseTo(1 + cap);
+  });
+
+  it('3+ Engines in a line multiply their speed bonus', () => {
+    const chained = worldOf(['nnn.', 'C...', '....', '....']);
+    expect(chained.cache.syn.speedFactor).toBeCloseTo(
+      1 + 3 * MOVE.engineBonus * (1 + LINES.chainBonusStep),
+    );
+    const pair = worldOf(['nn..', 'C...', '....', '....']);
+    expect(pair.cache.syn.speedFactor).toBeCloseTo(1 + 2 * MOVE.engineBonus);
+  });
+
+  it('other support tiles do not chain', () => {
+    expect(worldOf(['ddd.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+    expect(worldOf(['rrr.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+    expect(worldOf(['uuu.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+  });
+});
+
 describe('filled rows and columns (removed in v2)', () => {
   it('a full row or column of online tiles gives no bonus', () => {
     const w = worldOf(['Chh', 'h..', 'h..']);

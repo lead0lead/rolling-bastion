@@ -225,6 +225,15 @@ is destroyed, also in endless.
 How bonuses combine (v1 formula without the filled-line term): weapon damage =
 base × level multiplier × (1 + chain bonus + Generator L3 bonus).
 
+As implemented (Phase 3): `LINES.supportChainTypes` lists the chaining
+support types; `findChains` (`src/sim/synergies.ts`) walks weapons and those
+types alike (`chainsType`), facing ignored for supports. A chained
+Generator's fire rate gift and a chained Engine's speed bonus are multiplied
+by 1 + chain bonus; the Generator L3 damage gift is not. `TileMods.chainBonus`
+holds the bonus for every chained tile; only weapons add it to damage.
+Chain lines use the tile's colour, so support chains look like weapon
+chains.
+
 ### 2.8 XP, levels and offers
 
 Unchanged from v1 (`concept.md` §2.8), plus the land step at land levels
