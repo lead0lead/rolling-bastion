@@ -13,6 +13,8 @@ export interface SummaryData {
   level: number;
   /** The boss was defeated. */
   won: boolean;
+  /** Colossi defeated (more than one in endless). */
+  bossKills: number;
   /** The city as the run ended: its board (cell ids) and tiles. */
   board: readonly number[];
   tiles: readonly PlacedTile[];
@@ -42,25 +44,32 @@ export class SummaryScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const text = { fontFamily: FONT.family, fontStyle: FONT.weight, color: COLORS.text };
     this.add.tileSprite(0, 0, width, height, TEX.bgGrid).setOrigin(0);
-    playSfx(this, data.won ? 'win' : 'lose');
+    // After "Keep going" the run ends only when the Core falls.
+    const fallen = data.coreLostAt !== null;
+    playSfx(this, fallen ? 'lose' : 'win');
 
     const mins = Math.floor(data.time / 60);
     const secs = Math.floor(data.time % 60)
       .toString()
       .padStart(2, '0');
     this.add
-      .text(width / 2, 70, data.won ? 'The city rolls on.' : 'The Core has fallen.', {
+      .text(width / 2, 70, fallen ? 'The Core has fallen.' : 'The city rolls on.', {
         ...text,
         fontStyle: FONT.bold,
         fontSize: '44px',
-        color: data.won ? COLORS.textInfo : COLORS.text,
+        color: fallen ? COLORS.text : COLORS.textInfo,
       })
       .setOrigin(0.5);
     this.add
       .text(
         width / 2,
         125,
-        `Survived ${mins}:${secs}   ·   Level ${data.level}   ·   Kills ${data.kills}`,
+        [
+          `Survived ${mins}:${secs}`,
+          ...(data.won ? [`Boss defeated${data.bossKills > 1 ? ` ×${data.bossKills}` : ''}`] : []),
+          `Level ${data.level}`,
+          `Kills ${data.kills}`,
+        ].join('   ·   '),
         { ...text, fontSize: '22px', color: COLORS.textDim },
       )
       .setOrigin(0.5);

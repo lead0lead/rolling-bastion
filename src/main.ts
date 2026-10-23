@@ -8,6 +8,7 @@ import { PauseScene } from './scenes/PauseScene';
 import { RunScene } from './scenes/RunScene';
 import { SettingsScene } from './scenes/SettingsScene';
 import { SummaryScene } from './scenes/SummaryScene';
+import { VictoryScene } from './scenes/VictoryScene';
 import { TitleScene } from './scenes/TitleScene';
 
 // Phaser draws text to canvases, so the bundled font must be loaded first (concept.md §6).
@@ -47,5 +48,6 @@ new Phaser.Game({
     PauseScene,
     SettingsScene,
     SummaryScene,
+    VictoryScene,
   ],
 });

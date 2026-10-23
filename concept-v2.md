@@ -62,14 +62,14 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1–4 merged into `v2` (2.0.0-alpha.4). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 5 on `v2-phase-5-endless`: step 1 done (endless rules in the sim: `startEndless`, ×1.12/min growth, returning Colossus, land every 7 levels after 36). |
-| **Next step** | Phase 5 step 2: the win screen's "Keep going" / "End run" choice, HUD and end screen for endless. The Spear/Flamethrower boss gap is deferred (user, 2026-10-23). Then Phase 6 (polish and hosting). |
+| **Current step** | Phase 5 on `v2-phase-5-endless`: steps 1–2 done (endless rules in the sim; "Keep going" / "End run" after the boss, endless HUD line, end screen with "Boss defeated"). |
+| **Next step** | Phase 5 step 3: endless in the balance sim (how long bots survive past the boss). Then the performance check, version and docs. The Spear/Flamethrower boss gap is deferred (user, 2026-10-23). Then Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.4` on `v2`. Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-23 (Phase 5 step 1) |
+| **Last updated** | 2026-10-23 (Phase 5 step 2) |
 
 ---
 
