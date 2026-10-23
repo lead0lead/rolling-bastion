@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1–4 merged into `v2`; Phase 5 built on `v2-phase-5-endless` (2.0.0-alpha.5), not merged, waiting for the user's playtest. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 5 (endless and balance) done: endless rules, "Keep going" / "End run" after the boss, endless HUD and end screen, endless balance sim, 200-tile performance bench. Handed to the user. |
-| **Next step** | User playtests endless and decides: tune the endless numbers, merge Phase 5 into `v2`. The Spear/Flamethrower boss gap is deferred (user, 2026-10-23). Then Phase 6 (polish and hosting). |
+| **Status** | Phases 1–5 merged into `v2` (2.0.0-alpha.5). v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 5 merged into `v2` before a playtest (user decision 2026-10-23: merge, then start Phase 6; endless numbers tuned later if needed). |
+| **Next step** | Phase 6 (polish and hosting) on `v2-phase-6-polish`. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.5` on `v2-phase-5-endless` (`v2` is at `2.0.0-alpha.4`). Phase 6 will be `2.0.0-alpha.6`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.5` on `v2`. Phase 6 will be `2.0.0-alpha.6`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-23 (Phase 5 built, handed over) |
+| **Last updated** | 2026-10-23 (Phase 5 merged) |
 
 ---
 
@@ -771,7 +771,7 @@ these v2 changes:
 | **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
 | **Phase 3 — readability and synergies** (done, merged 2026-10-22) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
 | **Phase 4 — weapons rework and rebalance** (done, merged 2026-10-22; Spear/Flame boss gap moved to Phase 5) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
-| **Phase 5 — endless and balance** (built 2026-10-23, waiting for playtest; Spear/Flame boss gap deferred) | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; Spear and Flamethrower builds able to beat the Colossus (§12); performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
+| **Phase 5 — endless and balance** (done, merged 2026-10-23 before a playtest; Spear/Flame boss gap deferred) | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; Spear and Flamethrower builds able to beat the Colossus (§12); performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
 | **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
@@ -882,6 +882,11 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-23 — Phase 5 merged
+- Decision (user): merge Phase 5 into `v2` without a playtest first and
+  start Phase 6; the endless numbers get tuned later if needed. Removed
+  the stray `Pasted image.png` (untracked) on request. Nothing pushed.
 
 ### 2026-10-23 — Phase 5: endless
 - Decision (user): the Spear/Flamethrower boss gap is deferred: "I think
