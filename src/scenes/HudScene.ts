@@ -142,7 +142,7 @@ export class HudScene extends Phaser.Scene {
           `spawn budget ${budgetRate(w.time).toFixed(2)}/s  time ${w.time.toFixed(1)} s`,
           `E spawns: ${ui.debugEnemy}  ([ / ] to change)`,
           `god mode ${w.godMode ? 'ON' : 'off'} (I)`,
-          'G level · T +60 s · K kill all · H hurt boss 35% · L layout',
+          'G level · T +60 s · K kill all · H hurt boss 35% · J kill boss · L layout',
           'F2 level-up with land · F3 fill the board with Gatlings',
         ].join('\n'),
       );

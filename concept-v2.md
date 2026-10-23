@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1–5 merged into `v2` (2.0.0-alpha.5). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 5 merged into `v2` before a playtest (user decision 2026-10-23: merge, then start Phase 6; endless numbers tuned later if needed). |
-| **Next step** | Phase 6 (polish and hosting) on `v2-phase-6-polish`. |
+| **Status** | Phases 1–5 merged into `v2` (2.0.0-alpha.5); Phase 6 built on `v2-phase-6-polish` (2.0.0-alpha.6), not merged, waiting for the user's playtest. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 6 built; after the user's playtest ("feels great") the victory moment was made bigger (boss death burst, hold, animated title with stats, confetti). Handed over again. |
+| **Next step** | User playtests Phases 5 and 6 (endless, sounds, text). Then, on the user's go: merge Phase 6 into `v2`, tag v1's last `main` commit `v0.8.0`, merge `v2` into `main` and push (redeploys the live game as v2). The plan in §11 ends there; further work is new planning with the user. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.5` on `v2`. Phase 6 will be `2.0.0-alpha.6`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.6` on `v2-phase-6-polish` (`v2` is at `2.0.0-alpha.5`). The release that replaces v1 gets a version without the alpha label (to agree with the user, e.g. `2.0.0`). Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-23 (Phase 5 merged) |
+| **Last updated** | 2026-10-23 (Phase 6 built, handed over) |
 
 ---
 
@@ -296,8 +296,14 @@ Unchanged from v1 (`concept.md` §2.10).
   while a Colossus still lives. It drops no XP (as the first).
 - Normal spawns in endless use the wave table's last entry (12:00: budget
   10/s); spikes don't repeat.
-- Win choice: `VictoryScene` ("Colossus defeated!", Keep going / End run,
-  no Esc) opens over the frozen run. HUD (top right): "Endless · enemies
+- Win choice: `VictoryScene` (Keep going / End run, no Esc) opens over
+  the frozen run. Made bigger after the user's playtest (2026-10-23:
+  "very underwhelming"): every Colossus death bursts into three confetti
+  waves with a white flash and a long shake (`FX.bossDeath`); the first
+  one then plays out for 1.8 s before the screen opens with a popping
+  "COLOSSUS DEFEATED!" title, "Beaten at m:ss · Level · kills" and
+  confetti (`FX.victory`); the menu panel is titled "What now?". Debug key
+  J kills the boss (H stops at 1 HP). HUD (top right): "Endless · enemies
   ×N" and "Colossus returns in m:ss". End screen: "The city rolls on." when
   the run ended by choice, "The Core has fallen." otherwise, with "Boss
   defeated (×N)" in the stats line.
@@ -662,9 +668,21 @@ Unchanged from v1 (`concept.md` §4.3), except endless scaling (§2.11).
 ## 5. Story, Tone & Text
 
 Unchanged from v1. New draft text (user's to rewrite): "New land!", "Place
-the new land first", "Keep going", "End run", the chain hint in §3.3, the
-rules legend text, tooltip lines ("Receives:", "Buffs n neighbours") and
-chain labels (Phase 3).
+the new land first", "Colossus defeated!", "Keep going", "End run", the
+endless HUD lines ("Endless · enemies ×N", "Colossus returns in m:ss"), the
+chain hint in §3.3, the rules legend text, tooltip lines ("Receives:",
+"Buffs n neighbours") and chain labels (Phase 3), the fourth title line
+"Survive until the Colossus comes, beat it, then keep going if you dare"
+(Phase 6).
+
+**Text pass (Phase 6, as implemented):** tile descriptions checked against
+the tuned Phase 4 numbers (all match); the chain hint takes its numbers
+from `LINES`; the build screen's pause-time line ("Pause: last … avg …",
+a Phase 2 measurement) shows only in debug; the title screen gained the
+goal line above (Settings link moved to y 448, the demo city to y 580).
+Sounds added in Phase 6: `shot-crossbow`, `shot-flame`, `spear-thrust`,
+`saw-hit`, `magnet-pulse` (Kenney CC0, ASSETS.md; volumes untested by
+ear).
 
 ## 6. Look
 
@@ -772,7 +790,7 @@ these v2 changes:
 | **Phase 3 — readability and synergies** (done, merged 2026-10-22) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
 | **Phase 4 — weapons rework and rebalance** (done, merged 2026-10-22; Spear/Flame boss gap moved to Phase 5) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
 | **Phase 5 — endless and balance** (done, merged 2026-10-23 before a playtest; Spear/Flame boss gap deferred) | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; Spear and Flamethrower builds able to beat the Colossus (§12); performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
-| **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
+| **Phase 6 — polish and hosting** (built 2026-10-23, waiting for playtest; hosting: v2 replaces v1) | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
 "waves and shop" is gone). If a spike is dropped, its phase is removed or rewritten with the user, and
@@ -788,10 +806,11 @@ start early if the user asks.
 - Endless details (§2.11): scaling numbers and Colossus returns are built as drafted; tune after the user's playtest. Should a returning Colossus drop XP or another reward?
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
-- v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
-  on GitHub Pages (the workflow would build both branches into one Pages
-  artifact), or v2 replaces v1 on `main`.
-- Does v2 eventually replace v1 on `main`?
+- v2 hosting: **decided 2026-10-23 (user): v2 replaces v1 on `main`**
+  at the end of Phase 6 (over a `/v2/` preview or staying local). Merge
+  after the user has played Phase 6 and confirmed once more before the
+  push, since every push to `main` redeploys the live game. Tag v1's last
+  commit (`v0.8.0`) first so it stays easy to find.
 - Should Shield Emitters, Repair Bays and Magnets also chain? (For now only
   Generators and Engines, as asked.)
 - Carried over from v1: final title, code licence, piece mirroring,
@@ -882,6 +901,21 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-23 — Phase 6: polish and hosting
+- Decision (user): v2 replaces v1 on `main` (chosen over a `/v2/` preview
+  or staying local); merge after the playtest, confirming once more
+  before the push.
+- Built on `v2-phase-6-polish`: five new sounds (Crossbow, Flamethrower,
+  Spear, Saw hits, Magnet pulse; Kenney CC0 from the RPG Audio, Interface
+  and Impact packs, copied from the user's `banner-and-bone` project),
+  text pass (§5). Version 2.0.0-alpha.6. Build, lint and 173 tests pass.
+- Not done: no one has listened to the new sounds (volumes are guesses);
+  the endless numbers are untested by a player.
+- Next: user playtest, then the v1 → v2 switch on `main`.
+- Playtest (user): "it feels great"; only the "Colossus defeated" popover
+  was "very underwhelming". Made it bigger (§2.11 "Win choice"), checked
+  with headless-browser screenshots; new debug key J kills the boss.
 
 ### 2026-10-23 — Phase 5 merged
 - Decision (user): merge Phase 5 into `v2` without a playtest first and

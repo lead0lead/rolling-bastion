@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
-import { BUILD_VIEW, GRID, OFFERS, UPGRADES } from '../config/balance';
+import { BUILD_VIEW, GRID, LINES, OFFERS, UPGRADES } from '../config/balance';
 import { FX } from '../config/fx';
 import { LAND_SHAPES, type LandShape } from '../config/land';
 import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
@@ -124,7 +124,8 @@ const CHAIN_HINT = {
   key: 'chainHintShown',
   width: 420,
   text:
-    'Chains: line up 3 or more identical tiles facing the same way: each gets +50% damage. ' +
+    `Chains: line up ${LINES.chainMin} or more identical tiles facing the same way: ` +
+    `each gets +${Math.round(LINES.chainBonusStep * 100)}% damage. ` +
     'Generators and Engines chain too.\n(click to close)',
 };
 
@@ -1516,7 +1517,8 @@ export class BuildScene extends Phaser.Scene {
         ? `Scrap refund: ${this.run.refundPerScrap} XP per piece` +
           (this.session.scrapped ? ` (${this.session.scrapped} scrapped)` : '')
         : '',
-      d.length ? `Pause: last ${d.at(-1)?.toFixed(1)} s · avg ${avg.toFixed(1)} s` : '',
+      // How long build pauses take (a Phase 2 measurement), for debugging only.
+      DEBUG && d.length ? `Pause: last ${d.at(-1)?.toFixed(1)} s · avg ${avg.toFixed(1)} s` : '',
     ];
     if (this.flash && this.time.now < this.flash.until) lines.push('', this.flash.text);
     this.statusText.setText(lines.join('\n'));

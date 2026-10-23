@@ -36,6 +36,27 @@ export const FX = {
   /** Screen shake (duration ms, intensity): tile lost, boss phase change. */
   shakeTileLoss: { ms: 120, intensity: 0.003 },
   shakeBossPhase: { ms: 320, intensity: 0.007 },
+  /**
+   * Colossus death (concept-v2.md §2.11): confetti waves (count each, speed
+   * px/s, size px, life s; later waves slower), a white flash (ms), a long
+   * shake, and how long the first kill plays out before the victory screen (s).
+   */
+  bossDeath: {
+    waves: 3,
+    count: 70,
+    speed: 620,
+    size: 13,
+    life: 1.6,
+    flashMs: 300,
+    shake: { ms: 700, intensity: 0.014 },
+    holdSec: 1.8,
+  },
+  /** Victory screen: title pop-in (ms), stat line delay (ms), confetti per side (speed px/s, size px, life s). */
+  victory: {
+    popMs: 520,
+    statsDelayMs: 350,
+    confetti: { count: 90, speed: 700, size: 12, life: 1.8 },
+  },
   /** "Reduce effects" setting: this share of particles; no shake, wobble or pulses. */
   reducedParticleShare: 1 / 3,
 } as const;
