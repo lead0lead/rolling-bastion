@@ -62,7 +62,7 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1–5 merged into `v2` (2.0.0-alpha.5); Phase 6 built on `v2-phase-6-polish` (2.0.0-alpha.6), not merged, waiting for the user's playtest. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 6 (polish and hosting) done: new sounds, text pass, hosting decided (v2 replaces v1). Handed to the user. |
+| **Current step** | Phase 6 built; after the user's playtest ("feels great") the victory moment was made bigger (boss death burst, hold, animated title with stats, confetti). Handed over again. |
 | **Next step** | User playtests Phases 5 and 6 (endless, sounds, text). Then, on the user's go: merge Phase 6 into `v2`, tag v1's last `main` commit `v0.8.0`, merge `v2` into `main` and push (redeploys the live game as v2). The plan in §11 ends there; further work is new planning with the user. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
@@ -296,8 +296,14 @@ Unchanged from v1 (`concept.md` §2.10).
   while a Colossus still lives. It drops no XP (as the first).
 - Normal spawns in endless use the wave table's last entry (12:00: budget
   10/s); spikes don't repeat.
-- Win choice: `VictoryScene` ("Colossus defeated!", Keep going / End run,
-  no Esc) opens over the frozen run. HUD (top right): "Endless · enemies
+- Win choice: `VictoryScene` (Keep going / End run, no Esc) opens over
+  the frozen run. Made bigger after the user's playtest (2026-10-23:
+  "very underwhelming"): every Colossus death bursts into three confetti
+  waves with a white flash and a long shake (`FX.bossDeath`); the first
+  one then plays out for 1.8 s before the screen opens with a popping
+  "COLOSSUS DEFEATED!" title, "Beaten at m:ss · Level · kills" and
+  confetti (`FX.victory`); the menu panel is titled "What now?". Debug key
+  J kills the boss (H stops at 1 HP). HUD (top right): "Endless · enemies
   ×N" and "Colossus returns in m:ss". End screen: "The city rolls on." when
   the run ended by choice, "The Core has fallen." otherwise, with "Boss
   defeated (×N)" in the stats line.
@@ -907,6 +913,9 @@ Same format as v1 (`concept.md` §14). Newest first.
 - Not done: no one has listened to the new sounds (volumes are guesses);
   the endless numbers are untested by a player.
 - Next: user playtest, then the v1 → v2 switch on `main`.
+- Playtest (user): "it feels great"; only the "Colossus defeated" popover
+  was "very underwhelming". Made it bigger (§2.11 "Win choice"), checked
+  with headless-browser screenshots; new debug key J kills the boss.
 
 ### 2026-10-23 — Phase 5 merged
 - Decision (user): merge Phase 5 into `v2` without a playtest first and

@@ -94,6 +94,11 @@ export function debugFillWeapons(w: World): void {
   cityChanged(w);
 }
 
+/** Kills the boss as if by a hit (to test the victory and endless quickly). */
+export function debugKillBoss(w: World): void {
+  if (w.boss) w.boss.dead = true;
+}
+
 /** Takes this share of the boss's max HP (to reach its later phases quickly). */
 export function debugHurtBoss(w: World, fraction: number): void {
   const boss = w.boss;

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
-import { ENEMIES, ENEMY_TYPES } from '../config/enemies';
+import { BOSS, ENEMIES, ENEMY_TYPES } from '../config/enemies';
 import type { SoundKey } from '../config/audio';
 import { FX } from '../config/fx';
 import { LAND_SHAPES } from '../config/land';
@@ -20,6 +20,7 @@ import {
   debugFillGrid,
   debugFillWeapons,
   debugHurtBoss,
+  debugKillBoss,
   debugKillAll,
   debugLayoutJson,
   debugLevelUp,
@@ -142,6 +143,8 @@ export class RunScene extends Phaser.Scene {
   private ui!: RunUiState;
   private acc = 0;
   private buildOpen = false;
+  /** When the first boss kill started playing out (`time.now`, ms), or null. */
+  private victoryAt: number | null = null;
   private keys!: MoveKeys;
   private bg!: Phaser.GameObjects.TileSprite;
   private tileSprites!: SpritePool;
@@ -197,6 +200,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run', this.ui);
     this.acc = 0;
     this.buildOpen = false;
+    this.victoryAt = null;
 
     this.bg = this.add.tileSprite(0, 0, 10, 10, TEX.bgGrid).setOrigin(0).setDepth(-10);
     this.gemSprites = new SpritePool(this, 1);
@@ -248,9 +252,14 @@ export class RunScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     const w = this.world;
     if (w.over) {
-      // The first boss kill asks whether to keep going (concept-v2.md §2.11).
-      if (w.won && !isEndless(w)) this.openVictory();
-      else this.endRun();
+      // The first boss kill plays out, then asks whether to keep going (concept-v2.md §2.11).
+      if (w.won && !isEndless(w)) {
+        this.victoryAt ??= this.time.now;
+        this.render(0, delta / 1000);
+        if (this.time.now - this.victoryAt >= FX.bossDeath.holdSec * 1000) this.openVictory();
+      } else {
+        this.endRun();
+      }
       return;
     }
     this.acc += Math.min(delta / 1000, SIM.maxFrame);
@@ -316,10 +325,38 @@ export class RunScene extends Phaser.Scene {
     this.scene.bringToTop('Build');
   }
 
+  /** The Colossus bursts: confetti waves in its colours, a flash and a long shake. */
+  private bossDeath(x: number, y: number): void {
+    const d = FX.bossDeath;
+    const colors = [ENEMIES[BOSS.type].color, 0xffffff, COLORS.bossEnraged, COLORS.xp];
+    for (let i = 0; i < d.waves; i++) {
+      const f = 1 - i / (d.waves + 1);
+      this.particles.burst(
+        x,
+        y,
+        particleCount(d.count),
+        colors,
+        d.speed * f,
+        d.size,
+        d.life,
+        i > 0,
+      );
+    }
+    const camera = this.cameras.main;
+    if (motion()) {
+      camera.flash(d.flashMs, 255, 255, 255);
+      camera.shake(d.shake.ms, d.shake.intensity);
+    }
+  }
+
   /** "Keep going" or "End run" after the boss kill; the run freezes meanwhile. */
   private openVictory(): void {
     const w = this.world;
+    this.victoryAt = null;
     const data: VictorySceneData = {
+      time: w.time,
+      level: w.level,
+      kills: w.kills,
       keepGoing: () => {
         startEndless(w);
         this.input.keyboard?.resetKeys();
@@ -410,6 +447,9 @@ export class RunScene extends Phaser.Scene {
         break;
       case 'KeyK':
         debugKillAll(w);
+        break;
+      case 'KeyJ':
+        debugKillBoss(w);
         break;
       case 'KeyL':
         console.log(debugLayoutJson(w));
@@ -601,6 +641,8 @@ export class RunScene extends Phaser.Scene {
           true,
         );
         playSfx(this, 'tile-lost');
+      } else if (ev.kind === 'enemyKilled' && ENEMIES[ev.type].boss) {
+        this.bossDeath(ev.x, ev.y);
       } else if (ev.kind === 'enemyKilled') {
         const p = FX.enemyPop;
         const def = ENEMIES[ev.type];
