@@ -62,14 +62,14 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1–4 merged into `v2` (2.0.0-alpha.4). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 5 on `v2-phase-5-endless`: steps 1–2 done (endless rules in the sim; "Keep going" / "End run" after the boss, endless HUD line, end screen with "Boss defeated"). |
-| **Next step** | Phase 5 step 3: endless in the balance sim (how long bots survive past the boss). Then the performance check, version and docs. The Spear/Flamethrower boss gap is deferred (user, 2026-10-23). Then Phase 6 (polish and hosting). |
+| **Current step** | Phase 5 on `v2-phase-5-endless`: steps 1–3 done (endless rules; win choice, HUD and end screen; endless balance sim and the 200-tile performance bench). |
+| **Next step** | Phase 5 step 4: version 2.0.0-alpha.5 and docs, then hand the build to the user. The Spear/Flamethrower boss gap is deferred (user, 2026-10-23). Then Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.4` on `v2`. Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-23 (Phase 5 step 2) |
+| **Last updated** | 2026-10-23 (Phase 5 step 3) |
 
 ---
 
@@ -813,17 +813,10 @@ start early if the user asks.
 
 **Known issues**
 
-- **Intermittent bench spike (Phase 1):** in `npm run bench`, when the
-  stress city is worn down to the Core alone (≈ tick 410–450), one tick of
-  `updateEnemies` sometimes takes 100–320 ms (2 of 3 runs, then 0 of 3 with
-  a GC observer attached; not seen in 4 runs on `v2` before Phase 1).
-  Averages are fine (~6.9 ms/step, as before). Not found yet; the scenario
-  (600 enemies on one tile) can't happen in a real run without losing.
-  Look again in the Phase 5 performance check.
-- **`npm run bench` times out on this machine** (Vitest's 5 s test
-  timeout; the run takes ~7 s) on `v2` as well as on Phase 1: the check
-  never reports a pass here. Raise the bench's timeout in Phase 5, or run
-  on a faster machine.
+- **Intermittent bench spike (Phase 1):** not seen in Phase 5 (3 runs,
+  worst tick 5.9–8.3 ms in the 48-tile stress city, which averages
+  ~1.7 ms/step now). Keep an eye on it.
+- `npm run bench` timing out: fixed in Phase 5 (bench timeout 120 s).
 - v1 known issues (`concept.md` §12) carry over until the code involved is
   rebuilt.
 

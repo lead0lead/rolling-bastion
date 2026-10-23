@@ -1,8 +1,10 @@
 import { expect, it } from 'vitest';
 import { SPAWN } from '../src/config/balance';
+import type { Facing, TileType } from '../src/config/tiles';
 import { spawnRing } from '../src/sim/spawner';
 import { step } from '../src/sim/step';
 import { cityChanged, createWorld, type World } from '../src/sim/world';
+
 import { cityFrom } from '../tests/helpers';
 
 /**
@@ -64,7 +66,64 @@ function refill(w: World): void {
 }
 
 it('simulation step stays well inside the frame budget', () => {
-  const w = heavyWorld();
+  measure(heavyWorld(), '48-tile city');
+});
+
+/** Every type but the Core, cycled over the endless city. */
+const MIX: TileType[] = [
+  'gatling',
+  'hull',
+  'cannon',
+  'generator',
+  'mortar',
+  'plating',
+  'saw',
+  'shield',
+  'crossbow',
+  'repair',
+  'flamethrower',
+  'engine',
+  'spear',
+  'magnet',
+];
+
+/**
+ * An endless-sized city (concept-v2.md §11 Phase 5): 15×14 cells, 210 tiles
+ * of every type, with tiles that can't be destroyed so the size holds.
+ */
+function endlessWorld(): World {
+  const w = createWorld(5);
+  const rows = Array.from({ length: 14 }, (_, y) =>
+    Array.from({ length: 15 }, (_, x) => (x === 7 && y === 7 ? 'C' : 'a')).join(''),
+  );
+  w.city = cityFrom(rows);
+  w.city.tiles.forEach((t, i) => {
+    if (t.type === 'core') return;
+    t.type = MIX[i % MIX.length] ?? 'hull';
+    t.facing = (i % 4) as Facing;
+  });
+  cityChanged(w);
+  for (const t of w.city.tiles) t.hp = t.maxHp = 1e9;
+  w.godMode = true;
+  w.viewRadius = 300;
+  return w;
+}
+
+it('an endless-sized city of ~200 tiles stays inside the frame budget', () => {
+  const w = endlessWorld();
+  const n = 50;
+  const t0 = performance.now();
+  for (let i = 0; i < n; i++) cityChanged(w);
+  for (const t of w.city.tiles) t.hp = t.maxHp = 1e9;
+  const recompute = (performance.now() - t0) / n;
+  console.log(
+    `${w.city.tiles.length} tiles: city recompute (synergies, bridges) ${recompute.toFixed(3)} ms`,
+  );
+  measure(w, `${w.city.tiles.length}-tile city`);
+});
+
+/** Warms up, then times 600 ticks with 600 enemies and 300 projectiles kept in play. */
+function measure(w: World, label: string): void {
   for (let i = 0; i < 300; i++) {
     refill(w);
     step(w, { x: 0.3, y: 0.1 }, 1 / 60);
@@ -87,8 +146,8 @@ it('simulation step stays well inside the frame budget', () => {
   const p99 = times[Math.floor(ticks * 0.99)] ?? 0;
   const worst = times[ticks - 1] ?? 0;
   console.log(
-    `avg ${avg.toFixed(3)} ms/step, p99 ${p99.toFixed(3)} ms, worst ${worst.toFixed(3)} ms ` +
+    `${label}: avg ${avg.toFixed(3)} ms/step, p99 ${p99.toFixed(3)} ms, worst ${worst.toFixed(3)} ms ` +
       `(${Math.round(enemies / ticks)} enemies, ${Math.round(projectiles / ticks)} projectiles)`,
   );
   expect(avg).toBeLessThan(8);
-});
+}
