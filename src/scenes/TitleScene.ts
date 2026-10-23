@@ -24,7 +24,7 @@ const DEMO = {
   cell: 36,
   /** City centre and its slow drift (px, rad/s). */
   x: 640,
-  y: 555,
+  y: 580,
   driftX: 150,
   driftY: 18,
   driftSpeed: 0.35,
@@ -155,6 +155,7 @@ export class TitleScene extends Phaser.Scene {
           'Drive with WASD or the arrow keys — your guns fire by themselves',
           'Level up, then place pieces: keep every tile connected to the Core',
           'Line up guns into chains — or upgrade a tile type instead',
+          'Survive until the Colossus comes, beat it, then keep going if you dare',
         ].join('\n'),
         { ...text, fontSize: '18px', color: COLORS.textDim, align: 'center', lineSpacing: 6 },
       )
@@ -170,7 +171,7 @@ export class TitleScene extends Phaser.Scene {
       .setDepth(10);
 
     const settingsLink = this.add
-      .text(width / 2, 418, 'Settings (S)', { ...text, fontStyle: FONT.bold, fontSize: '22px' })
+      .text(width / 2, 448, 'Settings (S)', { ...text, fontStyle: FONT.bold, fontSize: '22px' })
       .setOrigin(0.5)
       .setDepth(10)
       .setInteractive({ useHandCursor: true });

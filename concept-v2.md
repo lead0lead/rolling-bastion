@@ -62,14 +62,14 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1–5 merged into `v2` (2.0.0-alpha.5). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 6 on `v2-phase-6-polish`: step 1 done (sounds for the new weapons and the Magnet pulse). |
-| **Next step** | Phase 6 step 2: text pass (§5). Then version 2.0.0-alpha.6 and docs, hand-over; after the user's playtest, v2 replaces v1 on `main` (user decision 2026-10-23; confirm again right before pushing `main`). |
+| **Current step** | Phase 6 on `v2-phase-6-polish`: steps 1–2 done (sounds for the new weapons and the Magnet pulse; text pass). |
+| **Next step** | Phase 6 step 3: version 2.0.0-alpha.6 and docs, hand-over. After the user's playtest, v2 replaces v1 on `main` (user decision 2026-10-23; confirm again right before pushing `main`). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.5` on `v2`. Phase 6 will be `2.0.0-alpha.6`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-23 (Phase 6 step 1) |
+| **Last updated** | 2026-10-23 (Phase 6 step 2) |
 
 ---
 
@@ -662,9 +662,21 @@ Unchanged from v1 (`concept.md` §4.3), except endless scaling (§2.11).
 ## 5. Story, Tone & Text
 
 Unchanged from v1. New draft text (user's to rewrite): "New land!", "Place
-the new land first", "Keep going", "End run", the chain hint in §3.3, the
-rules legend text, tooltip lines ("Receives:", "Buffs n neighbours") and
-chain labels (Phase 3).
+the new land first", "Colossus defeated!", "Keep going", "End run", the
+endless HUD lines ("Endless · enemies ×N", "Colossus returns in m:ss"), the
+chain hint in §3.3, the rules legend text, tooltip lines ("Receives:",
+"Buffs n neighbours") and chain labels (Phase 3), the fourth title line
+"Survive until the Colossus comes, beat it, then keep going if you dare"
+(Phase 6).
+
+**Text pass (Phase 6, as implemented):** tile descriptions checked against
+the tuned Phase 4 numbers (all match); the chain hint takes its numbers
+from `LINES`; the build screen's pause-time line ("Pause: last … avg …",
+a Phase 2 measurement) shows only in debug; the title screen gained the
+goal line above (Settings link moved to y 448, the demo city to y 580).
+Sounds added in Phase 6: `shot-crossbow`, `shot-flame`, `spear-thrust`,
+`saw-hit`, `magnet-pulse` (Kenney CC0, ASSETS.md; volumes untested by
+ear).
 
 ## 6. Look
 
