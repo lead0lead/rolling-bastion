@@ -62,14 +62,14 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1–5 merged into `v2` (2.0.0-alpha.5). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 5 merged into `v2` before a playtest (user decision 2026-10-23: merge, then start Phase 6; endless numbers tuned later if needed). |
-| **Next step** | Phase 6 (polish and hosting) on `v2-phase-6-polish`. |
+| **Current step** | Phase 6 on `v2-phase-6-polish`: step 1 done (sounds for the new weapons and the Magnet pulse). |
+| **Next step** | Phase 6 step 2: text pass (§5). Then version 2.0.0-alpha.6 and docs, hand-over; after the user's playtest, v2 replaces v1 on `main` (user decision 2026-10-23; confirm again right before pushing `main`). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.5` on `v2`. Phase 6 will be `2.0.0-alpha.6`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-23 (Phase 5 merged) |
+| **Last updated** | 2026-10-23 (Phase 6 step 1) |
 
 ---
 
@@ -788,10 +788,11 @@ start early if the user asks.
 - Endless details (§2.11): scaling numbers and Colossus returns are built as drafted; tune after the user's playtest. Should a returning Colossus drop XP or another reward?
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
-- v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
-  on GitHub Pages (the workflow would build both branches into one Pages
-  artifact), or v2 replaces v1 on `main`.
-- Does v2 eventually replace v1 on `main`?
+- v2 hosting: **decided 2026-10-23 (user): v2 replaces v1 on `main`**
+  at the end of Phase 6 (over a `/v2/` preview or staying local). Merge
+  after the user has played Phase 6 and confirmed once more before the
+  push, since every push to `main` redeploys the live game. Tag v1's last
+  commit (`v0.8.0`) first so it stays easy to find.
 - Should Shield Emitters, Repair Bays and Magnets also chain? (For now only
   Generators and Engines, as asked.)
 - Carried over from v1: final title, code licence, piece mirroring,

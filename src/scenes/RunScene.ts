@@ -56,9 +56,10 @@ const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
   gatling: 'shot-gatling',
   cannon: 'shot-cannon',
   mortar: 'shot-mortar',
-  crossbow: 'shot-cannon',
-  flamethrower: 'shot-gatling',
-  spear: 'ui-place',
+  crossbow: 'shot-crossbow',
+  flamethrower: 'shot-flame',
+  spear: 'spear-thrust',
+  saw: 'saw-hit',
 };
 /** Colour of the boss charge telegraph. */
 const CHARGE_COLOR = COLORS.charge;
@@ -619,7 +620,7 @@ export class RunScene extends Phaser.Scene {
         playSfx(this, ev.bomb ? 'bomb' : 'blast');
       } else if (ev.kind === 'magnetPulse') {
         this.magnetRings.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
-        playSfx(this, 'gem');
+        playSfx(this, 'magnet-pulse');
       } else if (ev.kind === 'bossPhase') {
         if (motion()) camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
         playSfx(this, 'boss-phase');
