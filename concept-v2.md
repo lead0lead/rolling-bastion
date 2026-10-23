@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1–5 merged into `v2` (2.0.0-alpha.5); Phase 6 built on `v2-phase-6-polish` (2.0.0-alpha.6), not merged, waiting for the user's playtest. v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 6 built; after the user's playtest ("feels great") the victory moment was made bigger (boss death burst, hold, animated title with stats, confetti). Handed over again. |
-| **Next step** | User playtests Phases 5 and 6 (endless, sounds, text). Then, on the user's go: merge Phase 6 into `v2`, tag v1's last `main` commit `v0.8.0`, merge `v2` into `main` and push (redeploys the live game as v2). The plan in §11 ends there; further work is new planning with the user. |
-| **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
-| **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.6` on `v2-phase-6-polish` (`v2` is at `2.0.0-alpha.5`). The release that replaces v1 gets a version without the alpha label (to agree with the user, e.g. `2.0.0`). Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
-| **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
+| **Status** | **v2 is live** (2.0.0): Phases 1–6 merged into `v2`, and `v2` merged into `main` on 2026-10-23 (user: "merge and deploy"), replacing v1. v1's last commit is tagged `v0.8.0`. |
+| **Current step** | v2 2.0.0 released to GitHub Pages. The v2 plan (§11) is complete. |
+| **Next step** | None planned. New work (endless tuning, Spear/Flamethrower vs the Colossus, other §12 items) starts with planning it with the user. |
+| **Decision milestone** | Passed 2026-10-21 (spike verdicts); v2 replaced v1 on 2026-10-23. |
+| **Branches** | `main` = live game (every push redeploys), now v2. `v2` = integration branch; merged into `main` only on the user's go. New phases/spikes branch from `v2`. |
+| **Version** | `2.0.0` (released). Further labels to agree with the user. |
+| **Play** | https://lead0lead.github.io/rolling-bastion/ (v2). v1: tag `v0.8.0` (run locally). |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-23 (Phase 6 built, handed over) |
+| **Last updated** | 2026-10-23 (v2 2.0.0 released on `main`) |
 
 ---
 
@@ -736,9 +736,9 @@ these v2 changes:
 
 ### Branches
 
-- `main` is v1 and is live: **no v2 work on `main`**, and `v2` is never
-  merged into `main` without the user's explicit decision (§12). v1 fixes,
-  if any, happen on `main`; merge `main` into `v2` afterwards when useful.
+- `main` is the live game (v1 until 2026-10-23, v2 since): **no direct work
+  on `main`**, and `v2` is merged into `main` only on the user's explicit
+  go, since every push redeploys. v1 is kept as tag `v0.8.0`.
 - `v2` is the integration branch for v2. It must always build, type check,
   lint and pass tests.
 - Phases: `v2-phase-N-<topic>` from `v2`, merged into `v2` after the user has
@@ -790,7 +790,7 @@ these v2 changes:
 | **Phase 3 — readability and synergies** (done, merged 2026-10-22) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
 | **Phase 4 — weapons rework and rebalance** (done, merged 2026-10-22; Spear/Flame boss gap moved to Phase 5) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
 | **Phase 5 — endless and balance** (done, merged 2026-10-23 before a playtest; Spear/Flame boss gap deferred) | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; Spear and Flamethrower builds able to beat the Colossus (§12); performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
-| **Phase 6 — polish and hosting** (built 2026-10-23, waiting for playtest; hosting: v2 replaces v1) | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
+| **Phase 6 — polish and hosting** (done 2026-10-23; v2 replaced v1 on `main` as 2.0.0) | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
 "waves and shop" is gone). If a spike is dropped, its phase is removed or rewritten with the user, and
@@ -806,11 +806,8 @@ start early if the user asks.
 - Endless details (§2.11): scaling numbers and Colossus returns are built as drafted; tune after the user's playtest. Should a returning Colossus drop XP or another reward?
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
-- v2 hosting: **decided 2026-10-23 (user): v2 replaces v1 on `main`**
-  at the end of Phase 6 (over a `/v2/` preview or staying local). Merge
-  after the user has played Phase 6 and confirmed once more before the
-  push, since every push to `main` redeploys the live game. Tag v1's last
-  commit (`v0.8.0`) first so it stays easy to find.
+- v2 hosting: **done 2026-10-23:** v2 replaced v1 on `main` (2.0.0); v1
+  is tag `v0.8.0`.
 - Should Shield Emitters, Repair Bays and Magnets also chain? (For now only
   Generators and Engines, as asked.)
 - Carried over from v1: final title, code licence, piece mirroring,
@@ -901,6 +898,15 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-23 — v2 released (2.0.0)
+- Playtest of the bigger victory moment (user): "nice, merge and deploy".
+- Merged Phase 6 into `v2`; version 2.0.0 (Claude's pick for the release
+  label; the alpha label dropped); README and CLAUDE.md updated for v2 on
+  `main`. Tagged v1's last `main` commit `v0.8.0`, fast-forwarded `main`
+  to `v2` and pushed `main`, `v2`, the phase branches and the tag; GitHub
+  Actions deploys the live game.
+- Next: nothing planned; new work starts with the user (§12).
 
 ### 2026-10-23 — Phase 6: polish and hosting
 - Decision (user): v2 replaces v1 on `main` (chosen over a `/v2/` preview

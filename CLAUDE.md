@@ -1,26 +1,28 @@
 # CLAUDE.md
 
-**This is the `v2` branch: `concept-v2.md` is the source of truth.** Read it
-first, in particular §0 (current state), the session log (§14) and open
+**v2 is the live game (2.0.0, on `main` since 2026-10-23); `concept-v2.md`
+is the source of truth.** Read it first, in particular §0 (current state), the session log (§14) and open
 questions (§12). Follow its "Start Here" instructions. `concept.md` is the
-frozen v1 record: read the sections `concept-v2.md` references, never edit it
-here.
+frozen v1 record (tag `v0.8.0`): read the sections `concept-v2.md`
+references, never edit it.
 
 ## Commands
 
 - `npm run dev` — dev server
 - `npm run build` — type check + production build; `npm run preview` to serve it
 - `npm test` — Vitest (tests live in `tests/`, mirroring `src/sim/`)
-- `npm run sim:balance` / `npm run sim:weapons` — balance and weapon sims (parallel shards, minutes)
+- `npm run sim:balance` / `npm run sim:weapons` / `npm run sim:endless` — balance, weapon and endless sims (parallel shards, minutes)
+- `npm run bench` — simulation performance check
 - `npm run lint` / `npm run typecheck` / `npm run format`
 
 ## Rules (summary of concept-v2.md §10 and concept.md §9–§10)
 
-- **No v2 work on `main`** — `main` is v1 and every push redeploys the live
-  game. Never merge `v2` into `main` without the user's explicit decision.
+- **No direct work on `main`** — every push to `main` redeploys the live
+  game. Work happens on `v2` (the integration branch) and branches from it;
+  `v2` is merged into `main` only on the user's explicit go.
 - Work only on the next unfinished spike or phase (concept-v2.md §11); stop
-  at the end of each and hand the build to the user. No v2 phase before the
-  user has decided keep/drop for both spikes.
+  at the end of each and hand the build to the user. The v2 plan (Phases
+  1–6) is complete; new work starts with planning it with the user.
 - Spikes: `v2-spike-<letter>-<topic>` from `v2`, quick and throwaway (logic in
   scenes, hard-coded numbers and missing tests are fine; the build and type
   check must still pass). Never merged; kept ideas are rebuilt in phases.
