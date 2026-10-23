@@ -6,7 +6,10 @@ import type { Rng } from './rng';
 
 /** True if reaching this level also offers land. */
 export function isLandLevel(level: number): boolean {
-  return (LAND.atLevels as readonly number[]).includes(level);
+  const levels: readonly number[] = LAND.atLevels;
+  const last = levels[levels.length - 1] ?? 0;
+  if (level > last) return (level - last) % LAND.thenEvery === 0;
+  return levels.includes(level);
 }
 
 /** Distinct land shapes for one land level-up. */

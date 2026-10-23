@@ -84,7 +84,15 @@ function volley(w: World, boss: Enemy): void {
   const spread = (v.spreadDeg * Math.PI) / 180;
   for (let i = 0; i < v.count; i++) {
     const f = v.count > 1 ? i / (v.count - 1) - 0.5 : 0;
-    fireEnemyShot(w, boss.x, boss.y, mid + f * spread, v.speed, v.damage, v.range / v.speed);
+    fireEnemyShot(
+      w,
+      boss.x,
+      boss.y,
+      mid + f * spread,
+      v.speed,
+      v.damage * boss.damageFactor,
+      v.range / v.speed,
+    );
   }
 }
 

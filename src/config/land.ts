@@ -10,6 +10,8 @@ export const LAND = {
    * so players get there later).
    */
   atLevels: [8, 15, 22, 29, 36],
+  /** After the last of `atLevels`, land keeps coming every this many levels (endless, §2.11). */
+  thenEvery: 7,
   /** Land shapes offered per land level-up. */
   offers: 3,
   /** Cells per land shape (every shape has the same count). */

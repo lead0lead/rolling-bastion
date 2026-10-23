@@ -567,8 +567,12 @@ export function removeDead(w: World): void {
     w.enemyPool.push(e);
     if (e === w.boss) {
       w.boss = null;
-      w.won = true;
-      w.over = true;
+      w.bossKills++;
+      // The first kill wins the run; in endless the Colossus just returns later.
+      if (w.endlessSince === null) {
+        w.won = true;
+        w.over = true;
+      }
     }
     if (e.noDrop) continue;
     w.kills++;

@@ -62,14 +62,14 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | Phases 1–4 merged into `v2` (2.0.0-alpha.4). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 4 merged into `v2` as is (user decision 2026-10-22); `v2` and the phase branches pushed. |
-| **Next step** | Phase 5 (endless and balance) on `v2-phase-5-endless`, including the Spear/Flamethrower boss gap carried over from Phase 4 (§12). Then Phase 6 (polish and hosting). |
+| **Current step** | Phase 5 on `v2-phase-5-endless`: step 1 done (endless rules in the sim: `startEndless`, ×1.12/min growth, returning Colossus, land every 7 levels after 36). |
+| **Next step** | Phase 5 step 2: the win screen's "Keep going" / "End run" choice, HUD and end screen for endless. The Spear/Flamethrower boss gap is deferred (user, 2026-10-23). Then Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
 | **Version** | `2.0.0-alpha.4` on `v2`. Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 4 merged and pushed) |
+| **Last updated** | 2026-10-23 (Phase 5 step 1) |
 
 ---
 
@@ -762,7 +762,9 @@ start early if the user asks.
   Generators and Engines, as asked.)
 - Carried over from v1: final title, code licence, piece mirroring,
   meta-progression.
-- **Spear and Flamethrower vs the Colossus** (carried into Phase 5):
+- **Spear and Flamethrower vs the Colossus** (deferred 2026-10-23, user:
+  "I think it's okay if some builds are not viable for now, we can change
+  this later"; no longer part of Phase 5):
   both builds clear waves but lose to the boss in the sim (boss at
   67–99% HP). Two tuning passes (2026-10-22, reverted) showed more damage
   doesn't help: Spear 50–60 dmg every 0.5 s, reach 112, and Flamethrower
