@@ -38,6 +38,8 @@ export interface Enemy {
   markUntil: number;
   /** Burn damage per second while burning. */
   burnDps: number;
+  /** Multiplier on its contact, shot and bomb damage (endless growth, concept-v2.md §2.11). */
+  damageFactor: number;
   dead: boolean;
 }
 
@@ -162,9 +164,17 @@ export interface World {
   /** The live boss, if any; checked outside the spatial hash (it is too big for it). */
   boss: Enemy | null;
   bossSpawned: boolean;
+  /** Game time the current (or last) boss arrived; enrage counts from here. */
+  bossSpawnedAt: number;
   bossState: BossState;
   /** The boss was defeated: the run is won. */
   won: boolean;
+  /** Game time the player chose "Keep going" (concept-v2.md §2.11), or null. */
+  endlessSince: number | null;
+  /** Colossi that returned in endless so far. */
+  bossReturns: number;
+  /** Colossi defeated, the first boss included. */
+  bossKills: number;
   /** Grid cell where the Core was destroyed (for the end screen), or null. */
   coreLostAt: { gx: number; gy: number } | null;
   /** Damage dealt to enemies per tile type (for balance stats). */
@@ -217,8 +227,12 @@ export function createWorld(seed: number): World {
     pendingLand: 0,
     boss: null,
     bossSpawned: false,
+    bossSpawnedAt: BOSS.at,
     bossState: newBossState(),
     won: false,
+    endlessSince: null,
+    bossReturns: 0,
+    bossKills: 0,
     coreLostAt: null,
     damageBy: {},
     tally: { shots: {}, gems: 0, enemyShots: 0 },
@@ -277,9 +291,12 @@ export function newBossState(): BossState {
   };
 }
 
-/** The boss enrages if still alive at BOSS.enrageAt (concept.md §2.6). */
+/**
+ * The boss enrages if still alive at BOSS.enrageAt (concept.md §2.6); a
+ * returning Colossus in endless after the same time from its arrival.
+ */
 export function bossEnraged(w: World): boolean {
-  return w.boss !== null && w.time >= BOSS.enrageAt;
+  return w.boss !== null && w.time >= w.bossSpawnedAt + BOSS.enrageAt - BOSS.at;
 }
 
 /** Tile modifiers; falls back to neutral values for a tile not in the cache. */

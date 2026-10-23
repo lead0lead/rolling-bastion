@@ -3,6 +3,7 @@ import { BOSS } from '../src/config/enemies';
 import { TILES, type Facing, type TileType } from '../src/config/tiles';
 import { LAND_SHAPES } from '../src/config/land';
 import { cellFromId, cellId, coreTile, type CityState } from '../src/sim/grid';
+import { startEndless } from '../src/sim/endless';
 import { addLand, landCells, landProblems, rollLand } from '../src/sim/land';
 import { addXp, applyBuildResult } from '../src/sim/progression';
 import { step } from '../src/sim/step';
@@ -368,14 +369,23 @@ interface Result {
   /** Seconds from the boss's first damage to the end of the run, and the highest boss phase seen. */
   bossFight: number | null;
   bossPhase: number;
+  /** Endless (SIM_ENDLESS): when the first boss fell, and Colossi defeated in all. */
+  wonAt: number | null;
+  bossKills: number;
+  coreLost: boolean;
 }
 
-function play(arch: Archetype, seed: number, xpShare: number): Result {
+function play(arch: Archetype, seed: number, xpShare: number, endlessSec: number): Result {
   const w = createWorld(seed);
   let bossHitAt: number | null = null;
   let bossPhase = 0;
-  while (!w.over && w.time < TIME_LIMIT) {
+  let wonAt: number | null = null;
+  while (!w.over && w.time < (wonAt === null ? TIME_LIMIT : wonAt + endlessSec)) {
     step(w, steer(w, arch), SIM.dt);
+    if (w.over && w.won && wonAt === null && endlessSec > 0) {
+      wonAt = w.time;
+      startEndless(w);
+    }
     if (w.boss || w.won) bossPhase = Math.max(bossPhase, w.bossState.phase);
     if (bossHitAt === null && (w.won || (w.boss && w.boss.hp < w.boss.maxHp))) bossHitAt = w.time;
     collectAll(w, xpShare);
@@ -398,8 +408,11 @@ function play(arch: Archetype, seed: number, xpShare: number): Result {
     kills: w.kills,
     tiles: w.city.tiles.length,
     damage: w.damageBy,
-    bossFight: bossHitAt === null ? null : w.time - bossHitAt,
+    bossFight: bossHitAt === null ? null : (wonAt ?? w.time) - bossHitAt,
     bossPhase,
+    wonAt,
+    bossKills: w.bossKills,
+    coreLost: w.coreLostAt !== null,
   };
 }
 
@@ -412,8 +425,12 @@ function report(arch: Archetype, r: Result): string {
   const fight =
     r.bossFight === null ? '' : ` (boss fight ${r.bossFight.toFixed(1)} s, phase ${r.bossPhase})`;
   const boss = r.bossHp === null ? '' : ` vs boss (${Math.round(r.bossHp * 100)}% HP left)`;
+  const endless =
+    r.wonAt === null
+      ? ''
+      : ` · endless: ${r.coreLost ? 'died' : 'alive'} at ${clock(r.time)} (+${clock(r.time - r.wonAt)}), Colossus ×${r.bossKills}`;
   const outcome = r.won
-    ? `WON at ${clock(r.time)}${fight}`
+    ? `WON at ${clock(r.wonAt ?? r.time)}${fight}${endless}`
     : r.time >= TIME_LIMIT
       ? `alive at ${clock(r.time)}, time limit${boss}`
       : `died at ${clock(r.time)}${boss}`;
@@ -429,7 +446,8 @@ function report(arch: Archetype, r: Result): string {
  * Plays this shard's share of the (build, seed) runs and prints one line per
  * run. Each shard is its own test file, so Vitest runs them in parallel on
  * separate cores. SIM_SEEDS: seeds (default 1,2); SIM_XP: XP share; SIM_ARCH:
- * comma-separated parts of build names to run (default: all).
+ * comma-separated parts of build names to run (default: all); SIM_ENDLESS:
+ * minutes to keep going after the boss kill (default 0: the run ends there).
  */
 export function runBalanceShard(shard: number): void {
   const seeds = String(import.meta.env.SIM_SEEDS ?? '1,2')
@@ -437,6 +455,7 @@ export function runBalanceShard(shard: number): void {
     .map(Number);
   const xpShare = Number(import.meta.env.SIM_XP ?? 1);
   const only = import.meta.env.SIM_ARCH ? String(import.meta.env.SIM_ARCH).split(',') : null;
+  const endlessSec = Number(import.meta.env.SIM_ENDLESS ?? 0) * 60;
   const jobs = ARCHETYPES.filter(
     (a) => !only || only.some((n) => a.name.toLowerCase().includes(n.toLowerCase())),
   ).flatMap((arch) => seeds.map((seed) => ({ arch, seed })));
@@ -445,7 +464,7 @@ export function runBalanceShard(shard: number): void {
   ];
   jobs.forEach((job, i) => {
     if (i % BALANCE_SHARDS !== shard) return;
-    lines.push(report(job.arch, play(job.arch, job.seed, xpShare)));
+    lines.push(report(job.arch, play(job.arch, job.seed, xpShare, endlessSec)));
   });
   if (lines.length > 1) console.log(lines.join('\n'));
 }

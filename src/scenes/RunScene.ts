@@ -28,6 +28,7 @@ import {
 import { chargePath } from '../sim/boss';
 import { facingAngle } from '../sim/grid';
 import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
+import { isEndless, startEndless } from '../sim/endless';
 import { rollLand } from '../sim/land';
 import { step, type MoveInput } from '../sim/step';
 import {
@@ -40,6 +41,7 @@ import {
 } from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
+import type { VictorySceneData } from './VictoryScene';
 
 const DEBUG_SPAWN_COUNT = 50;
 /** Share of the boss's max HP the H debug key takes. */
@@ -245,7 +247,9 @@ export class RunScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     const w = this.world;
     if (w.over) {
-      this.endRun();
+      // The first boss kill asks whether to keep going (concept-v2.md §2.11).
+      if (w.won && !isEndless(w)) this.openVictory();
+      else this.endRun();
       return;
     }
     this.acc += Math.min(delta / 1000, SIM.maxFrame);
@@ -311,6 +315,26 @@ export class RunScene extends Phaser.Scene {
     this.scene.bringToTop('Build');
   }
 
+  /** "Keep going" or "End run" after the boss kill; the run freezes meanwhile. */
+  private openVictory(): void {
+    const w = this.world;
+    const data: VictorySceneData = {
+      keepGoing: () => {
+        startEndless(w);
+        this.input.keyboard?.resetKeys();
+        this.scene.resume();
+      },
+      endRun: () => {
+        this.scene.resume();
+        this.endRun();
+      },
+    };
+    this.input.keyboard?.resetKeys();
+    this.scene.pause();
+    this.scene.launch('Victory', data);
+    this.scene.bringToTop('Victory');
+  }
+
   /** Pause menu (concept.md §8); the run freezes until it closes. */
   private openPause(): void {
     playSfx(this, 'ui-click');
@@ -327,6 +351,7 @@ export class RunScene extends Phaser.Scene {
       kills: w.kills,
       level: w.level,
       won: w.won,
+      bossKills: w.bossKills,
       board: [...w.city.board],
       tiles: w.city.tiles.map((t) => ({ ...t })),
       coreLostAt: w.coreLostAt,

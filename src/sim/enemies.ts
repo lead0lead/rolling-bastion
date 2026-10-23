@@ -70,7 +70,7 @@ export function updateEnemies(w: World, dt: number): void {
       continue;
     }
     const mods = modsOf(w, t);
-    const dps = def.contactDps * (e === w.boss ? bossContactFactor(w) : 1);
+    const dps = def.contactDps * e.damageFactor * (e === w.boss ? bossContactFactor(w) : 1);
     damageTile(w, t, dps * mods.contactTaken * dt);
     if (w.over) return;
     if (contact.thorns > 0) hitEnemy(w, e, contact.thorns * dt, 0, 0, 0, 'plating');
@@ -123,7 +123,15 @@ function rangedAttack(
   e.cooldown = r.interval;
   const angle = Math.atan2(target.y - e.y, target.x - e.x);
   // A little past the target, in case the city moves.
-  fireEnemyShot(w, e.x, e.y, angle, r.shotSpeed, r.damage, (r.range / r.shotSpeed) * 1.5);
+  fireEnemyShot(
+    w,
+    e.x,
+    e.y,
+    angle,
+    r.shotSpeed,
+    r.damage * e.damageFactor,
+    (r.range / r.shotSpeed) * 1.5,
+  );
 }
 
 /** Enemy shots fly straight and hit the first tile they enter. */
@@ -173,7 +181,7 @@ function detonate(w: World, e: Enemy, def: EnemyDef, t: PlacedTile): void {
   e.dead = true;
   e.noDrop = true;
   for (const o of hit) {
-    damageTile(w, o, bomb.damage);
+    damageTile(w, o, bomb.damage * e.damageFactor);
     if (w.over) return;
   }
 }

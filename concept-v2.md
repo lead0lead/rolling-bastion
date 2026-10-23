@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | Phases 1–4 merged into `v2` (2.0.0-alpha.4). v1 (v0.8.0) is untouched on `main` and live. |
-| **Current step** | Phase 4 merged into `v2` as is (user decision 2026-10-22); `v2` and the phase branches pushed. |
-| **Next step** | Phase 5 (endless and balance) on `v2-phase-5-endless`, including the Spear/Flamethrower boss gap carried over from Phase 4 (§12). Then Phase 6 (polish and hosting). |
+| **Status** | Phases 1–4 merged into `v2`; Phase 5 built on `v2-phase-5-endless` (2.0.0-alpha.5), not merged, waiting for the user's playtest. v1 (v0.8.0) is untouched on `main` and live. |
+| **Current step** | Phase 5 (endless and balance) done: endless rules, "Keep going" / "End run" after the boss, endless HUD and end screen, endless balance sim, 200-tile performance bench. Handed to the user. |
+| **Next step** | User playtests endless and decides: tune the endless numbers, merge Phase 5 into `v2`. The Spear/Flamethrower boss gap is deferred (user, 2026-10-23). Then Phase 6 (polish and hosting). |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts). Whether v2 ever replaces v1 on `main` is a separate, later user decision (§12). |
 | **Branches** | `main` = v1, live (every push redeploys). `v2` = v2 integration branch (not deployed). Spikes `v2-spike-<letter>-<topic>`, phases `v2-phase-N-<topic>`, both from `v2`. |
-| **Version** | `2.0.0-alpha.4` on `v2`. Phase 5 will be `2.0.0-alpha.5`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
+| **Version** | `2.0.0-alpha.5` on `v2-phase-5-endless` (`v2` is at `2.0.0-alpha.4`). Phase 6 will be `2.0.0-alpha.6`. Labels: spikes `2.0.0-spike.a`, `2.0.0-spike.b`; phases `2.0.0-alpha.N`. |
 | **Play** | v2: local only (`npm run dev` on a v2 branch). v1: https://lead0lead.github.io/rolling-bastion/ |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-22 (Phase 4 merged and pushed) |
+| **Last updated** | 2026-10-23 (Phase 5 built, handed over) |
 
 ---
 
@@ -263,7 +263,7 @@ static fade with reduced motion) and plays the quiet `gem` sound.
 
 Unchanged from v1 (`concept.md` §2.10).
 
-### 2.11 Endless (v2, draft for Phase 5)
+### 2.11 Endless (v2, as implemented in Phase 5)
 
 - The win screen after the boss offers **"Keep going"** and **"End run"**
   (decided 2026-10-21).
@@ -278,6 +278,40 @@ Unchanged from v1 (`concept.md` §2.10).
   way the late game gets harder.
 - The run ends when the Core is destroyed. The end screen reports time
   survived, "Boss defeated", level and kills.
+
+**As implemented (Phase 5):**
+- Numbers in `src/config/endless.ts` (`ENDLESS`: `growthPerMinute` 1.12,
+  `bossEvery` 300 s, `bossHpPerReturn` 1.5) and `LAND.thenEvery` 7
+  (`src/config/land.ts`), all as drafted.
+- `src/sim/endless.ts`: `startEndless` (only after the boss kill; sets
+  `World.endlessSince` and clears `over`), `endlessFactor`, `nextBossAt`.
+  The first boss kill still sets `won` and `over`; later kills only count
+  `World.bossKills`.
+- Every enemy spawned in endless gets HP × the factor (on top of the normal
+  growth) and `Enemy.damageFactor` = the factor, which scales contact,
+  Spitter shot, Bomber and Colossus volley damage. The returning Colossus
+  gets HP × 1.5ⁿ (n = return number) but not the per-minute HP factor; its
+  damage does scale. It arrives with fresh phases; enrage counts from its
+  arrival (`World.bossSpawnedAt`, same 2 min as the first). A return waits
+  while a Colossus still lives. It drops no XP (as the first).
+- Normal spawns in endless use the wave table's last entry (12:00: budget
+  10/s); spikes don't repeat.
+- Win choice: `VictoryScene` ("Colossus defeated!", Keep going / End run,
+  no Esc) opens over the frozen run. HUD (top right): "Endless · enemies
+  ×N" and "Colossus returns in m:ss". End screen: "The city rolls on." when
+  the run ended by choice, "The Core has fallen." otherwise, with "Boss
+  defeated (×N)" in the stats line.
+- Balance sim: `SIM_ENDLESS=<minutes>` keeps the bots going after the boss
+  (`npm run sim:endless` = 20 min). First run (seeds 1–2): bots last
+  +5 min (Saw builds) to +17 min (Mortar, Combo, Gatling) past the boss
+  and beat 1–3 Colossi; the ×1.12/min growth ends every run before the
+  20-min limit. Flame ring and Spear wall still lose to the first boss
+  (deferred), Saw wall seed 1 and Mortar core seed 2 too.
+- Performance (`npm run bench`, sim only, this machine): a 210-tile city
+  of every type with 600 enemies and 300 projectiles averages 1.6 ms per
+  step (p99 2.2 ms, worst ~3 ms); recomputing synergies and bridges for
+  it takes 0.9 ms. No spatial hash for tiles needed. Rendering was not
+  measured.
 
 ### 2.12 Weapons rework and rebalance (Phase 4; user request 2026-10-22, not planned in detail)
 
@@ -737,7 +771,7 @@ these v2 changes:
 | **Phase 2 — editing UX** | Selection, Shift+click, box select, group move/rotate, scrap selection, undo/redo within a pause including land (§3, §3.1). | Rearranging a 60-tile city feels quick to the user. |
 | **Phase 3 — readability and synergies** (done, merged 2026-10-22) | Piece outlines, buff pips, hover highlights, chain preview label, first-time hint, rules legend (§3.3); support chains (§2.7); Magnet pulse on XP gems (§2.9). | The user can tell at a glance what affects what. |
 | **Phase 4 — weapons rework and rebalance** (done, merged 2026-10-22; Spear/Flame boss gap moved to Phase 5) | Saw rework (rotating blade), rebalance of the existing weapons (Gatling too strong, Mortar misses), synergies between weapon types, possibly new weapons (piercing crossbow, short-range flamethrower with damage over time, thrusting spear). See §2.12. Balance sim and new tests per weapon. | Every weapon feels impactful to the user; no single weapon dominates in the balance sim; weapon types reward being combined. |
-| **Phase 5 — endless and balance** | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; Spear and Flamethrower builds able to beat the Colossus (§12); performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
+| **Phase 5 — endless and balance** (built 2026-10-23, waiting for playtest; Spear/Flame boss gap deferred) | Win screen "Keep going", endless scaling, returning Colossus, land every 7 levels (§2.11); balance sim bots that place land; Spear and Flamethrower builds able to beat the Colossus (§12); performance check with ~200 tiles at 600 enemies. | Endless is playable; no obviously dominant build. |
 | **Phase 6 — polish and hosting** | Sounds for new events, text pass, decide the v2 hosting question (§12). | v2 is ready to share or to replace v1. |
 
 Plan rewritten with the user 2026-10-21 after the spikes (the old Phase 2
@@ -751,7 +785,7 @@ start early if the user asks.
 
 **Open decisions (user)**
 
-- Endless details (§2.11): scaling numbers, Colossus returns (Phase 5).
+- Endless details (§2.11): scaling numbers and Colossus returns are built as drafted; tune after the user's playtest. Should a returning Colossus drop XP or another reward?
 - Final land levels, size and shape set (now 8/15/22/29/36, 12 cells,
   7 shapes). Parked: class starting shapes (§13).
 - v2 hosting: local only for now. Later options: a `/v2/` preview next to v1
@@ -762,7 +796,9 @@ start early if the user asks.
   Generators and Engines, as asked.)
 - Carried over from v1: final title, code licence, piece mirroring,
   meta-progression.
-- **Spear and Flamethrower vs the Colossus** (carried into Phase 5):
+- **Spear and Flamethrower vs the Colossus** (deferred 2026-10-23, user:
+  "I think it's okay if some builds are not viable for now, we can change
+  this later"; no longer part of Phase 5):
   both builds clear waves but lose to the boss in the sim (boss at
   67–99% HP). Two tuning passes (2026-10-22, reverted) showed more damage
   doesn't help: Spear 50–60 dmg every 0.5 s, reach 112, and Flamethrower
@@ -805,23 +841,16 @@ start early if the user asks.
 - **Readability at low zoom** with big cities and 600 enemies. *Check:*
   Phase 1 / Phase 3. Outlines keep a constant screen width; pips scale
   with the cell and may get too small at zoom 0.4 (12 px cells).
-- **Performance in endless:** many tiles (enemy→nearest tile queries,
-  synergy and bridge recompute) plus elites. *Check:* Phase 5 bench with
-  ~200 tiles; tiles may need their own spatial hash.
+- **Performance in endless:** checked in Phase 5: the sim handles 210
+  tiles at 600 enemies in ~1.6 ms per step. Rendering at that size is
+  untested; watch the FPS display in long endless runs.
 
 **Known issues**
 
-- **Intermittent bench spike (Phase 1):** in `npm run bench`, when the
-  stress city is worn down to the Core alone (≈ tick 410–450), one tick of
-  `updateEnemies` sometimes takes 100–320 ms (2 of 3 runs, then 0 of 3 with
-  a GC observer attached; not seen in 4 runs on `v2` before Phase 1).
-  Averages are fine (~6.9 ms/step, as before). Not found yet; the scenario
-  (600 enemies on one tile) can't happen in a real run without losing.
-  Look again in the Phase 5 performance check.
-- **`npm run bench` times out on this machine** (Vitest's 5 s test
-  timeout; the run takes ~7 s) on `v2` as well as on Phase 1: the check
-  never reports a pass here. Raise the bench's timeout in Phase 5, or run
-  on a faster machine.
+- **Intermittent bench spike (Phase 1):** not seen in Phase 5 (3 runs,
+  worst tick 5.9–8.3 ms in the 48-tile stress city, which averages
+  ~1.7 ms/step now). Keep an eye on it.
+- `npm run bench` timing out: fixed in Phase 5 (bench timeout 120 s).
 - v1 known issues (`concept.md` §12) carry over until the code involved is
   rebuilt.
 
@@ -853,6 +882,17 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-23 — Phase 5: endless
+- Decision (user): the Spear/Flamethrower boss gap is deferred: "I think
+  it's okay if some builds are not viable for now, we can change this
+  later." Endless built with the drafted numbers, to tune by playing.
+- Built on `v2-phase-5-endless` (3 steps + docs): endless rules in the
+  sim with tests (8 new, 173 in all); the "Colossus defeated!" choice,
+  endless HUD line, end screen; the endless balance sim and a 210-tile
+  performance bench (results in §2.11). Version 2.0.0-alpha.5.
+- Known: the bench timeout is fixed; the old bench spike didn't show.
+- Next: user playtest; tune the endless numbers or merge into `v2`.
 
 ### 2026-10-22 — Phase 4 merged
 - Tried two tuning passes for the Spear and Flamethrower builds (see

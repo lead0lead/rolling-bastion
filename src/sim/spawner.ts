@@ -1,6 +1,8 @@
 import { SPAWN } from '../config/balance';
 import { BOSS, ELITE, ENEMIES, type EnemyType } from '../config/enemies';
+import { ENDLESS } from '../config/endless';
 import { SPAWN_GROUPS, SPIKES, WAVES, type SpawnGroupId, type WaveEntry } from '../config/waves';
+import { endlessFactor, isEndless, nextBossAt } from './endless';
 import { xpToNext } from './progression';
 import { cityCentre, newBossState, type Enemy, type World } from './world';
 
@@ -28,10 +30,16 @@ export function spawnRingRadius(w: World): number {
 }
 
 export function updateSpawner(w: World, dt: number): void {
-  if (w.time >= BOSS.at) {
+  if (w.time >= BOSS.at && !isEndless(w)) {
     updateBossPhase(w);
     relocateFarEnemies(w);
     return;
+  }
+  // Endless: normal spawns go on (the wave table holds its last entry) and the Colossus returns.
+  const bossAt = nextBossAt(w);
+  if (bossAt !== null && !w.boss && w.time >= bossAt) {
+    w.bossReturns++;
+    spawnBoss(w, ENDLESS.bossHpPerReturn ** w.bossReturns);
   }
   while (w.spawn.spikeIndex < SPIKES.length) {
     const spike = SPIKES[w.spawn.spikeIndex];
@@ -75,9 +83,16 @@ export function updateSpawner(w: World, dt: number): void {
 function updateBossPhase(w: World): void {
   if (w.bossSpawned) return;
   w.bossSpawned = true;
+  spawnBoss(w, 1);
+}
+
+/** The Colossus arrives on the spawn ring with fresh phases and its HP times `hpMultiplier`. */
+function spawnBoss(w: World, hpMultiplier: number): void {
   w.bossState = newBossState();
+  w.bossSpawnedAt = w.time;
   const p = ringPoint(w, w.rng.next() * Math.PI * 2);
-  spawnEnemy(w, BOSS.type, p.x, p.y);
+  const boss = spawnEnemy(w, BOSS.type, p.x, p.y);
+  boss.hp = boss.maxHp *= hpMultiplier;
 }
 
 function pickGroup(w: World): { id: SpawnGroupId; count: number } {
@@ -143,7 +158,8 @@ export function spawnEnemy(
   elite?: EliteOptions,
 ): Enemy {
   const def = ENEMIES[type];
-  const growth = def.boss ? 1 : 1 + (SPAWN.hpGrowthPerMinute * w.time) / 60;
+  const endless = endlessFactor(w);
+  const growth = def.boss ? 1 : (1 + (SPAWN.hpGrowthPerMinute * w.time) / 60) * endless;
   const maxHp = def.maxHp * growth * (elite?.hpMultiplier ?? 1);
   const e = w.enemyPool.pop() ?? ({} as Enemy);
   e.type = type;
@@ -160,6 +176,7 @@ export function spawnEnemy(
   e.hitTime = -Infinity;
   e.burnUntil = e.snagUntil = e.staggerUntil = e.markUntil = -Infinity;
   e.burnDps = 0;
+  e.damageFactor = endless;
   e.dead = false;
   w.enemies.push(e);
   return e;

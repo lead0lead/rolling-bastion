@@ -5,7 +5,8 @@ import { budgetRate } from '../sim/spawner';
 import { coreTile } from '../sim/grid';
 import { xpToNext } from '../sim/progression';
 import { settings } from '../settings';
-import { bossEnraged } from '../sim/world';
+import { endlessFactor, nextBossAt } from '../sim/endless';
+import { bossEnraged, type World } from '../sim/world';
 import type { RunUiState } from './RunScene';
 
 const XP_BAR = { h: 8 };
@@ -92,7 +93,7 @@ export class HudScene extends Phaser.Scene {
     this.timer.setText(`${mins}:${secs.toString().padStart(2, '0')}`);
     this.level.setText(`Lv ${w.level}`);
     this.info.setText(
-      `Board ${w.city.board.size}  ·  Tiles ${w.city.tiles.length}  ·  Speed ${Math.round(w.cache.syn.speedFactor * 100)}%\nRerolls ${w.rerolls}\nKills ${w.kills}`,
+      `Board ${w.city.board.size}  ·  Tiles ${w.city.tiles.length}  ·  Speed ${Math.round(w.cache.syn.speedFactor * 100)}%\nRerolls ${w.rerolls}\nKills ${w.kills}${endlessLine(w)}`,
     );
 
     const core = coreTile(w.city);
@@ -147,4 +148,15 @@ export class HudScene extends Phaser.Scene {
       );
     }
   }
+}
+
+/** Endless status (concept-v2.md §2.11): enemy strength and the next Colossus. */
+function endlessLine(w: World): string {
+  const next = nextBossAt(w);
+  if (next === null) return '';
+  const strength = `Endless  ·  enemies ×${endlessFactor(w).toFixed(2)}`;
+  if (w.boss) return `\n${strength}`;
+  const left = Math.max(0, Math.ceil(next - w.time));
+  const clock = `${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, '0')}`;
+  return `\n${strength}\nColossus returns in ${clock}`;
 }
