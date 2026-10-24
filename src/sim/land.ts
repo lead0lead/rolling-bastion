@@ -1,5 +1,5 @@
 import { LAND, type LandShape } from '../config/land';
-import { cellId, cellKey, normalizeCells, rotateCells, type Cell, type CityState } from './grid';
+import { cellFromId, cellId, cellKey, normalizeCells, rotateCells, type Cell, type CityState } from './grid';
 import type { Rng } from './rng';
 
 /** Land shapes (concept-v2.md §2.1): offers, placement rules, growing the board. */
@@ -57,6 +57,16 @@ export function addLand(city: CityState, cells: readonly Cell[]): boolean {
   if (landProblems(city, cells).size > 0) return false;
   for (const c of cells) city.board.add(cellId(c.x, c.y));
   return true;
+}
+
+/** Grows the board by one cell on every side of its bounding box (the shop's land). */
+export function growBoard(city: CityState): void {
+  const cells = [...city.board].map(cellFromId);
+  const xs = cells.map((c) => c.x);
+  const ys = cells.map((c) => c.y);
+  for (let y = Math.min(...ys) - 1; y <= Math.max(...ys) + 1; y++) {
+    for (let x = Math.min(...xs) - 1; x <= Math.max(...xs) + 1; x++) city.board.add(cellId(x, y));
+  }
 }
 
 const EDGES = [

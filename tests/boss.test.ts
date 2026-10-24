@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS, ENEMIES } from '../src/config/enemies';
+import { ROUNDS } from '../src/config/waves';
 import { hitEnemy, removeDead, updateProjectiles } from '../src/sim/combat';
 import { updateEnemies } from '../src/sim/enemies';
 import { coreTile } from '../src/sim/grid';
-import { spawnEnemy, updateSpawner } from '../src/sim/spawner';
+import { roundBudget } from '../src/sim/endless';
+import { spawnEnemy, startRound } from '../src/sim/spawner';
 import { bossContactFactor, bossMove, chargePath, updateBoss } from '../src/sim/boss';
 import { cityCentre, createWorld, tileCentre, type World } from '../src/sim/world';
 
@@ -11,19 +13,18 @@ const DT = 1 / 60;
 
 function bossWorld(): World {
   const w = createWorld(1);
-  w.time = BOSS.at;
-  updateSpawner(w, DT);
+  w.round = ROUNDS.bossRound - 1;
+  startRound(w);
   return w;
 }
 
 describe('boss', () => {
-  it('arrives at its time, alone, with unscaled HP; regular spawns stop', () => {
+  it('arrives in the boss round with unscaled HP and a reduced regular budget', () => {
     const w = bossWorld();
     expect(w.boss?.type).toBe(BOSS.type);
     expect(w.boss?.maxHp).toBe(ENEMIES[BOSS.type].maxHp);
-    w.spawn.budget = 1000;
-    for (let i = 0; i < 60; i++) updateSpawner(w, DT);
-    expect(w.enemies).toHaveLength(1);
+    expect(w.spawn.total).toBe(roundBudget(ROUNDS.bossRound));
+    expect(w.spawn.total).toBeLessThan(roundBudget(ROUNDS.bossRound - 1) * 2);
   });
 
   it('summons Swarmer rings in phase 1', () => {
@@ -122,17 +123,17 @@ describe('boss', () => {
       updateEnemies(w, DT);
       return before - core.hp;
     };
-    expect(dealt(BOSS.enrageAt)).toBeCloseTo(dealt(BOSS.at) * BOSS.enrageDamage);
+    expect(dealt(BOSS.enrageAfter)).toBeCloseTo(dealt(0) * BOSS.enrageDamage);
   });
 
-  it('defeating it wins the run', () => {
+  it('defeating it marks the win but the run goes on', () => {
     const w = bossWorld();
     const boss = w.boss;
     if (!boss) throw new Error('no boss');
     hitEnemy(w, boss, boss.hp, 0, 0, 0);
     removeDead(w);
     expect(w.won).toBe(true);
-    expect(w.over).toBe(true);
+    expect(w.over).toBe(false);
     expect(w.boss).toBeNull();
   });
 });

@@ -16,17 +16,11 @@ describe('Phase 3 pool', () => {
         'z4-shield',
         'j4-repair',
         'p5-gatling',
-        'v5-plating',
-        'y5-saw',
-        'domino-crossbow',
-        'l3-crossbow',
         'domino-flamer',
         'l3-flamer',
-        'domino-spear',
-        'i3-spear',
       ]),
     );
-    expect(ids).toHaveLength(34);
+    expect(ids).toHaveLength(24);
   });
 
   it('contains every tile type except the Core', () => {

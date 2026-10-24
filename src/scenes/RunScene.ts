@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
-import { CAMERA, GRID, OFFERS, SIM } from '../config/balance';
+import { CAMERA, GRID, SIM } from '../config/balance';
 import { BOSS, ENEMIES, ENEMY_TYPES } from '../config/enemies';
 import type { SoundKey } from '../config/audio';
 import { FX } from '../config/fx';
-import { LAND_SHAPES } from '../config/land';
-import { PHASE3_POOL } from '../config/pieces';
+import { SHOP_PIECES } from '../config/pieces';
 import { TILES, type TileType } from '../config/tiles';
 import { DEBUG, nextSeed } from '../debug/flags';
+import { clearSavedRun, writeSavedRun } from '../saveGame';
+import { saveWorld } from '../sim/save';
 import { barrelFor } from '../render/icons';
 import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
 import { COLORS } from '../render/palette';
@@ -16,21 +17,19 @@ import { Particles } from '../render/particles';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { damageAlpha, outlineOf, showsCracks, SpritePool } from '../render/tiles';
 import {
-  debugAddTime,
   debugFillGrid,
   debugFillWeapons,
   debugHurtBoss,
   debugKillBoss,
   debugKillAll,
   debugLayoutJson,
-  debugLevelUp,
+  debugAddCoins,
   debugSpawn,
 } from '../sim/debugActions';
 import { chargePath } from '../sim/boss';
 import { facingAngle } from '../sim/grid';
-import { applyBuildResult, repairCoreAmount, rollRunOffers, scrapRefund } from '../sim/progression';
-import { isEndless, startEndless } from '../sim/endless';
-import { rollLand } from '../sim/land';
+import { applyShopResult } from '../sim/progression';
+import { startRound } from '../sim/spawner';
 import { step, type MoveInput } from '../sim/step';
 import {
   bossEnraged,
@@ -42,7 +41,6 @@ import {
 } from '../sim/world';
 import type { BuildSceneData } from './BuildScene';
 import type { SummaryData } from './SummaryScene';
-import type { VictorySceneData } from './VictoryScene';
 
 const DEBUG_SPAWN_COUNT = 50;
 /** Share of the boss's max HP the H debug key takes. */
@@ -57,10 +55,8 @@ const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
   gatling: 'shot-gatling',
   cannon: 'shot-cannon',
   mortar: 'shot-mortar',
-  crossbow: 'shot-crossbow',
   flamethrower: 'shot-flame',
-  spear: 'spear-thrust',
-  saw: 'saw-hit',
+  crossbow: 'shot-crossbow',
 };
 /** Colour of the boss charge telegraph. */
 const CHARGE_COLOR = COLORS.charge;
@@ -85,35 +81,8 @@ const FLAME_LOOK = {
 /** Status marks: gap from the enemy's edge, ring width, reticle tick length (px), ring alpha. */
 const STATUS_LOOK = { gap: 2, ring: 2, tick: 4, alpha: 0.9 };
 
-/** Spear jab look: time out and back (s), shaft width and colour, head length (px). */
-const THRUST_LOOK = { out: 0.06, back: 0.16, shaft: 4, shaftColor: 0xc8963e, head: 12 };
-
-/** Saw blade look: teeth count, tooth depth (fraction of radius), disc spin vs. orbit angle. */
-const BLADE_LOOK = { teeth: 10, tooth: 0.22, spinFactor: 3 };
-
-/** A toothed disc with an ink rim and hub. */
-function drawSawDisc(
-  g: Phaser.GameObjects.Graphics,
-  x: number,
-  y: number,
-  r: number,
-  spin: number,
-  color: number,
-): void {
-  const pts: Phaser.Types.Math.Vector2Like[] = [];
-  const n = BLADE_LOOK.teeth;
-  for (let i = 0; i < n * 2; i++) {
-    const a = spin + (i * Math.PI) / n;
-    const rr = i % 2 === 0 ? r : r * (1 - BLADE_LOOK.tooth);
-    pts.push({ x: x + Math.cos(a) * rr, y: y + Math.sin(a) * rr });
-  }
-  g.fillStyle(color, 1);
-  g.fillPoints(pts, true);
-  g.lineStyle(2, COLORS.ink, 1);
-  g.strokePoints(pts, true);
-  g.fillStyle(COLORS.ink, 1);
-  g.fillCircle(x, y, r * 0.25);
-}
+/** Size of a damaged tile's HP bar (px, in world units). */
+const HP_BAR = { w: 24, h: 4, ok: 0x6bd36b };
 
 /** Shell blasts: fade time (s) and colour. */
 const BLAST_FADE = 0.3;
@@ -127,7 +96,12 @@ export interface RunUiState {
   /** Smoothed ms per frame spent in the simulation and in building the frame's draw data. */
   simMs: number;
   drawMs: number;
+  /** Game speed picked on the HUD slider (one of `SIM.speeds`). */
+  speed: number;
 }
+
+/** How often the run is saved while playing (ms). */
+const SAVE_EVERY_MS = 5000;
 
 /** Smoothing factor for the overlay timings. */
 const TIMING_SMOOTHING = 0.05;
@@ -143,8 +117,18 @@ export class RunScene extends Phaser.Scene {
   private ui!: RunUiState;
   private acc = 0;
   private buildOpen = false;
-  /** When the first boss kill started playing out (`time.now`, ms), or null. */
-  private victoryAt: number | null = null;
+  /** The shop before round 1 is still to open. */
+  private prepShop = false;
+  /** The run loaded from a save, if this scene was started with one. */
+  private resumed: World | null = null;
+  /** The restarted round: the world is the one saved at its start and runs at once. */
+  private restart = false;
+  /** The world as the current round began (saved), for "Restart round" on the summary. */
+  private roundStart: string | null = null;
+  /** Open the pause menu on the first frame (a resumed run waits for the player). */
+  private pauseFirst = false;
+  /** Real ms since the run was last saved. */
+  private sinceSave = 0;
   private keys!: MoveKeys;
   private bg!: Phaser.GameObjects.TileSprite;
   private tileSprites!: SpritePool;
@@ -159,17 +143,15 @@ export class RunScene extends Phaser.Scene {
   private barrelAngles = new Map<number, number>();
   private enemySprites!: SpritePool;
   private shotSprites!: SpritePool;
-  private gemSprites!: SpritePool;
   private blastGfx!: Phaser.GameObjects.Graphics;
   private pulseGfx!: Phaser.GameObjects.Graphics;
-  private bladeGfx!: Phaser.GameObjects.Graphics;
   private flameGfx!: Phaser.GameObjects.Graphics;
   private statusGfx!: Phaser.GameObjects.Graphics;
+  /** HP bars under damaged tiles. */
+  private hpGfx!: Phaser.GameObjects.Graphics;
   private pulseClock = 0;
   private particles!: Particles;
   private blasts: { x: number; y: number; r: number; at: number }[] = [];
-  /** Magnet pulse rings (concept-v2.md §2.9), in game time like blasts. */
-  private magnetRings: { x: number; y: number; r: number; at: number }[] = [];
   /** Render-only wobble phase per (pooled) enemy object. */
   private wobblePhases = new WeakMap<Enemy, number>();
   /** Last tally values seen, to play a sound when they grow. */
@@ -187,23 +169,45 @@ export class RunScene extends Phaser.Scene {
     super('Run');
   }
 
+  init(data: { world?: World; restart?: boolean }): void {
+    this.resumed = data.world ?? null;
+    this.restart = data.restart ?? false;
+    // Phaser keeps the data of the last start when the next one has none: without this a
+    // new run would reload the world the first start came with (the saved, finished one).
+    this.sys.settings.data = {};
+  }
+
   create(): void {
     createTextures(this);
-    this.world = createWorld(nextSeed());
+    // A reloaded tab resumes the saved run, paused (concept-v2.md §2.15); anything else starts afresh.
+    this.world = this.resumed ?? createWorld(nextSeed());
+    this.pauseFirst = this.resumed !== null && !this.restart;
+    this.roundStart = this.restart ? saveWorld(this.world) : null;
+    // A fresh run opens the shop before round 1; a resumed one only if its round was over.
+    this.prepShop = this.resumed === null;
+    if (!this.resumed) clearSavedRun();
+    this.sinceSave = 0;
+    const saveNow = () => this.saveRun();
+    const onHidden = () => document.hidden && this.saveRun();
+    window.addEventListener('beforeunload', saveNow);
+    document.addEventListener('visibilitychange', onHidden);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('beforeunload', saveNow);
+      document.removeEventListener('visibilitychange', onHidden);
+    });
     this.ui = {
       world: this.world,
       debugOverlay: false,
       debugEnemy: ENEMY_TYPES[0] ?? '',
       simMs: 0,
       drawMs: 0,
+      speed: 1,
     };
     this.registry.set('run', this.ui);
     this.acc = 0;
     this.buildOpen = false;
-    this.victoryAt = null;
 
     this.bg = this.add.tileSprite(0, 0, 10, 10, TEX.bgGrid).setOrigin(0).setDepth(-10);
-    this.gemSprites = new SpritePool(this, 1);
     this.tileSprites = new SpritePool(this, 2);
     this.crackSprites = new SpritePool(this, 2.5);
     this.barrelSprites = new SpritePool(this, 2.6);
@@ -214,12 +218,11 @@ export class RunScene extends Phaser.Scene {
     this.shotSprites = new SpritePool(this, 4);
     this.blastGfx = this.add.graphics().setDepth(3.5);
     this.pulseGfx = this.add.graphics().setDepth(1.9);
-    this.bladeGfx = this.add.graphics().setDepth(2.6);
     this.flameGfx = this.add.graphics().setDepth(2.65);
     this.statusGfx = this.add.graphics().setDepth(3.4);
+    this.hpGfx = this.add.graphics().setDepth(2.7);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
-    this.magnetRings = [];
     this.seen = { shots: {}, gems: 0, enemyShots: 0, boss: false, charge: 'walk' };
 
     this.cam = { x: this.world.x, y: this.world.y, zoom: this.targetZoom() };
@@ -249,27 +252,47 @@ export class RunScene extends Phaser.Scene {
     this.scene.launch('Hud');
   }
 
+  /** Writes the run to localStorage, unless the shop is open (its edits aren't in the world yet) or the run is over. */
+  private saveRun(): void {
+    if (this.buildOpen || this.world.over) return;
+    this.sinceSave = 0;
+    writeSavedRun(this.world);
+  }
+
   override update(_time: number, delta: number): void {
     const w = this.world;
-    if (w.over) {
-      // The first boss kill plays out, then asks whether to keep going (concept-v2.md §2.11).
-      if (w.won && !isEndless(w)) {
-        this.victoryAt ??= this.time.now;
-        this.render(0, delta / 1000);
-        if (this.time.now - this.victoryAt >= FX.bossDeath.holdSec * 1000) this.openVictory();
-      } else {
-        this.endRun();
-      }
+    if (this.pauseFirst) {
+      this.pauseFirst = false;
+      this.render(0, 0);
+      this.openPause();
       return;
     }
-    this.acc += Math.min(delta / 1000, SIM.maxFrame);
+    this.sinceSave += delta;
+    if (this.sinceSave >= SAVE_EVERY_MS) this.saveRun();
+    if (w.over) {
+      this.endRun();
+      return;
+    }
+    // The shop is for the break between rounds only (concept-v2.md §2.16).
+    if (this.prepShop || w.roundClear) {
+      this.prepShop = false;
+      this.saveRun();
+      this.openShop();
+      return;
+    }
+    const speed = this.ui.speed;
+    this.acc += Math.min(delta / 1000, SIM.maxFrame) * speed;
     const input = this.moveInput();
     const t0 = performance.now();
     while (this.acc >= SIM.dt) {
       step(w, input, SIM.dt);
       this.acc -= SIM.dt;
-      // Stop at a level-up so the build pause opens on this exact tick.
-      if (w.pendingLevelUps > 0 || w.over) {
+      if (w.over) {
+        this.acc = 0;
+        break;
+      }
+      // A fast game that can't keep up falls behind instead of freezing the page.
+      if (speed > 1 && performance.now() - t0 > SIM.frameBudgetMs) {
         this.acc = 0;
         break;
       }
@@ -279,8 +302,6 @@ export class RunScene extends Phaser.Scene {
     const t2 = performance.now();
     this.ui.simMs += (t1 - t0 - this.ui.simMs) * TIMING_SMOOTHING;
     this.ui.drawMs += (t2 - t1 - this.ui.drawMs) * TIMING_SMOOTHING;
-    if (w.over) return;
-    if (w.pendingLevelUps > 0) this.openBuild();
   }
 
   private moveInput(): MoveInput {
@@ -293,33 +314,32 @@ export class RunScene extends Phaser.Scene {
 
   // ------------------------------------------------------------ build pause
 
-  private openBuild(): void {
+  /** The shop (concept-v2.md §2.13, §2.16): the build screen with prices; opens between rounds, the run freezes meanwhile. */
+  private openShop(): void {
     if (this.buildOpen) return;
     this.buildOpen = true;
-    playSfx(this, 'level-up');
+    playSfx(this, 'ui-toggle');
     const w = this.world;
-    // A land level-up offers land first, then the usual piece pick (concept-v2.md §2.1).
-    const land = w.pendingLand > 0 ? rollLand(w.rng, LAND_SHAPES) : null;
-    if (land) w.pendingLand--;
-    const level = w.level - w.pendingLevelUps + 1;
     const data: BuildSceneData = {
       city: w.city,
-      offers: rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time),
-      land,
-      title: land ? `New land!  Level ${level}` : `Salvage!  Level ${level}`,
-      coreHeal: repairCoreAmount(w),
-      rerollsLeft: w.rerolls,
-      refundPerScrap: scrapRefund(w),
-      reroll: () => rollRunOffers(w.rng, PHASE3_POOL, OFFERS.count, w.time),
-      done: (result) => {
-        w.pendingLevelUps--;
-        applyBuildResult(w, result);
+      offers: SHOP_PIECES,
+      shop: {
+        coins: w.coins,
+        landsBought: w.landsBought,
+      },
+      title: w.roundClear ? `Round ${w.round} cleared` : 'Get ready',
+      closeLabel: `Start round ${w.round + (w.roundClear ? 1 : 0)}`,
+      done: (shop) => {
+        applyShopResult(w, shop);
+        if (w.roundClear) startRound(w);
+        this.roundStart = saveWorld(w);
         this.scene.stop('Build');
         this.input.keyboard?.resetKeys();
         this.buildOpen = false;
         this.scene.resume();
       },
     };
+    this.input.keyboard?.resetKeys();
     this.scene.pause();
     this.scene.launch('Build', data);
     this.scene.bringToTop('Build');
@@ -349,30 +369,6 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  /** "Keep going" or "End run" after the boss kill; the run freezes meanwhile. */
-  private openVictory(): void {
-    const w = this.world;
-    this.victoryAt = null;
-    const data: VictorySceneData = {
-      time: w.time,
-      level: w.level,
-      kills: w.kills,
-      keepGoing: () => {
-        startEndless(w);
-        this.input.keyboard?.resetKeys();
-        this.scene.resume();
-      },
-      endRun: () => {
-        this.scene.resume();
-        this.endRun();
-      },
-    };
-    this.input.keyboard?.resetKeys();
-    this.scene.pause();
-    this.scene.launch('Victory', data);
-    this.scene.bringToTop('Victory');
-  }
-
   /** Pause menu (concept.md §8); the run freezes until it closes. */
   private openPause(): void {
     playSfx(this, 'ui-click');
@@ -384,16 +380,18 @@ export class RunScene extends Phaser.Scene {
 
   private endRun(): void {
     const w = this.world;
+    clearSavedRun();
     const summary: SummaryData = {
-      time: w.time,
+      round: w.round,
       kills: w.kills,
-      level: w.level,
+      coins: w.coinsEarned,
       won: w.won,
       bossKills: w.bossKills,
       board: [...w.city.board],
       tiles: w.city.tiles.map((t) => ({ ...t })),
       coreLostAt: w.coreLostAt,
       damageBy: { ...w.damageBy },
+      roundStart: this.roundStart,
     };
     this.scene.stop('Hud');
     this.scene.start('Summary', summary);
@@ -410,10 +408,8 @@ export class RunScene extends Phaser.Scene {
         this.ui.debugOverlay = !this.ui.debugOverlay;
         break;
       case 'F2':
-        // The next level-up offers land.
         e.preventDefault();
-        w.pendingLand++;
-        debugLevelUp(w);
+        debugAddCoins(w, 1000);
         break;
       case 'F3':
         e.preventDefault();
@@ -424,12 +420,9 @@ export class RunScene extends Phaser.Scene {
         debugFillWeapons(w);
         break;
       case 'KeyG':
-        debugLevelUp(w);
+        debugAddCoins(w, 100);
         break;
-      case 'KeyT':
-        debugAddTime(w, 60);
-        break;
-      case 'KeyE':
+      case 'KeyN':
         debugSpawn(w, this.ui.debugEnemy as (typeof ENEMY_TYPES)[number], DEBUG_SPAWN_COUNT);
         break;
       case 'BracketLeft':
@@ -467,6 +460,18 @@ export class RunScene extends Phaser.Scene {
       this.wobblePhases.set(e, phase);
     }
     return phase;
+  }
+
+  /** A small HP bar along the bottom of a damaged tile, so wear shows on every tile type. */
+  private drawHpBar(x: number, y: number, frac: number): void {
+    const { w, h } = HP_BAR;
+    const left = x - w / 2;
+    const top = y + GRID.cellPx / 2 - h - 2;
+    const g = this.hpGfx;
+    g.fillStyle(COLORS.ink, 0.85);
+    g.fillRect(left - 1, top - 1, w + 2, h + 2);
+    g.fillStyle(frac < 0.3 ? COLORS.coreLow : HP_BAR.ok, 1);
+    g.fillRect(left, top, w * Math.max(0, frac), h);
   }
 
   /** Eases a barrel's drawn angle toward `target` along the shorter way round. */
@@ -527,6 +532,7 @@ export class RunScene extends Phaser.Scene {
     this.tileSprites.begin();
     this.crackSprites.begin();
     this.barrelSprites.begin();
+    this.hpGfx.clear();
     for (const t of w.city.tiles) {
       const x = left + (t.gx + 0.5) * cell;
       const y = top + (t.gy + 0.5) * cell;
@@ -539,6 +545,7 @@ export class RunScene extends Phaser.Scene {
       if (showsCracks(hpFrac)) {
         this.crackSprites.add(x, y, TEX.cracks).setDisplaySize(cell, cell).setAlpha(alpha);
       }
+      if (hpFrac < 1) this.drawHpBar(x, y, hpFrac);
       const barrel = barrelFor(t.type);
       if (barrel) {
         const rest = facingAngle(t.facing);
@@ -616,15 +623,6 @@ export class RunScene extends Phaser.Scene {
     this.shotSprites.end();
     this.drawBlasts(w);
 
-    this.gemSprites.begin();
-    const sparkle = this.time.now * 0.001 * FX.gemSparkle.speed;
-    for (const gem of w.gems) {
-      // Each gem twinkles on its own phase, taken from its position.
-      const s = 1 + motion() * FX.gemSparkle.amount * Math.sin(sparkle + (gem.x + gem.y) * 0.05);
-      this.gemSprites.add(gem.x, gem.y, TEX.gem).setScale(s);
-    }
-    this.gemSprites.end();
-
     for (const ev of w.events) {
       if (ev.kind === 'tileDestroyed') {
         if (motion()) camera.shake(FX.shakeTileLoss.ms, FX.shakeTileLoss.intensity);
@@ -660,9 +658,6 @@ export class RunScene extends Phaser.Scene {
       } else if (ev.kind === 'blast') {
         this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
         playSfx(this, ev.bomb ? 'bomb' : 'blast');
-      } else if (ev.kind === 'magnetPulse') {
-        this.magnetRings.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
-        playSfx(this, 'magnet-pulse');
       } else if (ev.kind === 'bossPhase') {
         if (motion()) camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
         playSfx(this, 'boss-phase');
@@ -673,9 +668,7 @@ export class RunScene extends Phaser.Scene {
     this.particles.update(frameDt);
     this.particles.draw();
     this.drawPulses(w, ox, oy, frameDt);
-    this.drawBlades(w, ox - w.x, oy - w.y);
     this.drawFlames(w, ox - w.x, oy - w.y);
-    this.drawThrusts(w, ox - w.x, oy - w.y);
   }
 
   /**
@@ -715,41 +708,6 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  /** Spear shafts jutting out on each jab (concept-v2.md §2.12); drawn with the blades. */
-  private drawThrusts(w: World, dx: number, dy: number): void {
-    const g = this.bladeGfx;
-    const look = THRUST_LOOK;
-    for (const t of w.cache.thrusters) {
-      const thrust = w.cache.syn.thrusts[t.type];
-      const st = w.weapons.get(t.id);
-      if (!thrust || st?.firedAt === undefined) continue;
-      const age = w.time - st.firedAt;
-      if (age > look.out + look.back) continue;
-      const ext = age < look.out ? age / look.out : 1 - (age - look.out) / look.back;
-      const c = tileCentre(w, t);
-      const fx = Math.cos(st.aim);
-      const fy = Math.sin(st.aim);
-      const x0 = c.x + dx;
-      const y0 = c.y + dy;
-      const x1 = x0 + fx * thrust.reach * ext;
-      const y1 = y0 + fy * thrust.reach * ext;
-      g.lineStyle(look.shaft + 2, COLORS.ink, 1);
-      g.lineBetween(x0, y0, x1, y1);
-      g.lineStyle(look.shaft, look.shaftColor, 1);
-      g.lineBetween(x0, y0, x1, y1);
-      const h = look.head;
-      const tip = [
-        { x: x1 + fx * h, y: y1 + fy * h },
-        { x: x1 - fy * h * 0.5, y: y1 + fx * h * 0.5 },
-        { x: x1 + fy * h * 0.5, y: y1 - fx * h * 0.5 },
-      ];
-      g.fillStyle(0xffffff, 1);
-      g.fillPoints(tip, true);
-      g.lineStyle(2, COLORS.ink, 1);
-      g.strokePoints(tip, true);
-    }
-  }
-
   /** Flame cones of Flamethrowers that fired in the last moment (concept-v2.md §2.12). */
   private drawFlames(w: World, dx: number, dy: number): void {
     const g = this.flameGfx;
@@ -768,32 +726,6 @@ export class RunScene extends Phaser.Scene {
         g.fillStyle(color, alpha * fade);
         g.slice(c.x + dx, c.y + dy, weapon.range * reach * flicker, st.aim - half, st.aim + half);
         g.fillPath();
-      }
-    }
-  }
-
-  /**
-   * Saw blades: a toothed disc per blade on its orbit (concept-v2.md §2.12),
-   * at the sim's angle. (dx, dy) shifts sim positions to the interpolated city.
-   */
-  private drawBlades(w: World, dx: number, dy: number): void {
-    const g = this.bladeGfx;
-    g.clear();
-    for (const t of w.cache.blades) {
-      const blade = w.cache.syn.blades[t.type];
-      const aim = w.weapons.get(t.id)?.aim;
-      if (!blade || aim === undefined) continue;
-      const c = tileCentre(w, t);
-      for (let b = 0; b < blade.count; b++) {
-        const a = aim + (b * Math.PI * 2) / blade.count;
-        drawSawDisc(
-          g,
-          c.x + dx + Math.cos(a) * blade.orbit,
-          c.y + dy + Math.sin(a) * blade.orbit,
-          blade.radius,
-          a * BLADE_LOOK.spinFactor,
-          TILES[t.type].color,
-        );
       }
     }
   }
@@ -869,15 +801,5 @@ export class RunScene extends Phaser.Scene {
       g.strokeCircle(b.x, b.y, b.r);
     }
     this.blasts.length = n;
-    const m = FX.magnetPulse;
-    n = 0;
-    for (const ring of this.magnetRings) {
-      const age = (w.time - ring.at) / m.time;
-      if (age >= 1) continue;
-      this.magnetRings[n++] = ring;
-      g.lineStyle(m.width, TILES.magnet.color, m.alpha * (1 - age));
-      g.strokeCircle(ring.x, ring.y, ring.r * (motion() ? age : 1));
-    }
-    this.magnetRings.length = n;
   }
 }

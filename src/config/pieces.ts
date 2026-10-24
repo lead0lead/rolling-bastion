@@ -44,20 +44,21 @@ function piece(
 
 const L = {
   h: 'hull',
-  p: 'plating',
   g: 'gatling',
   c: 'cannon',
   m: 'mortar',
-  s: 'saw',
   x: 'crossbow',
   f: 'flamethrower',
-  k: 'spear',
   e: 'generator',
   d: 'shield',
   r: 'repair',
-  u: 'magnet',
   n: 'engine',
 } as const satisfies Record<string, TileType>;
+
+/** The shop's stock (concept-v2.md §2.13): every tile type except the Core, one cell each, always on sale. */
+export const SHOP_PIECES: PieceDef[] = Object.entries(L).map(([ch, tile]) =>
+  piece(`shop-${tile}`, [ch], L),
+);
 
 /**
  * Phase 1 sandbox pool: one of each common shape with a mix of tile types,
@@ -71,15 +72,12 @@ export const SANDBOX_POOL: PieceDef[] = [
   piece('i4-gatling', ['hggh'], L),
   piece('o-generator', ['ge', 'gg'], L),
   piece('t-cannon', ['hch', '.h.'], L),
-  piece('s-saw', ['.hs', 'sh.'], L),
+  piece('z-crossbow', ['.hx', 'xh.'], L),
   piece('z-shield', ['gd.', '.hg'], L),
   piece('l-gatling', ['g.', 'g.', 'ge'], L),
-  piece('j-plating', ['.p', '.p', 'pp'], L),
   piece('t-mortar', ['rmr', '.h.'], L),
-  piece('l3-engine', ['n.', 'hu'], L),
-  piece('l3-crossbow', ['x.', 'hx'], L),
+  piece('l3-engine', ['n.', 'hh'], L),
   piece('l3-flamer', ['f.', 'hf'], L),
-  piece('i3-spear', ['kkk'], L),
 ];
 
 /** Phase 2 pool (concept.md §4.2): Gatling and Cannon pieces plus pure Hull. */
@@ -114,25 +112,18 @@ export const PHASE3_POOL: PieceDef[] = [
   piece('t-cannon', ['hch', '.h.'], L),
   piece('s-cannon', ['.ch', 'hc.'], L, 0.8),
   piece('l3-mortar', ['m.', 'hh'], L, 0.8),
-  piece('domino-saw', ['sh'], L, 0.8),
+  piece('domino-crossbow', ['xh'], L, 0.8),
   piece('i4-gatling', ['hggh'], L, 0.6),
   piece('l4-cannon', ['c.', 'c.', 'hh'], L, 0.6),
-  piece('domino-crossbow', ['xh'], L, 0.8),
-  piece('l3-crossbow', ['x.', 'hh'], L, 0.6),
   piece('domino-flamer', ['fh'], L, 0.8),
   piece('l3-flamer', ['f.', 'hh'], L, 0.6),
-  piece('domino-spear', ['kh'], L, 0.8),
-  piece('i3-spear', ['kkk'], L, 0.5),
   // Structure
-  piece('l3-plating', ['p.', 'pp'], L, 0.6),
-  piece('i3-plating', ['ppp'], L, 0.4),
   piece('mono-hull', ['h'], L, 0.3),
   piece('o-hull', ['hh', 'hh'], L, 0.3),
   // Support
   piece('domino-generator', ['eg'], L, 0.8),
   piece('domino-shield', ['dh'], L, 0.8),
   piece('l3-repair', ['r.', 'hh'], L, 0.8),
-  piece('domino-magnet', ['uh'], L, 0.8),
   piece('domino-engine', ['nh'], L, 0.8),
   piece('z4-shield', ['dh.', '.hg'], L, 0.6),
   piece('j4-repair', ['.r', '.h', 'hh'], L, 0.5),
@@ -141,8 +132,5 @@ export const PHASE3_POOL: PieceDef[] = [
   piece('t5-cannon', ['ccc', '.h.', '.h.'], L, 0.5, PENTOMINO_TIME),
   piece('u5-mortar', ['h.h', 'mmm'], L, 0.5, PENTOMINO_TIME),
   piece('x5-generator', ['.g.', 'geg', '.g.'], L, 0.4, PENTOMINO_TIME),
-  piece('l5-plating', ['p...', 'pppp'], L, 0.3, PENTOMINO_TIME),
   piece('p5-gatling', ['eg', 'gg', 'h.'], L, 0.4, PENTOMINO_TIME),
-  piece('v5-plating', ['p..', 'p..', 'ppp'], L, 0.3, PENTOMINO_TIME),
-  piece('y5-saw', ['ssss', '.h..'], L, 0.4, PENTOMINO_TIME),
 ];

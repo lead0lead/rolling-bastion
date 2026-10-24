@@ -1,5 +1,5 @@
 export type EnemyType =
-  'swarmer' | 'runner' | 'brute' | 'spitter' | 'sapper' | 'bomber' | 'colossus';
+  'swarmer' | 'runner' | 'brute' | 'juggernaut' | 'spitter' | 'sapper' | 'bomber' | 'colossus';
 
 /** Keeps its distance and shoots the nearest tile (Spitter). */
 export interface RangedDef {
@@ -28,7 +28,7 @@ export interface EnemyDef {
   speed: number;
   /** Contact damage per second to the touched tile. */
   contactDps: number;
-  /** XP gem value dropped on death. */
+  /** Coins paid on death. */
   xp: number;
   /** Collision radius (px). */
   radius: number;
@@ -41,6 +41,8 @@ export interface EnemyDef {
   color: number;
   ranged?: RangedDef;
   bomb?: BombDef;
+  /** When killed it pops into `count` smaller enemies (balloons-TD style); elites and the boss don't. */
+  split?: { into: EnemyType; count: number };
   /** Walks to the nearest bridge tile instead of the nearest tile (Sapper). */
   targetsBridges?: boolean;
   /**
@@ -57,7 +59,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     maxHp: 10,
     speed: 60,
     contactDps: 5,
-    xp: 1,
+    xp: 2,
     radius: 7,
     cost: 1,
     color: 0xff5d73,
@@ -67,7 +69,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     maxHp: 6,
     speed: 140,
     contactDps: 4,
-    xp: 1,
+    xp: 2,
     radius: 6,
     cost: 0.8,
     color: 0xc77dff,
@@ -81,6 +83,18 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     radius: 13,
     cost: 8,
     color: 0xe63946,
+    split: { into: 'swarmer', count: 3 },
+  },
+  juggernaut: {
+    name: 'Juggernaut',
+    maxHp: 600,
+    speed: 38,
+    contactDps: 45,
+    xp: 30,
+    radius: 20,
+    cost: 30,
+    color: 0x7b2cbf,
+    split: { into: 'brute', count: 2 },
   },
   spitter: {
     name: 'Spitter',
@@ -116,7 +130,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     maxHp: 20,
     speed: 80,
     contactDps: 0,
-    xp: 3,
+    xp: 5,
     radius: 9,
     cost: 2.5,
     color: 0xd62839,
@@ -124,10 +138,10 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   colossus: {
     name: 'Colossus',
-    maxHp: 50000,
+    maxHp: 42000,
     speed: 35,
     contactDps: 60,
-    xp: 0,
+    xp: 200,
     radius: 36,
     cost: 0,
     color: 0xb5179e,
@@ -143,10 +157,8 @@ export const ENEMY_TYPES = Object.keys(ENEMIES) as EnemyType[];
  */
 export const BOSS = {
   type: 'colossus' as EnemyType,
-  /** Spawns at this game time (s); regular spawns stop. */
-  at: 720,
-  /** Still alive at this time (s): enrages. */
-  enrageAt: 840,
+  /** Still alive this long (s) after its arrival: enrages. */
+  enrageAfter: 120,
   /** Enraged contact damage multiplier (+100%). */
   enrageDamage: 2,
   /** HP fractions below which phase 2 and phase 3 start. */

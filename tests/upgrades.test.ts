@@ -28,12 +28,12 @@ describe('upgrade type of a piece', () => {
 });
 
 describe('levels and perks', () => {
-  it('levels need an owned tile and stop at the max level', () => {
+  it('levels need an owned tile and have no cap', () => {
     const city = typedCity(['Cg', '..'], { C: 'core', g: 'gatling' });
     expect(canUpgrade(city, 'cannon')).toBe(false);
     expect(canUpgrade(city, 'core')).toBe(false);
     for (let i = 0; i < 10; i++) applyUpgrade(city, 'gatling');
-    expect(typeLevel(city, 'gatling')).toBe(UPGRADES.maxLevel);
+    expect(typeLevel(city, 'gatling')).toBe(11);
   });
 
   it('perks unlock at level 3 and 5', () => {

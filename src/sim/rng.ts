@@ -4,6 +4,9 @@ export interface Rng {
   next(): number;
   /** Integer in [min, max] inclusive. */
   int(min: number, max: number): number;
+  /** The generator's state, for saving a run, and restoring it. */
+  state(): number;
+  setState(state: number): void;
 }
 
 export function createRng(seed: number): Rng {
@@ -18,5 +21,9 @@ export function createRng(seed: number): Rng {
   return {
     next,
     int: (min, max) => min + Math.floor(next() * (max - min + 1)),
+    state: () => state,
+    setState: (s) => {
+      state = s >>> 0;
+    },
   };
 }

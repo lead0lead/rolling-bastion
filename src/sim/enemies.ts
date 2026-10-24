@@ -11,11 +11,9 @@ interface Contact {
   tile: PlacedTile | undefined;
   /** A touched bridge tile, if any (Sappers attack it first). */
   bridge: PlacedTile | undefined;
-  /** Summed damage/s from touching spiked Plating. */
-  thorns: number;
 }
 
-const contact: Contact = { tile: undefined, bridge: undefined, thorns: 0 };
+const contact: Contact = { tile: undefined, bridge: undefined };
 
 /**
  * Enemy movement, ranged attacks, separation, collision with the city's
@@ -73,7 +71,6 @@ export function updateEnemies(w: World, dt: number): void {
     const dps = def.contactDps * e.damageFactor * (e === w.boss ? bossContactFactor(w) : 1);
     damageTile(w, t, dps * mods.contactTaken * dt);
     if (w.over) return;
-    if (contact.thorns > 0) hitEnemy(w, e, contact.thorns * dt, 0, 0, 0, 'plating');
     if (mods.reflect > 0) hitEnemy(w, e, dps * mods.reflect * dt, 0, 0, 0, 'shield');
   }
 
@@ -232,7 +229,7 @@ function separate(w: World): void {
 /**
  * Pushes the enemy out of any tile it overlaps (tiles are solid squares) and
  * records what it touches in `out`: the first tile (the one it attacks), a
- * touched bridge, plus thorns from all touched tiles.
+ * touched bridge.
  */
 function collideWithCity(w: World, e: Enemy, out: Contact): void {
   const cell = GRID.cellPx;
@@ -244,7 +241,6 @@ function collideWithCity(w: World, e: Enemy, out: Contact): void {
   const span = Math.ceil(reach / cell);
   out.tile = undefined;
   out.bridge = undefined;
-  out.thorns = 0;
   for (let dy = -span; dy <= span; dy++) {
     for (let dx = -span; dx <= span; dx++) {
       const t = tileAtCell(w, gx + dx, gy + dy);
@@ -261,8 +257,6 @@ function collideWithCity(w: World, e: Enemy, out: Contact): void {
       if (d2 > reach * reach) continue;
       out.tile ??= t;
       if (!out.bridge && w.cache.bridges.has(t.id)) out.bridge = t;
-      const m = modsOf(w, t);
-      out.thorns += m.thorns;
       if (d2 >= r * r) continue;
       if (d2 > 0) {
         const d = Math.sqrt(d2);

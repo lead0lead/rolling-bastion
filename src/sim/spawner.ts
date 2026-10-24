@@ -1,89 +1,74 @@
 import { SPAWN } from '../config/balance';
 import { BOSS, ELITE, ENEMIES, type EnemyType } from '../config/enemies';
 import { ENDLESS } from '../config/endless';
-import { SPAWN_GROUPS, SPIKES, WAVES, type SpawnGroupId, type WaveEntry } from '../config/waves';
-import { endlessFactor, isEndless, nextBossAt } from './endless';
-import { xpToNext } from './progression';
+import {
+  ROUND_GROUPS,
+  ROUNDS,
+  SPAWN_GROUPS,
+  type RoundEntry,
+  type SpawnGroupId,
+} from '../config/waves';
+import { endlessFactor, isBossRound, roundBudget } from './endless';
+import { pressureBudget, pressureDamage, pressureHp } from './pressure';
 import { cityCentre, newBossState, type Enemy, type World } from './world';
 
-/** Spawn budget per second at game time `t`, interpolated from the wave table. */
-export function budgetRate(t: number): number {
-  let prev = WAVES[0] as WaveEntry;
-  for (const entry of WAVES) {
-    if (entry.at > t) {
-      const f = (t - prev.at) / (entry.at - prev.at);
-      return prev.budgetPerSec + (entry.budgetPerSec - prev.budgetPerSec) * f;
-    }
-    prev = entry;
-  }
-  return prev.budgetPerSec;
-}
-
-function currentWave(t: number): WaveEntry {
-  let current = WAVES[0] as WaveEntry;
-  for (const entry of WAVES) if (entry.at <= t) current = entry;
-  return current;
+function groupsFor(round: number): RoundEntry['groups'] {
+  let current = ROUND_GROUPS[0] as RoundEntry;
+  for (const entry of ROUND_GROUPS) if (entry.from <= round) current = entry;
+  return current.groups;
 }
 
 export function spawnRingRadius(w: World): number {
   return w.viewRadius + SPAWN.ringMargin;
 }
 
-export function updateSpawner(w: World, dt: number): void {
-  if (w.time >= BOSS.at && !isEndless(w)) {
-    updateBossPhase(w);
-    relocateFarEnemies(w);
-    return;
-  }
-  // Endless: normal spawns go on (the wave table holds its last entry) and the Colossus returns.
-  const bossAt = nextBossAt(w);
-  if (bossAt !== null && !w.boss && w.time >= bossAt) {
-    w.bossReturns++;
+/** Starts the next round (after the shop): fresh budget, and the Colossus if it is due. */
+export function startRound(w: World): void {
+  w.round++;
+  w.roundClear = false;
+  const total = roundBudget(w.round);
+  w.spawn = { budget: 0, total, left: total, next: null, done: false };
+  if (isBossRound(w.round)) {
+    if (w.round > ROUNDS.bossRound) w.bossReturns++;
     spawnBoss(w, ENDLESS.bossHpPerReturn ** w.bossReturns);
   }
-  while (w.spawn.spikeIndex < SPIKES.length) {
-    const spike = SPIKES[w.spawn.spikeIndex];
-    if (!spike || spike.at > w.time) break;
-    if (spike.elite) {
-      let xp = 0;
-      for (let i = 0; i < spike.elite.levels; i++) xp += xpToNext(w.level + i);
-      const p = ringPoint(w, w.rng.next() * Math.PI * 2);
-      spawnEnemy(w, spike.enemy, p.x, p.y, { hpMultiplier: spike.elite.hpMultiplier, xp });
-    } else {
-      spawnRing(w, spike.enemy, spike.count);
-    }
-    w.spawn.spikeIndex++;
-  }
-
-  w.spawn.budget = Math.min(SPAWN.maxBankedBudget, w.spawn.budget + budgetRate(w.time) * dt);
-  w.spawn.next ??= pickGroup(w);
-  const next = w.spawn.next;
-  const def = SPAWN_GROUPS[next.id];
-  const cost = ENEMIES[def.enemy].cost * next.count;
-  if (w.spawn.budget >= cost) {
-    if (w.enemies.length < SPAWN.maxEnemies) {
-      spawnGroup(w, next.id, next.count);
-    } else if (w.enemies.length < SPAWN.maxEnemies + ELITE.headroom) {
-      // Above the soft cap the group arrives as one elite (concept.md §4.1).
-      const p = ringPoint(w, w.rng.next() * Math.PI * 2);
-      const mult = Math.max(ELITE.minMultiplier, next.count);
-      spawnEnemy(w, def.enemy, p.x, p.y, {
-        hpMultiplier: mult,
-        xp: ENEMIES[def.enemy].xp * mult,
-      });
-    }
-    w.spawn.budget -= cost;
-    w.spawn.next = null;
-  }
-
-  relocateFarEnemies(w);
 }
 
-/** From BOSS.at regular spawns stop and the boss arrives (its attacks: boss.ts). */
-function updateBossPhase(w: World): void {
-  if (w.bossSpawned) return;
-  w.bossSpawned = true;
-  spawnBoss(w, 1);
+export function updateSpawner(w: World, dt: number): void {
+  const sp = w.spawn;
+  if (!sp.done) {
+    sp.next ??= pickGroup(w);
+    const def = SPAWN_GROUPS[sp.next.id];
+    const cost = ENEMIES[def.enemy].cost * sp.next.count;
+    // The round's remaining budget can't pay for another group: nothing more comes.
+    if (cost > sp.left) {
+      sp.done = true;
+    } else {
+      // The bank cap must never be below the next group's price, or spawning stalls for good.
+      sp.budget = Math.min(
+        Math.max(SPAWN.maxBankedBudget, cost),
+        sp.budget + (sp.total / ROUNDS.spawnSec) * pressureBudget(w) * dt,
+      );
+      if (sp.budget >= cost) {
+        if (w.enemies.length < SPAWN.maxEnemies) {
+          spawnGroup(w, sp.next.id, sp.next.count);
+        } else if (w.enemies.length < SPAWN.maxEnemies + ELITE.headroom) {
+          // Above the soft cap the group arrives as one elite (concept.md §4.1).
+          const p = ringPoint(w, w.rng.next() * Math.PI * 2);
+          const mult = Math.max(ELITE.minMultiplier, sp.next.count);
+          spawnEnemy(w, def.enemy, p.x, p.y, {
+            hpMultiplier: mult,
+            xp: ENEMIES[def.enemy].xp * mult,
+          });
+        }
+        sp.budget -= cost;
+        // Pressure makes a round bring more enemies: they cost less of its budget.
+        sp.left -= cost / pressureBudget(w);
+        sp.next = null;
+      }
+    }
+  }
+  relocateFarEnemies(w);
 }
 
 /** The Colossus arrives on the spawn ring with fresh phases and its HP times `hpMultiplier`. */
@@ -96,7 +81,7 @@ function spawnBoss(w: World, hpMultiplier: number): void {
 }
 
 function pickGroup(w: World): { id: SpawnGroupId; count: number } {
-  const groups = Object.entries(currentWave(w.time).groups) as [SpawnGroupId, number][];
+  const groups = Object.entries(groupsFor(w.round)) as [SpawnGroupId, number][];
   const total = groups.reduce((s, [, weight]) => s + weight, 0);
   let roll = w.rng.next() * total;
   let id = groups[groups.length - 1]?.[0] ?? 'swarmer';
@@ -144,7 +129,7 @@ export function spawnRing(w: World, type: EnemyType, count: number): void {
   }
 }
 
-/** Makes a spawned enemy an elite: bigger, tougher, worth more XP. */
+/** Makes a spawned enemy an elite: bigger, tougher, worth more coins. */
 export interface EliteOptions {
   hpMultiplier: number;
   xp: number;
@@ -159,7 +144,9 @@ export function spawnEnemy(
 ): Enemy {
   const def = ENEMIES[type];
   const endless = endlessFactor(w);
-  const growth = def.boss ? 1 : (1 + (SPAWN.hpGrowthPerMinute * w.time) / 60) * endless;
+  const growth = def.boss
+    ? 1
+    : (1 + SPAWN.hpGrowthPerRound * (w.round - 1)) * endless * pressureHp(w);
   const maxHp = def.maxHp * growth * (elite?.hpMultiplier ?? 1);
   const e = w.enemyPool.pop() ?? ({} as Enemy);
   e.type = type;
@@ -176,7 +163,7 @@ export function spawnEnemy(
   e.hitTime = -Infinity;
   e.burnUntil = e.snagUntil = e.staggerUntil = e.markUntil = -Infinity;
   e.burnDps = 0;
-  e.damageFactor = endless;
+  e.damageFactor = endless * (def.boss ? 1 : pressureDamage(w));
   e.dead = false;
   w.enemies.push(e);
   return e;

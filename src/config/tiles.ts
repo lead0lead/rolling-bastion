@@ -3,18 +3,14 @@ import type { StatusType } from './statuses';
 export type TileType =
   | 'core'
   | 'hull'
-  | 'plating'
   | 'gatling'
   | 'cannon'
   | 'mortar'
-  | 'saw'
   | 'crossbow'
   | 'flamethrower'
-  | 'spear'
   | 'generator'
   | 'shield'
   | 'repair'
-  | 'magnet'
   | 'engine';
 
 /** Compass facing in quarter turns clockwise from up: 0 up, 1 right, 2 down, 3 left. */
@@ -42,46 +38,15 @@ export interface WeaponDef {
   blastRadius?: number;
   /** Aim where the target will be when the shot arrives (from its current velocity). */
   leadsTarget?: boolean;
-  /** Shots pass through every enemy in their path (each hit once). */
-  pierceAll?: boolean;
   /**
    * Flame cone: instead of a projectile, each shot hits every enemy within
    * `range` and this many degrees of the aim direction (full cone width).
    */
   coneDeg?: number;
-}
-
-/**
- * Saw blade (concept-v2.md §2.12): circles the tile's centre and hits every
- * enemy it passes; passes harmlessly over the city's own tiles.
- */
-export interface BladeDef {
-  /** Distance of the blade's centre from the tile's centre (px). */
-  orbit: number;
-  /** Blade hit radius (px). */
-  radius: number;
-  /** Turns per second at fire rate multiplier 1 (Generators speed it up). */
-  turnsPerSec: number;
-  damage: number;
-  /** The same blade hits the same enemy at most once per this many seconds. */
-  hitCooldown: number;
-}
-
-/**
- * Spear thrust (concept-v2.md §2.12): stabs straight out along the tile's
- * facing on a fixed rhythm, hitting every enemy on the line (passes over the
- * city's own tiles).
- */
-export interface ThrustDef {
-  /** Seconds per thrust cycle at fire rate multiplier 1. */
-  interval: number;
-  /** Line length from the tile's centre (px). */
-  reach: number;
-  /** Line width (px). */
-  width: number;
-  damage: number;
-  /** With extra jabs, the jabs of one cycle are this far apart (s). */
-  jabGap: number;
+  /** Targets the live enemy with the most HP in range instead of the nearest. */
+  targetsStrongest?: boolean;
+  /** Targets the enemy with the most others inside the blast radius (needs `blastRadius`). */
+  targetsDensest?: boolean;
 }
 
 /** How a weapon tile takes part in status combos (concept-v2.md §2.12). */
@@ -97,17 +62,8 @@ export interface ComboDef {
 /** Support tile effect at level 1; grows per level (UPGRADES.effectPerLevel). */
 export interface SupportDef {
   amount: number;
-  /** Cap on the summed effect of this type on one tile (or city-wide for Magnets). */
+  /** Cap on the summed effect of this type on one tile. */
   cap?: number;
-}
-
-/** Magnet pulse (concept-v2.md §2.9): each Magnet pulls in nearby XP gems on its own timer. */
-export interface PulseDef {
-  intervalSec: number;
-  /** Gems within this distance of the Magnet's centre are pulled (px); grows per level. */
-  radius: number;
-  /** Speed of pulled gems flying to the city (px/s). */
-  gemSpeed: number;
 }
 
 /** What a level 3 / level 5 perk does (concept.md §2.8). Applies to the whole tile type. */
@@ -123,18 +79,11 @@ export type PerkEffect =
   | { kind: 'diagonals' }
   | { kind: 'reflect'; fraction: number }
   | { kind: 'lowHpHealBoost'; belowFrac: number; factor: number }
-  | { kind: 'pulseInterval'; sec: number }
-  | { kind: 'pulseRadius'; px: number }
   | { kind: 'sizePenalty'; factor: number }
   | { kind: 'neighbourHp'; bonus: number }
   | { kind: 'regen'; hpPerSec: number }
-  | { kind: 'thorns'; dps: number }
-  | { kind: 'extraBlades'; count: number }
-  | { kind: 'bladeOrbit'; px: number }
   | { kind: 'range'; px: number }
-  | { kind: 'burnFactor'; factor: number }
-  | { kind: 'thrustReach'; px: number }
-  | { kind: 'extraJabs'; count: number };
+  | { kind: 'burnFactor'; factor: number };
 
 export type PerkKind = PerkEffect['kind'];
 
@@ -154,10 +103,7 @@ export interface TileDef {
   /** One-line function description shown in tooltips. */
   description: string;
   weapon?: WeaponDef;
-  blade?: BladeDef;
-  thrust?: ThrustDef;
   support?: SupportDef;
-  pulse?: PulseDef;
   combo?: ComboDef;
   /** Named perks unlocked at type level 3 and 5. */
   perks?: { l3: PerkDef; l5: PerkDef };
@@ -195,21 +141,6 @@ export const TILES: Record<TileType, TileDef> = {
         effect: { kind: 'neighbourHp', bonus: 0.1 },
       },
       l5: { name: 'Self-repair: regenerates 1 HP/s', effect: { kind: 'regen', hpPerSec: 1 } },
-    },
-  },
-  plating: {
-    name: 'Plating',
-    family: 'structure',
-    maxHp: 120,
-    color: 0x4f8ef7,
-    label: '▣',
-    description: 'No function. Heavy armour for the edge.',
-    perks: {
-      l3: {
-        name: 'Hardened: −20% contact damage taken',
-        effect: { kind: 'contactArmour', damageFactor: 0.8 },
-      },
-      l5: { name: 'Spiked: 10 dmg/s to touching enemies', effect: { kind: 'thorns', dps: 10 } },
     },
   },
   gatling: {
@@ -255,7 +186,7 @@ export const TILES: Record<TileType, TileDef> = {
       knockback: 220,
       arcDeg: 90,
     },
-    combo: { applies: 'staggered', profitsFrom: ['marked'] },
+    combo: { applies: 'staggered', profitsFrom: ['snagged'] },
     perks: {
       l3: { name: 'Wide traverse: arc 90° → 135°', effect: { kind: 'arc', deg: 135 } },
       l5: { name: 'Sabot: shots pierce 3 enemies', effect: { kind: 'pierce', count: 3 } },
@@ -267,13 +198,15 @@ export const TILES: Record<TileType, TileDef> = {
     maxHp: 35,
     color: 0xf2762e,
     label: 'M',
-    description: '30 dmg in a 64 px blast, 0.5 shots/s, range 80–350, all directions; aims ahead.',
+    description:
+      '30 dmg in a 64 px blast, 0.5 shots/s, range 80–350, all directions; aims ahead at Bombers first, then the densest group.',
     weapon: {
       damage: 30,
       fireRate: 0.5,
       range: 350,
       minRange: 80,
       blastRadius: 64,
+      targetsDensest: true,
       leadsTarget: true,
       projectileSpeed: 420,
       projectileRadius: 4,
@@ -290,45 +223,29 @@ export const TILES: Record<TileType, TileDef> = {
       },
     },
   },
-  saw: {
-    name: 'Saw',
-    family: 'weapon',
-    maxHp: 90,
-    color: 0xffe14d,
-    label: 'S',
-    description: 'A blade circles it 48 px out, 26 dmg to every enemy it passes, 1.5 turns/s.',
-    blade: { orbit: 48, radius: 20, turnsPerSec: 1.5, damage: 26, hitCooldown: 0.25 },
-    combo: { applies: 'snagged', profitsFrom: ['burning'] },
-    perks: {
-      l3: {
-        name: 'Twin blade: a second blade opposite',
-        effect: { kind: 'extraBlades', count: 1 },
-      },
-      l5: { name: 'Long arm: blade orbit 48 → 64 px', effect: { kind: 'bladeOrbit', px: 64 } },
-    },
-  },
   crossbow: {
     name: 'Crossbow',
     family: 'weapon',
     maxHp: 35,
     color: 0xe0a43a,
     label: 'X',
-    description: '60 dmg bolt through every enemy in its path, 0.7 shots/s, range 450, 60° arc.',
+    description:
+      'Shoots Bombers first, then the toughest enemy in range: 120 dmg bolt, 0.6 shots/s, range 520, all directions.',
     weapon: {
-      damage: 60,
-      fireRate: 0.7,
-      range: 450,
-      projectileSpeed: 700,
+      damage: 120,
+      fireRate: 0.6,
+      range: 520,
+      projectileSpeed: 800,
       projectileRadius: 4,
-      spreadDeg: 2,
+      spreadDeg: 0,
       knockback: 0,
-      arcDeg: 60,
-      pierceAll: true,
+      arcDeg: 360,
+      targetsStrongest: true,
     },
-    combo: { applies: 'marked', profitsFrom: ['staggered'] },
+    combo: { profitsFrom: ['staggered'] },
     perks: {
       l3: { name: 'Twin string: +1 bolt per shot', effect: { kind: 'extraProjectiles', count: 1 } },
-      l5: { name: 'Swivel stock: arc 60° → 120°', effect: { kind: 'arc', deg: 120 } },
+      l5: { name: 'Heavy bolts: pierce 3 enemies', effect: { kind: 'pierce', count: 3 } },
     },
   },
   flamethrower: {
@@ -354,20 +271,6 @@ export const TILES: Record<TileType, TileDef> = {
     perks: {
       l3: { name: 'Long nozzle: reach 96 → 128 px', effect: { kind: 'range', px: 128 } },
       l5: { name: 'Napalm: burn damage ×2', effect: { kind: 'burnFactor', factor: 2 } },
-    },
-  },
-  spear: {
-    name: 'Spear',
-    family: 'weapon',
-    maxHp: 70,
-    color: 0xc8963e,
-    label: 'K',
-    description: 'Thrusts straight ahead 96 px every 0.8 s: 80 dmg to every enemy on the line.',
-    thrust: { interval: 0.8, reach: 96, width: 24, damage: 80, jabGap: 0.25 },
-    combo: { applies: 'snagged', profitsFrom: ['staggered'] },
-    perks: {
-      l3: { name: 'Long shaft: reach 96 → 128 px', effect: { kind: 'thrustReach', px: 128 } },
-      l5: { name: 'Double jab: two thrusts per cycle', effect: { kind: 'extraJabs', count: 1 } },
     },
   },
   generator: {
@@ -415,25 +318,6 @@ export const TILES: Record<TileType, TileDef> = {
       l5: {
         name: 'Triage: double healing on tiles below 50% HP',
         effect: { kind: 'lowHpHealBoost', belowFrac: 0.5, factor: 2 },
-      },
-    },
-  },
-  magnet: {
-    name: 'Magnet',
-    family: 'support',
-    maxHp: 30,
-    color: 0x16b8a6,
-    label: 'U',
-    description: 'Every 8 s, pulls in XP gems within 300 px of itself.',
-    pulse: { intervalSec: 8, radius: 300, gemSpeed: 600 },
-    perks: {
-      l3: {
-        name: 'Quick pulse: every 8 s → 6 s',
-        effect: { kind: 'pulseInterval', sec: 6 },
-      },
-      l5: {
-        name: 'Wide pulse: base radius 300 → 450 px',
-        effect: { kind: 'pulseRadius', px: 450 },
       },
     },
   },

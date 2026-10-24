@@ -1,14 +1,15 @@
-import { SIM, UPGRADES } from '../src/config/balance';
-import { BOSS } from '../src/config/enemies';
+import { SIM } from '../src/config/balance';
+import { ECONOMY } from '../src/config/economy';
 import { TILES, type Facing, type TileType } from '../src/config/tiles';
 import { LAND_SHAPES } from '../src/config/land';
+import { ROUNDS } from '../src/config/waves';
+import { landPrice, repairAmount, upgradePrice } from '../src/sim/economy';
 import { cellFromId, cellId, coreTile, type CityState } from '../src/sim/grid';
-import { startEndless } from '../src/sim/endless';
 import { addLand, landCells, landProblems, rollLand } from '../src/sim/land';
-import { addXp, applyBuildResult } from '../src/sim/progression';
+import { startRound } from '../src/sim/spawner';
 import { step } from '../src/sim/step';
-import { canUpgrade, typeLevel } from '../src/sim/upgrades';
-import { cityCentre, createWorld, type World } from '../src/sim/world';
+import { applyUpgrade, canUpgrade, typeLevel } from '../src/sim/upgrades';
+import { cityCentre, cityChanged, createWorld, type World } from '../src/sim/world';
 
 /**
  * Balance check (concept.md §11 Phase 4): plays the same seeds with a few
@@ -17,14 +18,14 @@ import { cityCentre, createWorld, type World } from '../src/sim/world';
  * over the `balance.shard<N>.sim.ts` files so they use several cores. Not
  * part of `npm test`.
  *
- * A build is a rule giving the tile for each cell of an n×n grid. At each
- * level-up the bot repairs the Core when it is low, takes an upgrade every
- * few levels (or when the layout is complete), and otherwise grows the city
- * by a piece's worth of tiles: weapons and support first, Hull/Plating
- * along the shortest path to them. On grid expansion it rearranges the
- * city into the bigger layout. It collects all XP automatically and only
- * steers to dodge, so builds are compared on fighting strength. The bot is
- * crude; compare builds with each other, not with a human player.
+ * A build is a rule giving the tile for each cell of an n×n grid. In every
+ * shop visit (before round 1 and after each round) the bot repairs the Core
+ * when it is low, spends about a third of its coins on an upgrade, buys land
+ * once the layout is full, and puts the rest into tiles: weapons and support
+ * first, Hull along the shortest path to them. Coins come from kills as in
+ * the game; the bot only steers to dodge, so builds are compared on fighting
+ * strength. The bot is crude; compare builds with each other, not with a
+ * human player.
  */
 
 /** Where a cell sits: ring from the grid edge (0 = outer ring), on the Core's row/column, a grid corner. */
@@ -55,64 +56,51 @@ const ARCHETYPES: Archetype[] = [
   {
     name: 'Cannon lines',
     rule: (c) =>
-      c.edge === 0
-        ? c.corner
-          ? 'plating'
-          : 'cannon'
-        : c.edge === 1 && c.cross
-          ? 'shield'
-          : 'hull',
+      c.edge === 0 ? (c.corner ? 'hull' : 'cannon') : c.edge === 1 && c.cross ? 'shield' : 'hull',
     upgrades: ['cannon', 'shield'],
   },
   {
     name: 'Mortar core',
-    rule: (c) =>
-      c.edge === 0 ? 'plating' : c.edge === 1 ? (c.cross ? 'shield' : 'hull') : 'mortar',
-    upgrades: ['mortar', 'plating'],
+    rule: (c) => (c.edge === 0 ? 'hull' : c.edge === 1 ? (c.cross ? 'shield' : 'hull') : 'mortar'),
+    upgrades: ['mortar', 'shield'],
   },
   {
-    name: 'Saw wall',
-    rule: (c) =>
-      c.edge === 0 ? (c.corner ? 'plating' : 'saw') : c.edge === 1 && c.cross ? 'repair' : 'hull',
-    upgrades: ['saw', 'repair'],
-    melee: true,
-  },
-  {
-    name: 'Saw grinder',
-    rule: (c) => (c.edge === 0 ? 'plating' : c.edge === 1 ? 'saw' : c.cross ? 'repair' : 'hull'),
-    upgrades: ['saw', 'plating'],
-    melee: true,
-  },
-  {
-    name: 'Crossbow lines',
+    name: 'Crossbow ring',
     rule: (c) =>
       c.edge === 0
         ? c.corner
-          ? 'plating'
+          ? 'hull'
           : 'crossbow'
+        : c.edge === 1 && c.cross
+          ? 'repair'
+          : 'hull',
+    upgrades: ['crossbow', 'repair'],
+  },
+  {
+    name: 'Crossbow + Gatling',
+    rule: (c) =>
+      c.edge === 0
+        ? c.corner
+          ? 'hull'
+          : (c.dx + c.dy) % 2 === 0
+            ? 'crossbow'
+            : 'gatling'
         : c.edge === 1 && c.cross
           ? 'generator'
           : 'hull',
-    upgrades: ['crossbow', 'generator'],
+    upgrades: ['crossbow', 'gatling', 'generator'],
   },
   {
     name: 'Flame ring',
     rule: (c) =>
       c.edge === 0
         ? c.corner
-          ? 'plating'
+          ? 'hull'
           : 'flamethrower'
         : c.edge === 1 && c.cross
           ? 'repair'
           : 'hull',
     upgrades: ['flamethrower', 'repair'],
-    melee: true,
-  },
-  {
-    name: 'Spear wall',
-    rule: (c) =>
-      c.edge === 0 ? 'plating' : c.edge === 1 ? 'spear' : c.cross ? 'generator' : 'hull',
-    upgrades: ['spear', 'generator'],
     melee: true,
   },
   {
@@ -122,16 +110,16 @@ const ARCHETYPES: Archetype[] = [
         if (c.corner) return 'cannon';
         return (c.dx + c.dy) % 2 === 0 ? 'flamethrower' : 'gatling';
       }
-      if (c.edge === 1) return c.cross ? 'generator' : 'crossbow';
+      if (c.edge === 1) return c.cross ? 'generator' : 'shield';
       return 'mortar';
     },
-    upgrades: ['gatling', 'flamethrower', 'crossbow', 'mortar'],
+    upgrades: ['gatling', 'flamethrower', 'cannon', 'mortar'],
   },
   {
     name: 'Mixed cluster',
     rule: (c) => {
       if (c.edge === 0) {
-        if (c.corner) return 'plating';
+        if (c.corner) return 'hull';
         return Math.abs(c.dy) >= Math.abs(c.dx) ? 'gatling' : 'cannon';
       }
       if (c.edge === 1)
@@ -142,18 +130,16 @@ const ARCHETYPES: Archetype[] = [
   },
 ];
 
-/** Tiles added per level-up (about one piece). */
-const TILES_PER_LEVEL = 3;
-/** Every this many levels the bot upgrades instead of growing. */
-const UPGRADE_EVERY = 4;
-/** The bot takes Repair Core below this share of Core HP. */
+/** Share of the coins a shop visit spends on an upgrade (when one is affordable). */
+const UPGRADE_SHARE = 1 / 3;
+/** The bot repairs the Core below this share of its HP (when it can pay). */
 const REPAIR_BELOW = 0.4;
 /** Steering: enemies within this radius (px) push the city away; the boss counts this much more. */
-const FLEE_RADIUS = 260;
+const FLEE_RADIUS = 110;
 const BOSS_FEAR = 20;
 const WANDER_WEIGHT = 0.35;
-/** Stop a run here (s) if neither side has won: boss enrage + 2 min. */
-const TIME_LIMIT = BOSS.enrageAt + 120;
+/** Stop a run after this much game time (s) if neither side has won. */
+const TIME_LIMIT = 3600;
 
 type Layout = Map<string, { type: TileType; facing: Facing }>;
 
@@ -204,12 +190,12 @@ const NEIGHBOURS = [
   [0, -1],
 ] as const;
 
-/** Adds up to `count` tiles from the layout, each orthogonally connected to the city. */
-function grow(w: World, arch: Archetype, count: number): number {
+/** Buys tiles from the layout while the coins last, each orthogonally connected to the city. */
+function grow(w: World, arch: Archetype): number {
   const city = w.city;
   const layout = layoutFor(arch, city);
   let added = 0;
-  for (let i = 0; i < count; i++) {
+  for (;;) {
     const taken = new Set(city.tiles.map((t) => key(t.gx, t.gy)));
     const remaining = [...layout.keys()].filter((k) => !taken.has(k));
     if (remaining.length === 0) break;
@@ -239,6 +225,8 @@ function grow(w: World, arch: Archetype, count: number): number {
     for (const k of remaining) {
       const [x, y] = k.split(',').map(Number) as [number, number];
       if (!NEIGHBOURS.some(([dx, dy]) => taken.has(key(x + dx, y + dy)))) continue;
+      // Only what the coins pay for right now; dearer cells wait for a later visit.
+      if (ECONOMY.cost[(layout.get(k) as { type: TileType }).type] > w.coins) continue;
       const toCore = core ? Math.abs(x - core.gx) + Math.abs(y - core.gy) : 0;
       const score = (dist.get(k) ?? 99) * 100 + toCore;
       if (score < bestScore) {
@@ -249,6 +237,7 @@ function grow(w: World, arch: Archetype, count: number): number {
     if (!best) break;
     const [gx, gy] = best.split(',').map(Number) as [number, number];
     const cell = layout.get(best) as { type: TileType; facing: Facing };
+    w.coins -= ECONOMY.cost[cell.type];
     city.tiles.push({
       id: city.nextTileId++,
       type: cell.type,
@@ -302,19 +291,39 @@ function placeLand(w: World): void {
   if (best) addLand(city, best.cells);
 }
 
-function levelUp(w: World, arch: Archetype): void {
+/** True if the layout has no unbuilt cell left. */
+function layoutFull(w: World, arch: Archetype): boolean {
+  const taken = new Set(w.city.tiles.map((t) => key(t.gx, t.gy)));
+  return [...layoutFor(arch, w.city).keys()].every((k) => taken.has(k));
+}
+
+/** One shop visit (concept-v2.md §2.13, §2.16). */
+function shop(w: World, arch: Archetype): void {
   // Offline tiles must be reconnected or scrapped; the bot scraps them (and may rebuild them later).
   w.city.tiles = w.city.tiles.filter((t) => t.online);
+  cityChanged(w);
   const core = coreTile(w.city);
-  if (core && core.hp < core.maxHp * REPAIR_BELOW) {
-    applyBuildResult(w, { repair: true, scrapped: 0 });
-    return;
+  if (core && core.hp < core.maxHp * REPAIR_BELOW && w.coins >= ECONOMY.repairPrice) {
+    w.coins -= ECONOMY.repairPrice;
+    core.hp += repairAmount(w.city);
   }
   const upgrade = arch.upgrades
     .filter((t) => canUpgrade(w.city, t))
     .sort((a, b) => typeLevel(w.city, a) - typeLevel(w.city, b))[0];
-  const grown = w.level % UPGRADE_EVERY === 0 && upgrade ? 0 : grow(w, arch, TILES_PER_LEVEL);
-  applyBuildResult(w, { repair: false, scrapped: 0, upgrade: grown === 0 ? upgrade : null });
+  if (upgrade) {
+    const price = upgradePrice(w.city, upgrade);
+    if (price <= w.coins * UPGRADE_SHARE || (layoutFull(w, arch) && price <= w.coins)) {
+      w.coins -= price;
+      applyUpgrade(w.city, upgrade);
+    }
+  }
+  if (layoutFull(w, arch) && w.coins >= landPrice(w.landsBought)) {
+    w.coins -= landPrice(w.landsBought);
+    w.landsBought++;
+    placeLand(w);
+  }
+  grow(w, arch);
+  cityChanged(w);
 }
 
 /**
@@ -346,69 +355,54 @@ function steer(w: World, arch: Archetype): { x: number; y: number } {
   return len > 0 ? { x: fx / len + wx, y: fy / len + wy } : { x: wx, y: wy };
 }
 
-/**
- * The bot collects every gem at once, scaled by `share` (SIM_XP, default 1 =
- * a perfect collector), so XP depends on kills, not on how well the crude
- * steering drives over gems. This compares build strength, not driving.
- */
-function collectAll(w: World, share: number): void {
-  const xp = w.gems.reduce((s, g) => s + g.value, 0) * share;
-  w.gems.length = 0;
-  if (xp > 0) addXp(w, xp);
-}
-
 interface Result {
   seed: number;
+  round: number;
   time: number;
   won: boolean;
   bossHp: number | null;
-  level: number;
   kills: number;
   tiles: number;
+  coins: number;
   damage: Partial<Record<TileType, number>>;
   /** Seconds from the boss's first damage to the end of the run, and the highest boss phase seen. */
   bossFight: number | null;
   bossPhase: number;
-  /** Endless (SIM_ENDLESS): when the first boss fell, and Colossi defeated in all. */
+  /** Endless (SIM_ENDLESS): the round the first boss fell in, and Colossi defeated in all. */
   wonAt: number | null;
   bossKills: number;
   coreLost: boolean;
 }
 
-function play(arch: Archetype, seed: number, xpShare: number, endlessSec: number): Result {
+function play(arch: Archetype, seed: number, endlessRounds: number): Result {
   const w = createWorld(seed);
   let bossHitAt: number | null = null;
   let bossPhase = 0;
   let wonAt: number | null = null;
-  while (!w.over && w.time < (wonAt === null ? TIME_LIMIT : wonAt + endlessSec)) {
+  shop(w, arch);
+  while (!w.over && w.time < TIME_LIMIT && (wonAt === null || w.round <= wonAt + endlessRounds)) {
     step(w, steer(w, arch), SIM.dt);
-    if (w.over && w.won && wonAt === null && endlessSec > 0) {
-      wonAt = w.time;
-      startEndless(w);
-    }
+    if (w.won && wonAt === null) wonAt = w.round;
     if (w.boss || w.won) bossPhase = Math.max(bossPhase, w.bossState.phase);
     if (bossHitAt === null && (w.won || (w.boss && w.boss.hp < w.boss.maxHp))) bossHitAt = w.time;
-    collectAll(w, xpShare);
     w.events.length = 0;
-    while (w.pendingLevelUps > 0 && !w.over) {
-      if (w.pendingLand > 0) {
-        w.pendingLand--;
-        placeLand(w);
-      }
-      w.pendingLevelUps--;
-      levelUp(w, arch);
+    if (w.roundClear) {
+      if (wonAt !== null && w.round >= wonAt + endlessRounds) break;
+      shop(w, arch);
+      startRound(w);
     }
   }
   return {
     seed,
+    round: w.round,
     time: w.time,
     won: w.won,
     bossHp: w.boss ? w.boss.hp / w.boss.maxHp : null,
-    level: w.level,
     kills: w.kills,
     tiles: w.city.tiles.length,
+    coins: w.coinsEarned,
     damage: w.damageBy,
-    bossFight: bossHitAt === null ? null : (wonAt ?? w.time) - bossHitAt,
+    bossFight: bossHitAt === null ? null : w.time - bossHitAt,
     bossPhase,
     wonAt,
     bossKills: w.bossKills,
@@ -428,43 +422,42 @@ function report(arch: Archetype, r: Result): string {
   const endless =
     r.wonAt === null
       ? ''
-      : ` · endless: ${r.coreLost ? 'died' : 'alive'} at ${clock(r.time)} (+${clock(r.time - r.wonAt)}), Colossus ×${r.bossKills}`;
+      : ` · endless: ${r.coreLost ? 'died' : 'alive'} in round ${r.round} (+${r.round - r.wonAt}), Colossus ×${r.bossKills}`;
   const outcome = r.won
-    ? `WON at ${clock(r.wonAt ?? r.time)}${fight}${endless}`
-    : r.time >= TIME_LIMIT
-      ? `alive at ${clock(r.time)}, time limit${boss}`
-      : `died at ${clock(r.time)}${boss}`;
+    ? `WON in round ${r.wonAt ?? r.round}${fight}${endless}`
+    : r.coreLost
+      ? `died in round ${r.round}${boss}`
+      : `alive in round ${r.round}, time limit${boss}`;
   const total = Object.values(r.damage).reduce((a: number, b) => a + (b ?? 0), 0) || 1;
   const shares = Object.entries(r.damage)
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
     .map(([t, d]) => `${t} ${Math.round(((d ?? 0) / total) * 100)}%`)
     .join(', ');
-  return `${arch.name} · seed ${r.seed}: ${outcome} · level ${r.level} · kills ${r.kills} · ${r.tiles} tiles · damage: ${shares}`;
+  return `${arch.name} · seed ${r.seed}: ${outcome} · ${clock(r.time)} · coins ${Math.round(r.coins)} · kills ${r.kills} · ${r.tiles} tiles · damage: ${shares}`;
 }
 
 /**
  * Plays this shard's share of the (build, seed) runs and prints one line per
  * run. Each shard is its own test file, so Vitest runs them in parallel on
- * separate cores. SIM_SEEDS: seeds (default 1,2); SIM_XP: XP share; SIM_ARCH:
- * comma-separated parts of build names to run (default: all); SIM_ENDLESS:
- * minutes to keep going after the boss kill (default 0: the run ends there).
+ * separate cores. SIM_SEEDS: seeds (default 1,2); SIM_ARCH: comma-separated
+ * parts of build names to run (default: all); SIM_ENDLESS: rounds to keep
+ * going after the boss round (default 0: the run ends at the boss kill).
  */
 export function runBalanceShard(shard: number): void {
   const seeds = String(import.meta.env.SIM_SEEDS ?? '1,2')
     .split(',')
     .map(Number);
-  const xpShare = Number(import.meta.env.SIM_XP ?? 1);
   const only = import.meta.env.SIM_ARCH ? String(import.meta.env.SIM_ARCH).split(',') : null;
-  const endlessSec = Number(import.meta.env.SIM_ENDLESS ?? 0) * 60;
+  const endlessRounds = Number(import.meta.env.SIM_ENDLESS ?? 0);
   const jobs = ARCHETYPES.filter(
     (a) => !only || only.some((n) => a.name.toLowerCase().includes(n.toLowerCase())),
   ).flatMap((arch) => seeds.map((seed) => ({ arch, seed })));
   const lines = [
-    `Balance sim shard ${shard + 1}/${BALANCE_SHARDS} — XP share ${xpShare}; bot: ${TILES_PER_LEVEL} tiles/level, upgrade every ${UPGRADE_EVERY} levels (max L${UPGRADES.maxLevel})`,
+    `Balance sim shard ${shard + 1}/${BALANCE_SHARDS} — boss in round ${ROUNDS.bossRound}; bot: ${Math.round(UPGRADE_SHARE * 100)}% of the coins on upgrades, the rest on tiles and land`,
   ];
   jobs.forEach((job, i) => {
     if (i % BALANCE_SHARDS !== shard) return;
-    lines.push(report(job.arch, play(job.arch, job.seed, xpShare, endlessSec)));
+    lines.push(report(job.arch, play(job.arch, job.seed, endlessRounds)));
   });
   if (lines.length > 1) console.log(lines.join('\n'));
 }

@@ -9,7 +9,6 @@ import { drawCracks, drawOfflineMark, drawTile, outlineOf } from './tiles';
 /** Procedural textures (concept.md §6: no external art in the prototype). */
 export const TEX = {
   bgGrid: 'bg-grid',
-  gem: 'gem',
   shotSmall: 'shot-small',
   shotBig: 'shot-big',
   shell: 'shell',
@@ -32,7 +31,7 @@ const TILE_TEX_PX = 64;
 export const BG_GRID_SIZE = 64;
 
 export function createTextures(scene: Phaser.Scene): void {
-  if (scene.textures.exists(TEX.gem)) return;
+  if (scene.textures.exists(TEX.shotSmall)) return;
   const g = scene.make.graphics({}, false);
 
   g.fillStyle(COLORS.background, 1);
@@ -61,7 +60,6 @@ export function createTextures(scene: Phaser.Scene): void {
   // Shiny round dots (concept.md §6: like agar.io food), each in its own colour family.
   for (const [key, color, r] of [
     [TEX.enemyShot, COLORS.enemyShot, 4.5],
-    [TEX.gem, COLORS.gem, 5],
     [TEX.shotSmall, COLORS.shot, 3.5],
     [TEX.shotBig, COLORS.shotBig, 5.5],
     [TEX.shell, COLORS.shell, 5.5],

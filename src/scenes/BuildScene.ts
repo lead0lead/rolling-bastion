@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
 import { BUILD_VIEW, GRID, LINES, OFFERS, UPGRADES } from '../config/balance';
+import { ECONOMY } from '../config/economy';
 import { FX } from '../config/fx';
 import { LAND_SHAPES, type LandShape } from '../config/land';
 import { SANDBOX_POOL, type PieceDef } from '../config/pieces';
@@ -14,12 +15,16 @@ import { createTextures, TEX } from '../render/textures';
 import { COLORS, css, FONT } from '../render/palette';
 import { damageAlpha, showsCracks, SpritePool } from '../render/tiles';
 import {
-  canReroll,
+  buyLand,
+  buyRepair,
+  buyUpgrade,
+  canAfford,
   cancelHeld,
   clearSelection,
   confirmStatus,
   debugDestroyAt,
   dropAt,
+  swapAt,
   landPreviewAt,
   offerLand,
   pickLand,
@@ -28,8 +33,8 @@ import {
   pickUpAt,
   previewAt,
   previewChains,
+  offerIndexAt,
   redo,
-  reroll,
   rotate,
   scrapAt,
   scrapHeld,
@@ -38,12 +43,10 @@ import {
   selectBox,
   selectedGroups,
   startBuild,
-  chosenUpgrade,
-  toggleRepair,
   toggleSelectAt,
-  toggleUpgrade,
   undo,
   type BuildSession,
+  type ShopState,
 } from '../sim/build';
 import { findBridges } from '../sim/connectivity';
 import {
@@ -57,28 +60,24 @@ import {
   type CityState,
   type PlacedTile,
 } from '../sim/grid';
-import type { BuildResult } from '../sim/progression';
 import { rollOffers } from '../sim/progression';
 import { rollLand } from '../sim/land';
 import { createRng, type Rng } from '../sim/rng';
 import { chainBonusFor, computeSynergies, type Chain, type Synergies } from '../sim/synergies';
-import { typeLevel } from '../sim/upgrades';
+import { landPrice, pieceCost, repairAmount, upgradePrice } from '../sim/economy';
+import { canUpgrade, typeLevel } from '../sim/upgrades';
 
 /** Data for a build pause inside a run. Without it the scene runs as a sandbox. */
 export interface BuildSceneData {
   city: CityState;
   offers: PieceDef[];
-  /** Land shapes to place first (a land level-up, concept-v2.md §2.1), or null. */
-  land: LandShape[] | null;
+  /** Coins and stock callbacks; the session edits it in place (concept-v2.md §2.13). */
+  shop: ShopState;
   title: string;
-  /** HP Repair Core would heal now. */
-  coreHeal: number;
-  rerollsLeft: number;
-  /** XP refunded per placed piece scrapped. */
-  refundPerScrap: number;
-  /** New offers for a reroll (the session counts rerolls used; the run charges them at the end). */
-  reroll: () => PieceDef[];
-  done: (result: BuildResult) => void;
+  /** Label of the button that closes the shop and starts the round. */
+  closeLabel: string;
+  /** Called when the shop closes, with the coins and lands bought. */
+  done: (shop: ShopState) => void;
 }
 
 // Screen layout (1280×720).
@@ -98,6 +97,24 @@ const PAN_KEYS = {
   s: 'KeyS',
   d: 'KeyD',
 } as const;
+/** Keys that buy the n-th part of the shop list (and pick land shapes 1–3 in the land step). */
+const PART_KEYS = [
+  'Digit1',
+  'Digit2',
+  'Digit3',
+  'Digit4',
+  'Digit5',
+  'Digit6',
+  'Digit7',
+  'Digit8',
+  'Digit9',
+  'Digit0',
+  'Minus',
+];
+const PART_KEY_LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'];
+/** The shop list: one row per part, a buy area and a small upgrade button (concept-v2.md §2.13). */
+const ROWS = { x: 1010, y: 80, w: 240, h: 28, gap: 2, buyW: 168, icon: 20 };
+/** Land cards of the land step. */
 const CARDS = {
   x: 1010,
   y: 80,
@@ -109,10 +126,8 @@ const CARDS = {
   previewTop: 44,
   previewPad: 4,
 };
-/** "Upgrade <type>" strip at the bottom of a card (inset, height). */
-const UPGRADE_STRIP = { inset: 8, h: 24 };
-const REPAIR = { x: 1010, y: 508, w: 240, h: 40 };
-const REROLL = { x: 1010, y: 556, w: 240, h: 40 };
+const REPAIR = { x: 1010, y: 512, w: 240, h: 30 };
+const LAND = { x: 1010, y: 548, w: 240, h: 30 };
 const CONFIRM = { x: 1010, y: 640, w: 240, h: 56 };
 const SCRAP = { x: 30, y: 590, w: 250, h: 106 };
 /** Arc wedges in the build screen: radius in cells and opacity (direction and width only, not range). */
@@ -149,14 +164,21 @@ function inRect(r: Rect, x: number, y: number): boolean {
   return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 }
 
-function cardRect(i: number): Rect {
+/** A land card of the land step. */
+function landRect(i: number): Rect {
   return { x: CARDS.x, y: CARDS.y + i * (CARDS.h + CARDS.gap), w: CARDS.w, h: CARDS.h };
 }
 
+/** Row `i` of the shop list: the buy area on the left. */
+function cardRect(i: number): Rect {
+  return { x: ROWS.x, y: ROWS.y + i * (ROWS.h + ROWS.gap), w: ROWS.buyW, h: ROWS.h };
+}
+
+/** The upgrade button at the right end of row `i`. */
 function upgradeRect(i: number): Rect {
   const r = cardRect(i);
-  const { inset, h } = UPGRADE_STRIP;
-  return { x: r.x + inset, y: r.y + r.h - h - inset, w: r.w - 2 * inset, h };
+  const x = r.x + r.w + ROWS.gap * 2;
+  return { x, y: r.y, w: ROWS.x + ROWS.w - x, h: ROWS.h };
 }
 
 /**
@@ -169,7 +191,6 @@ export class BuildScene extends Phaser.Scene {
   private rng!: Rng;
   private city!: CityState;
   private session!: BuildSession;
-  private rerollsLeft = 0;
   /**
    * The board view is drawn by `boardCam` (main camera, limited to VIEW,
    * panned and zoomed) from `boardLayer`; everything else by a full-screen
@@ -221,7 +242,12 @@ export class BuildScene extends Phaser.Scene {
   private upgradeTexts: Phaser.GameObjects.Text[] = [];
   private confirmText!: Phaser.GameObjects.Text;
   private repairText!: Phaser.GameObjects.Text;
-  private rerollText!: Phaser.GameObjects.Text;
+  private landText!: Phaser.GameObjects.Text;
+  private coinText!: Phaser.GameObjects.Text;
+  /** Quarter turns the part in hand has been rotated, kept when the next copy is picked up. */
+  private heldTurns = 0;
+  /** What the card texts were made for; they are rebuilt when it changes. */
+  private offersSig = '';
   private reasonText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private tooltip!: Phaser.GameObjects.Text;
@@ -245,7 +271,6 @@ export class BuildScene extends Phaser.Scene {
   create(): void {
     this.rng = createRng(SEED);
     this.city = this.run?.city ?? createCity();
-    this.rerollsLeft = this.run?.rerollsLeft ?? 0;
     this.press = null;
     this.flash = null;
     this.cardTexts = [];
@@ -304,23 +329,25 @@ export class BuildScene extends Phaser.Scene {
         30,
         90,
         [
-          'New land: pick 1/2/3, R rotates, click places',
-          'Pick a piece: click or 1/2/3',
-          ...(this.run ? ['Repair Core: 4 · Reroll: 5', 'Upgrade instead: Shift+1/2/3'] : []),
-          'Move: drag (or click, then click)',
-          'Select: Shift+click · drag on empty space · Ctrl+A',
-          'Undo / redo: Ctrl+Z / Ctrl+Shift+Z',
-          'Rotate: R / right-click · Put back: Esc',
-          'Scrap: drag onto SCRAP, or X (selection or hovered)',
-          'Bridges: B · Arcs: V · Confirm: Enter',
-          'Pan: WASD / arrows / middle-drag',
-          'Zoom: wheel · Fit: F or Home · Rules: H or ?',
-          ...(DEBUG ? ['Debug: K destroys hovered tile · F2 offers land'] : []),
+          ...(this.run
+            ? [
+                'Enter: start the round',
+                'Esc: put back · R rotate · X scrap',
+                'Ctrl+Z undo · H rules',
+              ]
+            : [
+                'Pick a piece: click or 1/2/3',
+                'Confirm: Enter',
+                'R rotate · Esc put back · X scrap · Ctrl+Z undo',
+                'Drag to move · Shift+click or drag a box to select',
+                'B bridges · V arcs · F fit · H rules',
+              ]),
+          ...(DEBUG ? ['Debug: K destroys hovered tile · F2 offers land · G +100 coins'] : []),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
       )
       .setOrigin(0, 0);
-    this.statusText = this.add.text(30, 440, '', {
+    this.statusText = this.add.text(30, this.run ? 190 : 290, '', {
       ...text,
       fontSize: '14px',
       color: COLORS.textDim,
@@ -334,17 +361,25 @@ export class BuildScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.confirmText = this.add
-      .text(CONFIRM.x + CONFIRM.w / 2, CONFIRM.y + CONFIRM.h / 2, 'CONFIRM', {
-        ...text,
-        fontSize: '20px',
-      })
+      .text(
+        CONFIRM.x + CONFIRM.w / 2,
+        CONFIRM.y + CONFIRM.h / 2,
+        this.run ? this.run.closeLabel.toUpperCase() : 'CONFIRM',
+        {
+          ...text,
+          fontSize: '20px',
+        },
+      )
       .setOrigin(0.5);
     this.repairText = this.add
       .text(REPAIR.x + REPAIR.w / 2, REPAIR.y + REPAIR.h / 2, '', { ...text, fontSize: '14px' })
       .setOrigin(0.5);
-    this.rerollText = this.add
-      .text(REROLL.x + REROLL.w / 2, REROLL.y + REROLL.h / 2, '', { ...text, fontSize: '14px' })
+    this.landText = this.add
+      .text(LAND.x + LAND.w / 2, LAND.y + LAND.h / 2, '', { ...text, fontSize: '14px' })
       .setOrigin(0.5);
+    this.coinText = this.add
+      .text(1250, 28, '', { ...text, fontStyle: FONT.bold, fontSize: '24px' })
+      .setOrigin(1, 0);
     this.reasonText = this.add
       .text(CONFIRM.x + CONFIRM.w, CONFIRM.y - 8, '', {
         ...text,
@@ -375,10 +410,7 @@ export class BuildScene extends Phaser.Scene {
 
     this.adoptUi();
     this.legend = new RulesLegend(this, this.uiLayer, 640, 360);
-    this.newPause(
-      this.run?.offers ?? rollOffers(this.rng, SANDBOX_POOL, OFFERS.count),
-      this.run?.land ?? null,
-    );
+    this.newPause(this.run?.offers ?? rollOffers(this.rng, SANDBOX_POOL, OFFERS.count), null);
     this.bindInput();
   }
 
@@ -396,7 +428,7 @@ export class BuildScene extends Phaser.Scene {
   }
 
   private newPause(offers: PieceDef[], land: LandShape[] | null = null): void {
-    this.session = startBuild(this.city, offers, land);
+    this.session = startBuild(this.city, offers, land, this.run?.shop ?? null);
     this.pauseStartedAt = this.time.now;
     this.fitView();
     this.showOffers();
@@ -405,11 +437,12 @@ export class BuildScene extends Phaser.Scene {
   private showOffers(): void {
     for (const t of [...this.cardTexts, ...this.upgradeTexts]) t.destroy();
     const land = this.session.land;
+    this.offersSig = this.signature();
     if (land) {
       // The land step comes first; the piece cards replace these once it is placed.
       this.upgradeTexts = [];
       this.cardTexts = land.map((shape, i) => {
-        const r = cardRect(i);
+        const r = landRect(i);
         return this.add.text(r.x + 12, r.y + 10, `${i + 1}  Land: ${shape.name}`, {
           fontFamily: FONT.family,
           fontStyle: FONT.weight,
@@ -422,22 +455,20 @@ export class BuildScene extends Phaser.Scene {
     }
     this.cardTexts = this.session.offers.map((def, i) => {
       const r = cardRect(i);
-      return this.add.text(r.x + 12, r.y + 10, `${i + 1}  ${pieceSummary(def)}`, {
+      const price = this.run ? `  ·  ${pieceCost(def)}` : '';
+      const indent = def.cells.length === 1 ? ROWS.icon + 14 : 10;
+      const key = this.run ? `${PART_KEY_LABELS[i] ?? ''}  ` : `${i + 1}  `;
+      return this.add.text(r.x + indent, r.y + 6, `${key}${pieceSummary(def)}${price}`, {
         fontFamily: FONT.family,
         fontStyle: FONT.weight,
         fontSize: '13px',
         color: COLORS.text,
-        wordWrap: { width: CARDS.w - 24 },
       });
     });
     this.upgradeTexts = this.session.upgrades.map((type, i) => {
       const r = upgradeRect(i);
-      const label = type
-        ? `⇧${i + 1}  Upgrade ${TILES[type].name} → L${typeLevel(this.city, type) + 1}` +
-          (perkAt(type, typeLevel(this.city, type) + 1) ? ' ★' : '')
-        : '';
       return this.add
-        .text(r.x + r.w / 2, r.y + r.h / 2, label, {
+        .text(r.x + r.w / 2, r.y + r.h / 2, type ? `⇧ ${upgradePrice(this.city, type)}` : '', {
           fontFamily: FONT.family,
           fontStyle: FONT.weight,
           fontSize: '12px',
@@ -450,7 +481,14 @@ export class BuildScene extends Phaser.Scene {
     this.adoptUi();
   }
 
-  /** Run-only options (upgrades, Repair Core, reroll) show once any land step is done. */
+  /** What the card and strip texts show: they are rebuilt when this changes (a bought piece's new offer, an upgrade, a scrap). */
+  private signature(): string {
+    const s = this.session;
+    const levels = s.upgrades.map((t) => (t ? typeLevel(this.city, t) : 0));
+    return `${s.land ? 'L' : ''}|${s.offers.map((o) => o.id).join()}|${s.upgrades.join()}|${levels.join()}`;
+  }
+
+  /** Run-only options (upgrades, Repair Core, land) show once any land step is done. */
   private hasRunOptions(): boolean {
     return this.run !== null && this.session.offers.length > 0 && !this.session.land;
   }
@@ -468,7 +506,7 @@ export class BuildScene extends Phaser.Scene {
       }
       return;
     }
-    const card = this.cardAt(p.x, p.y);
+    const card = this.landAt(p.x, p.y);
     if (card >= 0 && pickLand(s, card)) playSfx(this, 'ui-pick');
     else cancelHeld(s);
   }
@@ -542,6 +580,20 @@ export class BuildScene extends Phaser.Scene {
     return -1;
   }
 
+  private landAt(x: number, y: number): number {
+    const land = this.session.land ?? [];
+    for (let i = 0; i < land.length; i++) if (inRect(landRect(i), x, y)) return i;
+    return -1;
+  }
+
+  /** The row under the point, buy or upgrade part. */
+  private rowAt(x: number, y: number): number {
+    for (let i = 0; i < this.session.offers.length; i++) {
+      if (inRect(cardRect(i), x, y) || inRect(upgradeRect(i), x, y)) return i;
+    }
+    return -1;
+  }
+
   private cardAt(x: number, y: number): number {
     for (let i = 0; i < this.session.offers.length; i++) if (inRect(cardRect(i), x, y)) return i;
     return -1;
@@ -587,6 +639,13 @@ export class BuildScene extends Phaser.Scene {
       }
     });
 
+    // A light two-finger trackpad tap (Firefox on macOS) may send only `contextmenu`, no
+    // pointerdown with the right button, so right click is driven from this event.
+    const canvas = this.game.canvas;
+    const onContextMenu = () => this.rightClick(this.input.activePointer);
+    canvas.addEventListener('contextmenu', onContextMenu);
+    this.events.once('shutdown', () => canvas.removeEventListener('contextmenu', onContextMenu));
+
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.pointer = { x: p.x, y: p.y };
       if (this.legend.visible) {
@@ -603,13 +662,24 @@ export class BuildScene extends Phaser.Scene {
         this.midDrag = { x: p.x, y: p.y, scrollX: c.scrollX, scrollY: c.scrollY };
         return;
       }
-      if (p.rightButtonDown()) {
-        this.rotateHeld();
-        return;
-      }
+      // Right click is handled by the canvas contextmenu event below.
+      if (p.rightButtonDown()) return;
       if (this.session.land && !inRect(CONFIRM, p.x, p.y)) {
         this.landPointerDown(p);
         return;
+      }
+      if (this.run && this.session.heldOrigin?.kind === 'offer') {
+        if (inRect(CONFIRM, p.x, p.y)) {
+          this.tryConfirm();
+          return;
+        }
+        // Another part in the list swaps the one in hand.
+        const row = this.cardAt(p.x, p.y);
+        if (row >= 0) {
+          this.pickPart(row);
+          this.press = { x: p.x, y: p.y, picked: true };
+          return;
+        }
       }
       if (this.session.held) {
         this.press = { x: p.x, y: p.y, picked: false };
@@ -623,13 +693,13 @@ export class BuildScene extends Phaser.Scene {
         this.tryRepair();
         return;
       }
-      if (this.hasRunOptions() && inRect(REROLL, p.x, p.y)) {
-        this.tryReroll();
+      if (this.hasRunOptions() && inRect(LAND, p.x, p.y)) {
+        this.tryLand();
         return;
       }
       const up = this.upgradeAt(p.x, p.y);
       if (up >= 0) {
-        if (toggleUpgrade(this.session, up)) playSfx(this, 'ui-toggle');
+        this.tryUpgrade(this.session.upgrades[up]);
         return;
       }
       const card = this.cardAt(p.x, p.y);
@@ -647,6 +717,7 @@ export class BuildScene extends Phaser.Scene {
       }
       const picked =
         card >= 0 ? pickOffer(this.session, card) : pickUpAt(this.session, cell.x, cell.y);
+      if (card >= 0 && !picked) this.cardRefused(card);
       if (picked) playSfx(this, 'ui-pick');
       this.press = { x: p.x, y: p.y, picked };
     });
@@ -672,6 +743,16 @@ export class BuildScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => this.onKey(e));
+  }
+
+  /** Nothing in hand: take another of the part under the pointer from the shop. Otherwise rotate. */
+  private rightClick(p: Phaser.Input.Pointer): void {
+    if (this.legend.visible) return;
+    const s = this.session;
+    const cell = this.cellAt(p.x, p.y);
+    const row = s.held || s.land ? -1 : offerIndexAt(s, cell.x, cell.y);
+    if (row >= 0) this.pickPart(row);
+    else this.rotateHeld();
   }
 
   /** Ends a box select: a drag selects the groups in the box, a plain click clears the selection. */
@@ -708,11 +789,18 @@ export class BuildScene extends Phaser.Scene {
     if (this.inView(x, y)) {
       const cell = this.cellAt(x, y);
       const groupId = s.held?.groupId;
-      if (!dropAt(s, cell.x, cell.y)) {
+      const part = this.run && s.heldOrigin?.kind === 'offer' ? s.heldOrigin.index : -1;
+      if (swapAt(s, cell.x, cell.y)) {
+        // The covered tiles are in hand now; the part stays placed.
+        playSfx(this, 'ui-place');
+        if (groupId !== undefined) this.placed = { groupId, at: this.time.now };
+      } else if (!dropAt(s, cell.x, cell.y)) {
         this.showFlash('Does not fit there');
       } else {
         playSfx(this, 'ui-place');
         if (groupId !== undefined) this.placed = { groupId, at: this.time.now };
+        // In the shop the part stays in hand, rotation included, until Esc or the coins run out.
+        if (part >= 0 && pickOffer(s, part)) rotate(s, this.heldTurns);
       }
       return;
     }
@@ -729,28 +817,22 @@ export class BuildScene extends Phaser.Scene {
     if (this.legend.visible) return;
     const s = this.session;
     const cell = this.cellAt(this.pointer.x, this.pointer.y);
-    switch (e.code) {
-      case 'Digit1':
-      case 'Digit2':
-      case 'Digit3': {
-        const index = Number(e.code.slice(-1)) - 1;
-        if (s.land) {
-          if (pickLand(s, index)) playSfx(this, 'ui-pick');
-          break;
-        }
-        if (e.shiftKey) {
-          if (this.hasRunOptions() && toggleUpgrade(s, index)) playSfx(this, 'ui-toggle');
-          break;
-        }
-        if (s.heldOrigin?.kind === 'offer') cancelHeld(s);
-        if (pickOffer(s, index)) playSfx(this, 'ui-pick');
-        break;
+    const partKey = PART_KEYS.indexOf(e.code);
+    if (partKey >= 0) {
+      if (s.land) {
+        if (partKey < 3 && pickLand(s, partKey)) playSfx(this, 'ui-pick');
+      } else {
+        this.pickPart(partKey);
       }
-      case 'Digit4':
-        if (this.hasRunOptions()) this.tryRepair();
-        break;
-      case 'Digit5':
-        if (this.hasRunOptions()) this.tryReroll();
+      return;
+    }
+    switch (e.code) {
+      case 'KeyU':
+        // Upgrade the type of the hovered tile.
+        if (this.hasRunOptions() && !s.held) {
+          const t = this.hoveredTile();
+          if (t) this.tryUpgrade(t.type);
+        }
         break;
       case 'KeyR':
         this.rotateHeld();
@@ -761,7 +843,7 @@ export class BuildScene extends Phaser.Scene {
         break;
       case 'Escape':
         if (s.held || s.heldLand) cancelHeld(s);
-        else clearSelection(s);
+        else if (s.selection.size) clearSelection(s);
         break;
       case 'KeyZ':
       case 'KeyY':
@@ -799,6 +881,10 @@ export class BuildScene extends Phaser.Scene {
         e.preventDefault();
         if (offerLand(s, rollLand(this.rng, LAND_SHAPES))) this.showOffers();
         break;
+      case 'KeyG':
+        // Debug: coins for the shop (F2 is taken by the land offer here).
+        if (DEBUG && s.shop) s.shop.coins += 100;
+        break;
       case 'KeyK':
         // Debug: destroy the hovered tile, as if enemies had.
         if (DEBUG) debugDestroyAt(s, cell.x, cell.y);
@@ -833,58 +919,78 @@ export class BuildScene extends Phaser.Scene {
     }
   }
 
-  /** Repair Core is pointless (and disabled) while the Core is at full HP. */
-  private canRepair(): boolean {
-    return (this.run?.coreHeal ?? 0) > 0 || this.session.repairChosen;
+  /** A card could not be bought: say why. */
+  private cardRefused(index: number): void {
+    const s = this.session;
+    const def = s.offers[index];
+    if (!def || s.held || s.land) return;
+    if (!canAfford(s, pieceCost(def))) this.showFlash(`Not enough coins (${pieceCost(def)})`);
   }
 
   private tryRepair(): void {
-    if (this.canRepair()) {
-      if (toggleRepair(this.session)) playSfx(this, 'ui-toggle');
-    } else {
-      this.showFlash('The Core is at full HP');
+    const s = this.session;
+    if (s.held) return;
+    if (repairAmount(this.city) <= 0) this.showFlash('The Core is at full HP');
+    else if (!canAfford(s, ECONOMY.repairPrice)) this.showFlash('Not enough coins');
+    else if (buyRepair(s)) playSfx(this, 'upgrade');
+  }
+
+  private tryLand(): void {
+    const s = this.session;
+    if (s.held || !s.shop) return;
+    if (!canAfford(s, landPrice(s.shop.landsBought))) this.showFlash('Not enough coins');
+    else if (buyLand(s)) {
+      this.showOffers();
+      playSfx(this, 'ui-toggle');
     }
   }
 
-  /** Rerolls left in the run, minus those spent (and not undone) this pause. */
-  private rerollsLeftNow(): number {
-    return this.rerollsLeft - this.session.rerollsUsed;
+  private tryUpgrade(type: TileType | null | undefined): void {
+    const s = this.session;
+    if (!type || s.held) return;
+    if (!canUpgrade(this.city, type)) {
+      this.showFlash(
+        type === 'core' ? 'The Core cannot be upgraded' : `${TILES[type].name} is at the top level`,
+      );
+    } else if (!canAfford(s, upgradePrice(this.city, type))) {
+      this.showFlash(`Not enough coins (${upgradePrice(this.city, type)})`);
+    } else if (buyUpgrade(s, type)) {
+      playSfx(this, 'upgrade');
+      this.showOffers();
+    }
   }
 
-  private tryReroll(): void {
-    if (!this.run || !canReroll(this.session)) return;
-    if (this.rerollsLeftNow() <= 0) {
-      this.showFlash('No rerolls left');
-      return;
-    }
-    reroll(this.session, this.run.reroll());
-    this.showOffers();
-    playSfx(this, 'ui-toggle');
+  /** Picks up the n-th part of the list (a part already in hand goes back first). */
+  private pickPart(index: number): void {
+    const s = this.session;
+    if (!s.offers[index] || s.land) return;
+    if (s.heldOrigin?.kind === 'offer') cancelHeld(s);
+    this.heldTurns = 0;
+    if (pickOffer(s, index)) playSfx(this, 'ui-pick');
+    else this.cardRefused(index);
   }
 
   private rotateHeld(): void {
     if (!this.session.held && !this.session.heldLand) return;
+    if (this.session.heldOrigin?.kind === 'offer') this.heldTurns = (this.heldTurns + 1) % 4;
     rotate(this.session);
     playSfx(this, 'ui-rotate');
   }
 
   private tryConfirm(): void {
     const s = this.session;
+    // A part still in hand goes back (coins refunded) instead of blocking the close.
+    if (this.run && s.heldOrigin?.kind === 'offer') cancelHeld(s);
     if (!confirmStatus(s).ok) {
       playSfx(this, 'ui-error');
       return;
     }
-    playSfx(this, chosenUpgrade(s) ? 'upgrade' : 'ui-confirm');
+    playSfx(this, 'ui-confirm');
     const durations = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
     durations.push((this.time.now - this.pauseStartedAt) / 1000);
     this.registry.set('pauseDurations', durations);
     if (this.run) {
-      this.run.done({
-        repair: s.repairChosen,
-        scrapped: s.scrapped,
-        upgrade: chosenUpgrade(s),
-        rerollsUsed: s.rerollsUsed,
-      });
+      this.run.done(this.run.shop);
       return;
     }
     this.newPause(rollOffers(this.rng, SANDBOX_POOL, OFFERS.count));
@@ -970,27 +1076,6 @@ export class BuildScene extends Phaser.Scene {
 
   /** Faint wedge showing an arc weapon's facing and arc width (concept.md §2.10). */
   private drawArc(cx: number, cy: number, cs: number, t: Pick<PlacedTile, 'type' | 'facing'>) {
-    const blade = this.syn.blades[t.type];
-    if (blade) {
-      // Saw: the blade's path (its centre line and hit width).
-      const r = (blade.orbit / GRID.cellPx) * cs;
-      const g = this.arcs;
-      g.lineStyle(((2 * blade.radius) / GRID.cellPx) * cs, TILES[t.type].color, ARC_FILL_ALPHA);
-      g.strokeCircle(cx, cy, r);
-      g.lineStyle(2 * this.px(), TILES[t.type].color, ARC_LINE_ALPHA);
-      g.strokeCircle(cx, cy, r);
-      return;
-    }
-    const thrust = this.syn.thrusts[t.type];
-    if (thrust) {
-      // Spear: the line it stabs along.
-      const a = facingAngle(t.facing);
-      const len = (thrust.reach / GRID.cellPx) * cs;
-      const g = this.arcs;
-      g.lineStyle(((thrust.width + 8) / GRID.cellPx) * cs, TILES[t.type].color, ARC_FILL_ALPHA * 2);
-      g.lineBetween(cx, cy, cx + Math.cos(a) * len, cy + Math.sin(a) * len);
-      return;
-    }
     const weapon = TILES[t.type].weapon;
     if (!weapon || weapon.arcDeg >= 360) return;
     const half = (weapon.arcDeg * Math.PI) / 360;
@@ -1267,38 +1352,30 @@ export class BuildScene extends Phaser.Scene {
   private drawCards(): void {
     const g = this.g;
     const s = this.session;
+    if (this.signature() !== this.offersSig) this.showOffers();
     if (s.land) {
       this.drawLandCards(s.land);
       return;
     }
     s.offers.forEach((def, i) => {
       const r = cardRect(i);
-      const upgraded = s.upgradeChosen === i;
-      const taken =
-        (s.offerTaken && !upgraded) || (s.heldOrigin?.kind === 'offer' && s.heldOrigin.index === i);
-      const alpha = taken ? 0.3 : 1;
+      const selected = s.heldOrigin?.kind === 'offer' && s.heldOrigin.index === i;
+      const taken = s.offerTaken || (selected && !this.run);
+      const poor = !taken && !canAfford(s, pieceCost(def));
+      const alpha = taken ? 0.3 : poor ? 0.55 : 1;
       this.cardTexts[i]?.setAlpha(alpha);
-      const hovered = !s.held && !s.offerTaken && inRect(r, this.pointer.x, this.pointer.y);
-      g.fillStyle(COLORS.panel, 1);
-      g.fillRoundedRect(r.x, r.y, r.w, r.h, 8);
-      g.lineStyle(2, hovered ? COLORS.hover : COLORS.panelBorder, 1);
-      g.strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
-
-      const w = Math.max(...def.cells.map((c) => c.x)) + 1;
-      const h = Math.max(...def.cells.map((c) => c.y)) + 1;
-      const strip =
-        s.upgrades[i] && this.hasRunOptions() ? UPGRADE_STRIP.h + UPGRADE_STRIP.inset : 0;
-      // Shrink tall pieces so the preview never runs into the upgrade strip.
-      const room = r.h - CARDS.previewTop - strip - CARDS.previewPad;
-      const cs = Math.min(CARDS.cell, Math.floor(room / h));
-      const ox = r.x + (r.w - w * cs) / 2;
-      const oy = r.y + CARDS.previewTop + (room - h * cs) / 2;
-      for (const c of def.cells) {
+      const hovered = !s.held && !taken && !poor && inRect(r, this.pointer.x, this.pointer.y);
+      g.fillStyle(selected ? COLORS.selected : COLORS.panel, 1);
+      g.fillRoundedRect(r.x, r.y, r.w, r.h, 6);
+      g.lineStyle(2, selected ? COLORS.valid : hovered ? COLORS.hover : COLORS.panelBorder, 1);
+      g.strokeRoundedRect(r.x, r.y, r.w, r.h, 6);
+      const cell = def.cells[0];
+      if (cell && def.cells.length === 1) {
         this.drawTileImage(
-          ox + c.x * cs,
-          oy + c.y * cs,
-          cs,
-          { ...c, type: c.tile, online: true },
+          r.x + 7,
+          r.y + (r.h - ROWS.icon) / 2,
+          ROWS.icon,
+          { ...cell, type: cell.tile, online: true },
           alpha,
           1,
           true,
@@ -1306,11 +1383,12 @@ export class BuildScene extends Phaser.Scene {
       }
 
       const up = this.upgradeTexts[i];
-      const showUp = !!s.upgrades[i] && this.hasRunOptions();
+      const type = s.upgrades[i];
+      const showUp = !!type && this.hasRunOptions();
       up?.setVisible(showUp);
-      if (showUp) {
-        const enabled = upgraded || (!s.offerTaken && !s.held);
-        this.drawButton(upgradeRect(i), enabled, upgraded);
+      if (type && showUp) {
+        const enabled = !s.held && canAfford(s, upgradePrice(this.city, type));
+        this.drawButton(upgradeRect(i), enabled, false);
         up?.setAlpha(enabled ? 1 : 0.4);
       }
     });
@@ -1320,7 +1398,7 @@ export class BuildScene extends Phaser.Scene {
   private drawLandCards(land: readonly LandShape[]): void {
     const g = this.g;
     land.forEach((shape, i) => {
-      const r = cardRect(i);
+      const r = landRect(i);
       const held = this.session.heldLand?.index === i;
       const hovered = inRect(r, this.pointer.x, this.pointer.y);
       g.fillStyle(held ? COLORS.selected : COLORS.panel, 1);
@@ -1376,18 +1454,20 @@ export class BuildScene extends Phaser.Scene {
 
     const runOptions = this.hasRunOptions();
     this.repairText.setVisible(runOptions);
-    this.rerollText.setVisible(runOptions);
-    if (runOptions && this.run) {
-      const repairOn = (!s.offerTaken || s.repairChosen) && !s.held && this.canRepair();
-      const rerollOn = canReroll(s) && this.rerollsLeftNow() > 0;
-      this.drawButton(REPAIR, repairOn, s.repairChosen);
-      this.drawButton(REROLL, rerollOn, false);
+    this.landText.setVisible(runOptions);
+    this.coinText.setVisible(!!s.shop);
+    if (s.shop) this.coinText.setText(`Coins ${Math.floor(s.shop.coins)}`);
+    if (runOptions && s.shop) {
+      const heal = Math.round(repairAmount(this.city));
+      const repairOn = !s.held && heal > 0 && canAfford(s, ECONOMY.repairPrice);
+      const price = landPrice(s.shop.landsBought);
+      const landOn = !s.held && canAfford(s, price);
+      this.drawButton(REPAIR, repairOn, false);
+      this.drawButton(LAND, landOn, false);
       this.repairText
-        .setText(`4  Repair Core  +${Math.round(this.run.coreHeal)} HP`)
+        .setText(`Repair Core  +${heal} HP  ·  ${ECONOMY.repairPrice}`)
         .setAlpha(repairOn ? 1 : 0.4);
-      this.rerollText
-        .setText(`5  Reroll  (${this.rerollsLeftNow()} left)`)
-        .setAlpha(rerollOn ? 1 : 0.4);
+      this.landText.setText(`Buy land  ·  ${price}`).setAlpha(landOn ? 1 : 0.4);
     }
 
     const status = confirmStatus(s);
@@ -1401,9 +1481,7 @@ export class BuildScene extends Phaser.Scene {
         : status.block === 'holding'
           ? 'Place the held piece (Esc puts it back)'
           : status.block === 'no_offer_taken'
-            ? this.run
-              ? 'Pick a piece, an upgrade or Repair Core'
-              : 'Pick one of the offered pieces'
+            ? 'Pick one of the offered pieces'
             : status.block === 'disconnected'
               ? `${status.offline} tile${status.offline === 1 ? ' is' : 's are'} not connected to the Core — reconnect or scrap`
               : '',
@@ -1421,7 +1499,7 @@ export class BuildScene extends Phaser.Scene {
 
   private updateTooltip(): void {
     const s = this.session;
-    const i = s.held || s.land ? -1 : this.cardAt(this.pointer.x, this.pointer.y);
+    const i = s.held || s.land ? -1 : this.rowAt(this.pointer.x, this.pointer.y);
     const def = s.offers[i];
     if (!def) {
       const t = this.hoveredTile();
@@ -1429,7 +1507,9 @@ export class BuildScene extends Phaser.Scene {
         this.tooltip.setVisible(false);
         return;
       }
-      this.tooltip.setText(tileDetails(this.city, this.syn, t)).setVisible(true);
+      this.tooltip
+        .setText(tileDetails(this.city, this.syn, t) + this.upgradeHint(t.type))
+        .setVisible(true);
       const { x, y } = this.pointer;
       const tw = this.tooltip.width;
       const th = this.tooltip.height;
@@ -1441,7 +1521,16 @@ export class BuildScene extends Phaser.Scene {
     }
     const r = cardRect(i);
     this.tooltip.setText(pieceDetails(def, this.city, s.upgrades[i] ?? null)).setVisible(true);
-    this.tooltip.setPosition(r.x - this.tooltip.width - 10, r.y);
+    this.tooltip.setPosition(
+      r.x - this.tooltip.width - 10,
+      Math.min(r.y, this.scale.height - this.tooltip.height - 10),
+    );
+  }
+
+  /** Last tooltip line in a run: what pressing U on this tile would buy. */
+  private upgradeHint(type: TileType): string {
+    if (!this.run || !canUpgrade(this.city, type)) return '';
+    return `\nU: upgrade ${TILES[type].name} to L${typeLevel(this.city, type) + 1}  ·  ${upgradePrice(this.city, type)} coins`;
   }
 
   /** The placed tile under the pointer in the board view, when nothing is held. */
@@ -1508,15 +1597,12 @@ export class BuildScene extends Phaser.Scene {
     const d = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
     const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
     const lines = [
-      `Board ${city.board.size} cells  ·  ${city.tiles.length} tiles  ·  speed ${Math.round(this.syn.speedFactor * 100)}%`,
-      `Undo ${this.session.history.length} · Redo ${this.session.future.length}`,
-      `Bridges view: ${this.showBridges ? 'ON' : 'off'}  ·  Arcs: ${this.showArcs ? 'ON' : 'off'}`,
+      `${city.tiles.length} tiles  ·  speed ${Math.round(this.syn.speedFactor * 100)}%`,
+      ...(this.run
+        ? []
+        : [`Undo ${this.session.history.length} · Redo ${this.session.future.length}`]),
       levelSummary(city),
       `Chains: ${this.syn.chains.length}`,
-      this.run && this.run.refundPerScrap > 0
-        ? `Scrap refund: ${this.run.refundPerScrap} XP per piece` +
-          (this.session.scrapped ? ` (${this.session.scrapped} scrapped)` : '')
-        : '',
       // How long build pauses take (a Phase 2 measurement), for debugging only.
       DEBUG && d.length ? `Pause: last ${d.at(-1)?.toFixed(1)} s · avg ${avg.toFixed(1)} s` : '',
     ];

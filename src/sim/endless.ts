@@ -1,28 +1,29 @@
 import { ENDLESS } from '../config/endless';
+import { ROUNDS } from '../config/waves';
 import type { World } from './world';
 
-/** Endless (concept-v2.md §2.11): the run goes on after the boss kill. */
+/** Round pacing and endless (concept-v2.md §2.11, §2.16): the run goes on after the boss kill, until the Core falls. */
 
-/** True once the player chose "Keep going". */
-export function isEndless(w: World): boolean {
-  return w.endlessSince !== null;
+/** The Colossus comes in the boss round, and again every `ENDLESS.bossEvery` rounds after it. */
+export function isBossRound(round: number): boolean {
+  return round >= ROUNDS.bossRound && (round - ROUNDS.bossRound) % ENDLESS.bossEvery === 0;
 }
 
-/** After the boss kill: resume the run in endless. No effect otherwise. */
-export function startEndless(w: World): void {
-  if (!w.won || isEndless(w)) return;
-  w.endlessSince = w.time;
-  w.over = false;
+/** Spawn budget of a round: grows steadily up to the boss round, then linearly (endless). */
+export function roundBudget(round: number): number {
+  const early = ROUNDS.baseBudget * ROUNDS.budgetGrowth ** (Math.min(round, ROUNDS.bossRound) - 1);
+  const late = 1 + ENDLESS.budgetPerRound * Math.max(0, round - ROUNDS.bossRound);
+  return early * late * (isBossRound(round) ? ROUNDS.bossRoundShare : 1);
 }
 
 /** Enemy HP and damage multiplier for enemies spawned now (1 before endless). */
 export function endlessFactor(w: World): number {
   if (w.endlessSince === null) return 1;
-  return ENDLESS.growthPerMinute ** ((w.time - w.endlessSince) / 60);
+  return ENDLESS.growthPerRound ** (w.round - w.endlessSince);
 }
 
-/** Game time the next Colossus returns at (null before endless); waits while one lives. */
-export function nextBossAt(w: World): number | null {
+/** Rounds until the next Colossus (0 = this round); null before endless. */
+export function roundsToBoss(w: World): number | null {
   if (w.endlessSince === null) return null;
-  return w.endlessSince + ENDLESS.bossEvery * (w.bossReturns + 1);
+  return (ENDLESS.bossEvery - ((w.round - ROUNDS.bossRound) % ENDLESS.bossEvery)) % ENDLESS.bossEvery;
 }

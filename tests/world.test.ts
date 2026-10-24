@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { GRID, LEVEL_UP, MOVE, XP } from '../src/config/balance';
+import { GRID, LEVEL_UP, MOVE, SPAWN } from '../src/config/balance';
+import { ECONOMY } from '../src/config/economy';
+import { ROUNDS } from '../src/config/waves';
 import { ENEMIES } from '../src/config/enemies';
 import { TILES } from '../src/config/tiles';
 import { damageTile, removeDead, updateProjectiles, updateWeapons } from '../src/sim/combat';
 import { updateEnemies } from '../src/sim/enemies';
 import { cellId, coreTile, tileAt, type PlacedTile } from '../src/sim/grid';
-import { addXp, applyBuildResult, collectGems, xpToNext } from '../src/sim/progression';
-import { budgetRate, spawnEnemy } from '../src/sim/spawner';
+import { addXp, applyBuildResult, xpToNext } from '../src/sim/progression';
+import { roundBudget } from '../src/sim/endless';
+import { spawnEnemy } from '../src/sim/spawner';
 import { SpatialHash } from '../src/sim/spatialHash';
 import { moveCity, step } from '../src/sim/step';
 import { cityChanged, createWorld, tileAtCell, tileCentre, type World } from '../src/sim/world';
@@ -52,10 +55,12 @@ describe('movement', () => {
 });
 
 describe('spawner', () => {
-  it('interpolates the budget between wave entries', () => {
-    expect(budgetRate(0)).toBeCloseTo(0.9);
-    expect(budgetRate(22.5)).toBeCloseTo(1.15);
-    expect(budgetRate(10_000)).toBeCloseTo(10);
+  it('round budgets grow each round up to the boss round, then linearly', () => {
+    expect(roundBudget(1)).toBe(ROUNDS.baseBudget);
+    for (let r = 2; r < ROUNDS.bossRound; r++) {
+      expect(roundBudget(r)).toBeCloseTo(roundBudget(r - 1) * ROUNDS.budgetGrowth);
+    }
+    expect(roundBudget(ROUNDS.bossRound + 1)).toBeGreaterThan(roundBudget(ROUNDS.bossRound - 1));
   });
 
   it('is deterministic for a seed', () => {
@@ -70,11 +75,11 @@ describe('spawner', () => {
     expect(a.kills).toBe(b.kills);
   });
 
-  it('scales enemy HP with game time', () => {
+  it('scales enemy HP with the round', () => {
     const w = createWorld(1);
-    w.time = 600;
+    w.round = 7;
     const e = spawnEnemy(w, 'swarmer', 0, 0);
-    expect(e.maxHp).toBeCloseTo(ENEMIES.swarmer.maxHp * 1.6);
+    expect(e.maxHp).toBeCloseTo(ENEMIES.swarmer.maxHp * (1 + 6 * SPAWN.hpGrowthPerRound));
   });
 });
 
@@ -127,8 +132,8 @@ describe('tile damage', () => {
   });
 });
 
-describe('weapons, kills and XP', () => {
-  it('the Core pistol kills a swarmer in range, which drops a gem worth XP', () => {
+describe('weapons, kills and coins', () => {
+  it('the Core pistol kills a swarmer in range, which pays its coins at once', () => {
     const w = createWorld(1);
     const core = coreTile(w.city);
     if (!core) throw new Error('no core');
@@ -144,7 +149,8 @@ describe('weapons, kills and XP', () => {
       removeDead(w);
     }
     expect(w.kills).toBe(1);
-    expect(w.gems).toHaveLength(1);
+    expect(w.coins).toBe(ECONOMY.startCoins + ENEMIES.swarmer.xp);
+    expect(w.coinsEarned).toBe(ENEMIES.swarmer.xp);
     // Credited to the Core, counting only damage up to the enemy's HP.
     expect(w.damageBy.core).toBeCloseTo(ENEMIES.swarmer.maxHp);
   });
@@ -156,19 +162,6 @@ describe('weapons, kills and XP', () => {
     gun.type = 'gatling';
     cityChanged(w);
     expect(w.cache.weapons.map((t) => t.type)).toEqual(['core']);
-  });
-
-  it('collects gems within the pickup radius of any tile', () => {
-    const w = createWorld(1);
-    const core = coreTile(w.city);
-    if (!core) throw new Error('no core');
-    const c = tileCentre(w, core);
-    const edge = c.x + GRID.cellPx / 2;
-    w.gems.push({ x: edge + XP.pickupRadius - 1, y: c.y, value: 3 });
-    w.gems.push({ x: edge + XP.pickupRadius + 5, y: c.y, value: 3 });
-    collectGems(w);
-    expect(w.xp).toBe(3);
-    expect(w.gems).toHaveLength(1);
   });
 
   it('chains level-ups and carries excess XP over', () => {

@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { LINES, MOVE, UPGRADES } from '../src/config/balance';
+import { LINES, MOVE } from '../src/config/balance';
 import { TILES, type TileType } from '../src/config/tiles';
 import { damageTile, healTiles, updateProjectiles, updateWeapons } from '../src/sim/combat';
 import { tileAt, turnFacing } from '../src/sim/grid';
 import { buffsReceived } from '../src/sim/synergies';
-import { collectGems } from '../src/sim/progression';
 import { spawnEnemy } from '../src/sim/spawner';
 import { cityChanged, createWorld, modsOf, tileCentre, type World } from '../src/sim/world';
 import { typedCity } from './helpers';
@@ -14,15 +13,13 @@ const DT = 1 / 60;
 const LEGEND: Record<string, TileType> = {
   C: 'core',
   h: 'hull',
-  p: 'plating',
   g: 'gatling',
   c: 'cannon',
   m: 'mortar',
-  s: 'saw',
+  x: 'crossbow',
   e: 'generator',
   d: 'shield',
   r: 'repair',
-  u: 'magnet',
   n: 'engine',
 };
 
@@ -96,45 +93,6 @@ describe('adjacency buffs', () => {
     expect(hull.hp).toBe(hull.maxHp);
   });
 
-  it('a Magnet pulse pulls in gems within its radius of the Magnet, once per interval', () => {
-    const w = worldOf(['u..', 'C..', '...']);
-    const pulse = TILES.magnet.pulse;
-    if (!pulse) throw new Error('no pulse');
-    const m = tileCentre(w, tile(w, 0, 0));
-    w.gems.push({ x: m.x, y: m.y - (pulse.radius - 10), value: 2 });
-    w.gems.push({ x: m.x, y: m.y - (pulse.radius + 40), value: 5 });
-    let pulses = 0;
-    for (let i = 0; i < 60 * (pulse.intervalSec * 3 + 0.5); i++) {
-      collectGems(w, DT);
-      pulses += w.events.filter((e) => e.kind === 'magnetPulse').length;
-      w.events.length = 0;
-    }
-    expect(pulses).toBe(3);
-    expect(w.xp).toBe(2);
-    expect(w.gems).toHaveLength(1);
-  });
-
-  it('Magnets keep their own timers; offline Magnets do not pulse', () => {
-    const w = worldOf(['uhu', 'C..', '..u']);
-    expect(w.cache.magnets).toHaveLength(2);
-    collectGems(w, DT);
-    const timers = [...w.magnetTimers.values()];
-    expect(timers).toHaveLength(2);
-    expect(timers[0]).not.toBeCloseTo(timers[1] as number);
-  });
-
-  it('Magnet levels widen the pulse; L3 pulses faster, L5 raises the base radius', () => {
-    const pulse = TILES.magnet.pulse;
-    if (!pulse) throw new Error('no pulse');
-    const l2 = worldOf(['u..', 'C..', '...'], { magnet: 2 }).cache.syn.magnetPulse;
-    expect(l2.radius).toBeCloseTo(pulse.radius * (1 + UPGRADES.effectPerLevel));
-    expect(l2.intervalSec).toBe(pulse.intervalSec);
-    const l3 = worldOf(['u..', 'C..', '...'], { magnet: 3 }).cache.syn.magnetPulse;
-    expect(l3.intervalSec).toBeLessThan(pulse.intervalSec);
-    const l5 = worldOf(['u..', 'C..', '...'], { magnet: 5 }).cache.syn.magnetPulse;
-    expect(l5.radius).toBeGreaterThan(pulse.radius * (1 + 4 * UPGRADES.effectPerLevel));
-  });
-
   it('Engines add speed after the size penalty', () => {
     const w = worldOf(['nn.', 'C..', '...']);
     expect(w.cache.syn.speedFactor).toBeCloseTo(1 + 2 * MOVE.engineBonus);
@@ -181,10 +139,10 @@ describe('perks', () => {
   });
 
   it('Hull L3 raises neighbour max HP and the gain is added as HP', () => {
-    const w = worldOf(['hp.', 'C..', '...'], { hull: 3 });
-    const plating = tile(w, 1, 0);
-    expect(plating.maxHp).toBeCloseTo(TILES.plating.maxHp * 1.1);
-    expect(plating.hp).toBeCloseTo(plating.maxHp);
+    const w = worldOf(['hx.', 'C..', '...'], { hull: 3 });
+    const bow = tile(w, 1, 0);
+    expect(bow.maxHp).toBeCloseTo(TILES.crossbow.maxHp * 1.1);
+    expect(bow.hp).toBeCloseTo(bow.maxHp);
   });
 
   it('Engine L5 removes the size penalty', () => {
@@ -283,7 +241,6 @@ describe('support chains', () => {
   it('other support tiles do not chain', () => {
     expect(worldOf(['ddd.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
     expect(worldOf(['rrr.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
-    expect(worldOf(['uuu.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
   });
 });
 

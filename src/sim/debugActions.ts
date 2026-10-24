@@ -1,18 +1,13 @@
 import { ENEMIES, type EnemyType } from '../config/enemies';
 import { TILES, type Facing, type TileType } from '../config/tiles';
-import { addXp, xpToNext } from './progression';
 import { spawnRing } from './spawner';
 import { cellFromId, cellId } from './grid';
 import { cityChanged, type World } from './world';
 
 /** Debug tooling (concept.md §8). Pure world mutations, bound to keys by the run scene. */
 
-export function debugLevelUp(w: World): void {
-  addXp(w, xpToNext(w.level) - w.xp);
-}
-
-export function debugAddTime(w: World, seconds: number): void {
-  w.time += seconds;
+export function debugAddCoins(w: World, amount: number): void {
+  w.coins += amount;
 }
 
 /** Spawns `count` enemies of a type on the ring; a boss type spawns once (if none is alive). */

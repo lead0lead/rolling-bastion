@@ -76,15 +76,11 @@ const MIX: TileType[] = [
   'cannon',
   'generator',
   'mortar',
-  'plating',
-  'saw',
-  'shield',
   'crossbow',
+  'shield',
   'repair',
   'flamethrower',
   'engine',
-  'spear',
-  'magnet',
 ];
 
 /**

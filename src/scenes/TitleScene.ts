@@ -41,7 +41,7 @@ const DEMO = {
 const BLOB_TYPES: EnemyType[] = ['swarmer', 'runner', 'spitter', 'sapper', 'bomber', 'brute'];
 
 /** Candy colours for the title letters, from the tile palette. */
-const LETTER_COLORS: TileType[] = ['gatling', 'cannon', 'generator', 'shield', 'plating', 'repair'];
+const LETTER_COLORS: TileType[] = ['gatling', 'cannon', 'generator', 'shield', 'hull', 'repair'];
 const TITLE = {
   text: 'Rolling Bastion',
   y: 150,

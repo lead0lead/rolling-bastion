@@ -61,8 +61,8 @@ export const SPAWN = {
   maxBankedBudget: 20,
   clusterScatter: 40,
   lineSpacing: 18,
-  /** Enemy HP grows by this fraction per minute. */
-  hpGrowthPerMinute: 0.06,
+  /** Enemy HP grows by this fraction per round after the first. */
+  hpGrowthPerRound: 0.08,
 } as const;
 
 export const ENEMY_PHYSICS = {
@@ -83,15 +83,11 @@ export const COMBAT = {
   projectileLifeFactor: 1.15,
 } as const;
 
-/** XP and levels (concept.md §2.8). */
+/** Legacy XP numbers (concept-v2.md §2.13); the run itself has no levels any more. */
 export const XP = {
   /** XP to next level = base + perLevel × level. */
   base: 5,
   perLevel: 4,
-  /** Gem pickup radius around any tile (px). */
-  pickupRadius: 24,
-  /** Live gem cap; beyond it new XP is added to an existing gem. */
-  maxGems: 400,
 } as const;
 
 export const LEVEL_UP = {
@@ -107,6 +103,10 @@ export const SIM = {
   dt: 1 / 60,
   /** Longest frame gap simulated in one go (s); avoids a spiral after tab switches. */
   maxFrame: 0.25,
+  /** Game speeds the HUD slider offers. */
+  speeds: [1, 2, 5, 10],
+  /** Above 1× a frame stops simulating after this long (ms), so a fast game slows down instead of freezing. */
+  frameBudgetMs: 12,
 } as const;
 
 /** Tile type upgrades (concept.md §2.8). */
@@ -117,7 +117,6 @@ export const UPGRADES = {
   effectPerLevel: 0.2,
   /** Hull/Plating max HP per level above 1. */
   hpPerLevel: 0.2,
-  maxLevel: 5,
 } as const;
 
 /** Weapon and support chains (concept-v2.md §2.7; filled rows/columns removed in v2). */

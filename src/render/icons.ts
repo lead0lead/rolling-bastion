@@ -33,11 +33,6 @@ export function drawIcon(
     case 'hull':
       rivets(g, s, shade);
       break;
-    case 'plating':
-      g.lineStyle(3 * s, ink, 0.85);
-      g.strokeRoundedRect(13 * s, 13 * s, 38 * s, 38 * s, 4 * s);
-      rivets(g, s, shade);
-      break;
     case 'gatling':
     case 'cannon': {
       const r = (type === 'cannon' ? 17 : 15) * s;
@@ -47,12 +42,6 @@ export function drawIcon(
       g.strokeCircle(c, c, r);
       break;
     }
-    case 'spear':
-      g.fillStyle(shade, 1);
-      g.fillCircle(c, c, 12 * s);
-      g.lineStyle(3 * s, ink, 1);
-      g.strokeCircle(c, c, 12 * s);
-      break;
     case 'flamethrower':
       // Fuel tank under the nozzle.
       g.fillStyle(shade, 1);
@@ -60,32 +49,18 @@ export function drawIcon(
       g.lineStyle(3 * s, ink, 1);
       g.strokeRoundedRect(17 * s, 17 * s, 30 * s, 30 * s, 8 * s);
       break;
-    case 'crossbow':
-      g.fillStyle(shade, 1);
-      g.fillCircle(c, c, 13 * s);
-      g.lineStyle(3 * s, ink, 1);
-      g.strokeCircle(c, c, 13 * s);
-      break;
     case 'mortar':
       g.lineStyle(4 * s, ink, 1);
       g.strokeCircle(c, c, 16 * s);
       g.fillStyle(ink, 1);
       g.fillCircle(c, c, 7 * s);
       break;
-    case 'saw': {
-      const teeth = 10;
-      const xy: number[] = [];
-      for (let i = 0; i < teeth * 2; i++) {
-        const a = (i / (teeth * 2)) * Math.PI * 2;
-        const r = i % 2 === 0 ? 23 : 16;
-        xy.push(32 + Math.cos(a) * r, 32 + Math.sin(a) * r);
-      }
-      g.fillStyle(ink, 1);
-      g.fillPoints(pts(xy), true);
+    case 'crossbow':
       g.fillStyle(shade, 1);
-      g.fillCircle(c, c, 6 * s);
+      g.fillCircle(c, c, 13 * s);
+      g.lineStyle(3 * s, ink, 1);
+      g.strokeCircle(c, c, 13 * s);
       break;
-    }
     case 'generator':
       g.fillStyle(ink, 1);
       g.fillPoints(pts([36, 10, 18, 36, 30, 36, 26, 54, 46, 26, 34, 26, 40, 10]), true);
@@ -100,17 +75,6 @@ export function drawIcon(
       g.fillStyle(ink, 1);
       g.fillRect(27 * s, 14 * s, 10 * s, 36 * s);
       g.fillRect(14 * s, 27 * s, 36 * s, 10 * s);
-      break;
-    case 'magnet':
-      g.lineStyle(8 * s, ink, 1);
-      g.beginPath();
-      g.arc(c, 30 * s, 13 * s, 0, Math.PI, false);
-      g.strokePath();
-      g.lineBetween(19 * s, 30 * s, 19 * s, 16 * s);
-      g.lineBetween(45 * s, 30 * s, 45 * s, 16 * s);
-      g.fillStyle(shade, 1);
-      g.fillRect(15 * s, 12 * s, 8 * s, 6 * s);
-      g.fillRect(41 * s, 12 * s, 8 * s, 6 * s);
       break;
     case 'engine':
       g.lineStyle(6 * s, ink, 1);
@@ -138,14 +102,13 @@ function rivets(g: Phaser.GameObjects.Graphics, s: number, color: number): void 
 }
 
 /** Barrel shapes, drawn pointing right with the pivot at the box centre. */
-export type BarrelType = 'core' | 'gatling' | 'cannon' | 'crossbow' | 'flamethrower' | 'spear';
+export type BarrelType = 'core' | 'gatling' | 'cannon' | 'crossbow' | 'flamethrower';
 export const BARREL_TYPES: readonly BarrelType[] = [
   'core',
   'gatling',
   'cannon',
   'crossbow',
   'flamethrower',
-  'spear',
 ];
 
 /** Tiles with a turning barrel (aimed weapons). */
@@ -174,17 +137,6 @@ export function drawBarrel(g: Phaser.GameObjects.Graphics, type: BarrelType, siz
     g.strokeRect(c + 24 * s, c - 8 * s, 6 * s, 16 * s);
     g.fillCircle(c, c, 11 * s);
     g.strokeCircle(c, c, 11 * s);
-  } else if (type === 'spear') {
-    // A short shaft resting on the tile with a leaf-shaped head at the front.
-    g.fillRect(c - 10 * s, c - 2.5 * s, 30 * s, 5 * s);
-    g.strokeRect(c - 10 * s, c - 2.5 * s, 30 * s, 5 * s);
-    const head = [
-      { x: c + 18 * s, y: c - 6 * s },
-      { x: c + 30 * s, y: c },
-      { x: c + 18 * s, y: c + 6 * s },
-    ];
-    g.fillPoints(head, true);
-    g.strokePoints(head, true);
   } else if (type === 'flamethrower') {
     // Short nozzle widening to a flared mouth.
     g.fillRect(c, c - 4 * s, 18 * s, 8 * s);

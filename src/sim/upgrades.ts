@@ -68,7 +68,6 @@ export function upgradeType(def: PieceDef): TileType {
 /** True if the city owns a tile of this type and it is below the max level. */
 export function canUpgrade(city: CityState, type: TileType): boolean {
   if (type === 'core') return false;
-  if (typeLevel(city, type) >= UPGRADES.maxLevel) return false;
   return city.tiles.some((t) => t.type === type);
 }
 

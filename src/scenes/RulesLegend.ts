@@ -92,7 +92,7 @@ function sections(): { rows: string[]; bridges?: boolean; text: string }[] {
         `get +${pct(step)} / +${pct(2 * step)} / +${pct(LINES.chainMaxBonus)} for ` +
         `${LINES.chainMin} / ${LINES.chainMin + 1} / ${LINES.chainMin + 2}+. Weapons gain damage. ` +
         'Generators and Engines chain too (facing ignored), boosting their own effect. ' +
-        'Mortars and Saws ignore facing.',
+        'Mortars and Crossbows ignore facing.',
     },
     {
       rows: ['dg.', 'Ceg', '.gr'],

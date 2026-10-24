@@ -1,6 +1,5 @@
 /**
- * Sound effects (concept.md §7; Phase 6 of v2 added the new weapons' and the
- * Magnet's): Kenney CC0 samples in public/sfx (see ASSETS.md). Per sound: volume (0–1, before the master volume) and the
+ * Sound effects (concept.md §7): Kenney CC0 samples in public/sfx (see ASSETS.md). Per sound: volume (0–1, before the master volume) and the
  * shortest gap between two plays (s), so frequent sounds don't machine-gun.
  */
 export const SOUNDS = {
@@ -9,9 +8,6 @@ export const SOUNDS = {
   'shot-mortar': { volume: 0.4, gap: 0.15 },
   'shot-crossbow': { volume: 0.35, gap: 0.12 },
   'shot-flame': { volume: 0.2, gap: 0.25 },
-  'spear-thrust': { volume: 0.35, gap: 0.12 },
-  'saw-hit': { volume: 0.25, gap: 0.12 },
-  'magnet-pulse': { volume: 0.5, gap: 0.5 },
   blast: { volume: 0.35, gap: 0.12 },
   bomb: { volume: 0.6, gap: 0.15 },
   'enemy-pop': { volume: 0.3, gap: 0.045 },
