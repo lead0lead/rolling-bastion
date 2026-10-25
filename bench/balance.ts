@@ -37,7 +37,7 @@ interface Cell {
   dy: number;
 }
 
-interface Archetype {
+export interface Archetype {
   name: string;
   rule: (c: Cell) => TileType | null;
   /** Types to level up, in turn. */
@@ -46,7 +46,7 @@ interface Archetype {
   melee?: boolean;
 }
 
-const ARCHETYPES: Archetype[] = [
+export const ARCHETYPES: Archetype[] = [
   {
     name: 'Gatling batteries',
     rule: (c) =>
@@ -54,27 +54,19 @@ const ARCHETYPES: Archetype[] = [
     upgrades: ['gatling', 'generator'],
   },
   {
-    name: 'Cannon lines',
-    rule: (c) =>
-      c.edge === 0 ? (c.corner ? 'hull' : 'cannon') : c.edge === 1 && c.cross ? 'shield' : 'hull',
-    upgrades: ['cannon', 'shield'],
+    name: 'Crossbow lines',
+    rule: (c) => (c.edge === 0 && !c.corner ? 'crossbow' : 'hull'),
+    upgrades: ['crossbow'],
   },
   {
-    name: 'Mortar core',
-    rule: (c) => (c.edge === 0 ? 'hull' : c.edge === 1 ? (c.cross ? 'shield' : 'hull') : 'mortar'),
-    upgrades: ['mortar', 'shield'],
+    name: 'Confetti core',
+    rule: (c) => (c.edge <= 1 ? 'hull' : 'confetti'),
+    upgrades: ['confetti'],
   },
   {
     name: 'Crossbow ring',
-    rule: (c) =>
-      c.edge === 0
-        ? c.corner
-          ? 'hull'
-          : 'crossbow'
-        : c.edge === 1 && c.cross
-          ? 'repair'
-          : 'hull',
-    upgrades: ['crossbow', 'repair'],
+    rule: (c) => (c.edge === 0 && !c.corner ? 'crossbow' : 'hull'),
+    upgrades: ['crossbow'],
   },
   {
     name: 'Crossbow + Gatling',
@@ -92,41 +84,33 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     name: 'Flame ring',
-    rule: (c) =>
-      c.edge === 0
-        ? c.corner
-          ? 'hull'
-          : 'flamethrower'
-        : c.edge === 1 && c.cross
-          ? 'repair'
-          : 'hull',
-    upgrades: ['flamethrower', 'repair'],
+    rule: (c) => (c.edge === 0 && !c.corner ? 'flamethrower' : 'hull'),
+    upgrades: ['flamethrower'],
     melee: true,
   },
   {
     name: 'Combo mix',
     rule: (c) => {
       if (c.edge === 0) {
-        if (c.corner) return 'cannon';
+        if (c.corner) return 'crossbow';
         return (c.dx + c.dy) % 2 === 0 ? 'flamethrower' : 'gatling';
       }
-      if (c.edge === 1) return c.cross ? 'generator' : 'shield';
-      return 'mortar';
+      if (c.edge === 1) return c.cross ? 'generator' : 'hull';
+      return 'confetti';
     },
-    upgrades: ['gatling', 'flamethrower', 'cannon', 'mortar'],
+    upgrades: ['gatling', 'flamethrower', 'crossbow', 'confetti'],
   },
   {
     name: 'Mixed cluster',
     rule: (c) => {
       if (c.edge === 0) {
         if (c.corner) return 'hull';
-        return Math.abs(c.dy) >= Math.abs(c.dx) ? 'gatling' : 'cannon';
+        return Math.abs(c.dy) >= Math.abs(c.dx) ? 'gatling' : 'crossbow';
       }
-      if (c.edge === 1)
-        return c.cross ? 'generator' : Math.abs(c.dx) === Math.abs(c.dy) ? 'shield' : 'hull';
-      return (c.dx + c.dy) % 2 === 0 ? 'repair' : 'mortar';
+      if (c.edge === 1) return c.cross ? 'generator' : 'hull';
+      return (c.dx + c.dy) % 2 === 0 ? 'hull' : 'confetti';
     },
-    upgrades: ['gatling', 'generator', 'cannon'],
+    upgrades: ['gatling', 'generator', 'crossbow'],
   },
 ];
 
@@ -355,7 +339,7 @@ function steer(w: World, arch: Archetype): { x: number; y: number } {
   return len > 0 ? { x: fx / len + wx, y: fy / len + wy } : { x: wx, y: wy };
 }
 
-interface Result {
+export interface Result {
   seed: number;
   round: number;
   time: number;
@@ -372,23 +356,39 @@ interface Result {
   wonAt: number | null;
   bossKills: number;
   coreLost: boolean;
+  /** Lowest Core HP share seen (tension) and mean share of coins left unspent per shop visit (fuzzer). */
+  coreMin: number;
+  idle: number;
 }
 
-function play(arch: Archetype, seed: number, endlessRounds: number): Result {
+export function play(arch: Archetype, seed: number, endlessRounds: number): Result {
   const w = createWorld(seed);
   let bossHitAt: number | null = null;
   let bossPhase = 0;
   let wonAt: number | null = null;
-  shop(w, arch);
+  let coreMin = 1;
+  let idleSum = 0;
+  let visits = 0;
+  const visit = () => {
+    const before = w.coins;
+    shop(w, arch);
+    if (before > 0) {
+      idleSum += w.coins / before;
+      visits++;
+    }
+  };
+  visit();
   while (!w.over && w.time < TIME_LIMIT && (wonAt === null || w.round <= wonAt + endlessRounds)) {
     step(w, steer(w, arch), SIM.dt);
+    const core = coreTile(w.city);
+    coreMin = Math.min(coreMin, core ? core.hp / core.maxHp : 0);
     if (w.won && wonAt === null) wonAt = w.round;
     if (w.boss || w.won) bossPhase = Math.max(bossPhase, w.bossState.phase);
     if (bossHitAt === null && (w.won || (w.boss && w.boss.hp < w.boss.maxHp))) bossHitAt = w.time;
     w.events.length = 0;
     if (w.roundClear) {
       if (wonAt !== null && w.round >= wonAt + endlessRounds) break;
-      shop(w, arch);
+      visit();
       startRound(w);
     }
   }
@@ -407,6 +407,8 @@ function play(arch: Archetype, seed: number, endlessRounds: number): Result {
     wonAt,
     bossKills: w.bossKills,
     coreLost: w.coreLostAt !== null,
+    coreMin,
+    idle: visits ? idleSum / visits : 0,
   };
 }
 

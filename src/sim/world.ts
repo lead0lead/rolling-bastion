@@ -42,7 +42,36 @@ export interface Enemy {
   burnDps: number;
   /** Multiplier on its contact, shot and bomb damage (endless growth, concept-v2.md §2.11). */
   damageFactor: number;
+  /** Coins a Thief carries off (paid back doubled if it is killed), and whether it is running away. */
+  loot: number;
+  fleeing: boolean;
+  /** Blob generation (0 = the original); for a Disco Robot, the beat count. */
+  gen: number;
   dead: boolean;
+}
+
+/** A drone from a Drone Hangar: circles the city and shoots enemies. */
+export interface Drone {
+  /** Id of the hangar that launched it. */
+  home: number;
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  /** Orbit / attack angle (rad). */
+  angle: number;
+  cooldown: number;
+}
+
+/** A black hole: drags enemies within `radius` toward its centre for `life` more seconds and deals `dps`. */
+export interface Hole {
+  x: number;
+  y: number;
+  radius: number;
+  pull: number;
+  dps: number;
+  life: number;
+  maxLife: number;
 }
 
 export interface Projectile {
@@ -90,9 +119,15 @@ export interface EnemyShot {
 }
 
 export type WorldEvent =
-  | { kind: 'tileDestroyed'; x: number; y: number; type: TileType }
+  | { kind: 'tileDestroyed'; x: number; y: number; type: TileType; brokeOff?: boolean }
+  | { kind: 'zap'; pts: number[] }
+  | { kind: 'streak'; label: string; count: number }
+  | { kind: 'domeBreak'; x: number; y: number; radius: number }
+  | { kind: 'steal'; x: number; y: number; amount: number }
+  | { kind: 'discoBeat'; x: number; y: number; strike: boolean }
+  | { kind: 'droneLaunch' }
   | { kind: 'enemyKilled'; x: number; y: number; type: EnemyType }
-  | { kind: 'blast'; x: number; y: number; radius: number; bomb: boolean }
+  | { kind: 'blast'; x: number; y: number; radius: number; bomb: boolean; source?: TileType }
   | { kind: 'levelUp'; level: number }
   | { kind: 'bossPhase'; phase: number };
 
@@ -109,6 +144,10 @@ export interface CityCache {
   maxRy: number;
   /** Online tiles that have a weapon. */
   weapons: PlacedTile[];
+  /** Online tiles by type (for the gadget tiles). */
+  online: Partial<Record<TileType, PlacedTile[]>>;
+  /** Farthest tile centre from the middle of the bounding box (px): the dome's inner radius. */
+  reach: number;
   /** Bridge tiles (Sapper targets) and their centres relative to the origin. */
   bridges: Set<number>;
   bridgeCentres: { rx: number; ry: number }[];
@@ -148,6 +187,14 @@ export interface World {
   roundClear: boolean;
   /** State of each weapon tile, by tile id. */
   weapons: Map<number, WeaponState>;
+  drones: Drone[];
+  /** Seconds until each Drone Hangar (by tile id) launches its next drone. */
+  hangarTimers: Record<number, number>;
+  holes: Hole[];
+  /** The Dome Emitters' shared bubble: HP, total max HP, game time of the last hit, and when a broken dome is back (0 = up). */
+  dome: { hp: number; max: number; hitAt: number; downUntil: number };
+  /** Kill streak: kills in a row, game time of the last, and the highest announced tier (−1 = none). */
+  streak: { count: number; at: number; tier: number };
   /** Coins to spend in the shop (concept-v2.md §2.13), and all coins picked up so far. */
   coins: number;
   coinsEarned: number;
@@ -220,6 +267,11 @@ export function createWorld(seed: number): World {
     round: 1,
     roundClear: false,
     weapons: new Map(),
+    drones: [],
+    hangarTimers: {},
+    holes: [],
+    dome: { hp: 0, max: 0, hitAt: -Infinity, downUntil: 0 },
+    streak: { count: 0, at: -Infinity, tier: -1 },
     coins: ECONOMY.startCoins,
     coinsEarned: 0,
     lastHitAt: 0,
@@ -300,12 +352,9 @@ export function modsOf(w: World, t: PlacedTile): TileMods {
 const NEUTRAL_MODS: TileMods = {
   damage: 1,
   fireRate: 1,
-  damageTaken: 1,
   contactTaken: 1,
-  heal: 0,
   regen: 0,
   maxHp: 0,
-  reflect: 0,
   chainBonus: 0,
 };
 
@@ -314,6 +363,7 @@ function buildCache(city: CityState): CityCache {
   const cells = new Map<number, PlacedTile>();
   const centres: CityCache['centres'] = [];
   const weapons: PlacedTile[] = [];
+  const online: CityCache['online'] = {};
   let minRx = Infinity;
   let maxRx = -Infinity;
   let minRy = Infinity;
@@ -332,11 +382,18 @@ function buildCache(city: CityState): CityCache {
     minRy = Math.min(minRy, ry);
     maxRy = Math.max(maxRy, ry);
     if (!t.online) continue;
+    (online[t.type] ??= []).push(t);
     if (TILES[t.type].weapon) weapons.push(t);
     if (bridges.has(t.id)) bridgeCentres.push({ rx, ry });
   }
   if (centres.length === 0) minRx = maxRx = minRy = maxRy = 0;
+  const mx = (minRx + maxRx) / 2;
+  const my = (minRy + maxRy) / 2;
+  let reach = 0;
+  for (const c of centres) reach = Math.max(reach, Math.hypot(c.rx - mx, c.ry - my));
   return {
+    online,
+    reach,
     cells,
     centres,
     minRx,

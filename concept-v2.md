@@ -62,7 +62,7 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | **v2 is live** (2.0.0): Phases 1–6 merged into `v2`, and `v2` merged into `main` on 2026-10-23 (user: "merge and deploy"), replacing v1. v1's last commit is tagged `v0.8.0`. |
-| **Current step** | **Round-based run (2026-10-24, §2.16), uncommitted:** waves instead of a clock, shop only between rounds, kills pay coins directly, Saw and Magnet removed, Crossbow back. Before that: v2 2.0.0 released to GitHub Pages. The v2 plan (§11) is complete. **Coin economy and shop** (§2.13) and the **speed slider** built on `main` locally on the user's explicit instruction (2026-10-24), not yet committed or pushed. Then (2026-10-24): enemy splitting (Brute → 3 Swarmers, new Juggernaut → 2 Brutes), logarithmic endless spawn budget and ever-shorter Colossus returns, Magnets on evenly staggered timers whose interval shrinks with level; uncommitted. |
+| **Current step** | **Casino (2026-10-24, §2.18), uncommitted:** shop roulette replaces the Wheel of Fortune tile. Before that: **Party update (2026-10-24, §2.17), uncommitted:** new tiles, enemies, break-off, kill streaks, synth sounds; untuned. Before that: **Round-based run (2026-10-24, §2.16), uncommitted:** waves instead of a clock, shop only between rounds, kills pay coins directly, Saw and Magnet removed, Crossbow back. Before that: v2 2.0.0 released to GitHub Pages. The v2 plan (§11) is complete. **Coin economy and shop** (§2.13) and the **speed slider** built on `main` locally on the user's explicit instruction (2026-10-24), not yet committed or pushed. Then (2026-10-24): enemy splitting (Brute → 3 Swarmers, new Juggernaut → 2 Brutes), logarithmic endless spawn budget and ever-shorter Colossus returns, Magnets on evenly staggered timers whose interval shrinks with level; uncommitted. |
 | **Next step** | Playtest the round-based run (§2.16) and tune it by feel. None otherwise planned. New work (endless tuning, Spear/Flamethrower vs the Colossus, other §12 items) starts with planning it with the user. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts); v2 replaced v1 on 2026-10-23. |
 | **Branches** | `main` = live game (every push redeploys), now v2. `v2` = integration branch; merged into `main` only on the user's go. New phases/spikes branch from `v2`. |
@@ -622,6 +622,55 @@ Everything below is Claude's draft, numbers to tune by playing.
   Feel not tested by a player.
 
 ---
+
+### 2.17 Party update (user request 2026-10-24, uncommitted)
+
+Funnier, crazier content, all in `src/config/gadgets.ts` (numbers) and
+`src/sim/gadgets.ts`, `streak.ts` (logic). Starting values, untuned.
+
+- **Tiles (shop, one cell each):** Tesla Coil (chain lightning, 4 jumps,
+  stuns), Confetti Mortar (blast, hit enemies stop and "dance"), Black Hole
+  Projector (every 5 s a hole drags enemies in and crushes them), Drone
+  Hangar (up to 3 drones that circle the city and shoot; Generators speed it
+  up), Dome Emitter (one city-wide bubble, 150 HP per emitter, stops enemies
+  and shots, recharges after 3 s, breaks into a shockwave and is back after
+  6 s; the Colossus ignores it), Repair Robot (patches the most damaged tile
+  anywhere, 8 HP/s, drawn as a rolling robot).
+- **Enemies:** Kamikaze Penguin (a Bomber that only hits one tile), Thief
+  (steals up to 25 coins on touching the city and runs; killed with the loot
+  it pays it back doubled; a dome blocks it), Mirror Knight (bounces shots, takes
+  10 %; lightning, flame and blasts get through), Blob (splits in two on every
+  hit, up to 3 generations), Disco Robot (mini-boss, 1500 HP, from round 8:
+  rhythmic ring that turns red before it strikes the tiles inside).
+- **Break-off:** tiles that were connected and lose their link to the Core in
+  a fight now break off and are gone for good (`breakOff` in `combat.ts`);
+  offline tiles from the shop are untouched until then.
+- **Kill streaks:** kills within 1.5 s continue a streak; "Double!" (10),
+  "Mega!" (25), "Ludicrous!" (50), "Monster!" (100), "Godlike!" (200) pop up
+  and are spoken (browser speech synthesis); coin sounds rise in pitch with the streak.
+- **Sound:** the new sounds are synthesised with Web Audio (`synth` in
+  `config/audio.ts`), no files.
+- **Dropped on request:** Fridge Cannon, Magnet enemy, UFO abductor, and
+  (after a first build) Catapult, Cheer Flag, Boxing Glove (with bowling) and
+  Rubber Duck Launcher.
+- **Removed on request (2026-10-24):** Shield Emitter, Repair Bay and the
+  plain Mortar (Dome Emitter, Repair Robot and Confetti Mortar take their
+  places), with everything only they used: damage-taken, heal and reflect
+  mods, diagonal/low-HP perks, shell salvos, buff pips for them, the
+  `shot-mortar` sound. Older sections of this document that mention them
+  describe the state before this change.
+- Saves: `SAVE_VERSION` is 3; older saves are ignored.
+
+### 2.18 Casino (user request 2026-10-24, uncommitted; replaces the Wheel of Fortune tile)
+
+The Wheel of Fortune tile is gone. Instead the shop has a **Casino** button
+(under Buy land) that opens a roulette wheel over the paused build screen
+(`CasinoScene`, `config/casino.ts`, `sim/casino.ts`). Pick a bet (5/10/25/50),
+SPIN (Enter/Space), Esc leaves. 20 segments: 12 busts, 2× ½, 4× ×2, 1× ×3,
+1× ×5 → expected payout 85 % of the bet, so the house wins in the long run;
+at most 6 spins per shop visit. The result is rolled first, the wheel then
+spins to it (marquee lights, tick sounds, coin burst, shake on ×3+). A spin
+clears the undo history, so a loss cannot be undone. Untuned.
 
 ## 3. Controls & Camera
 
@@ -1364,3 +1413,15 @@ driven once in headless Chrome (run, slider, shop buy / place / land / undo,
   the Juggernaut (cost 30) could never be afforded because the budget bank was
   capped at 20, so spawning stopped for good (seen at 20:00); the bank cap is
   now at least the next group's price.
+
+### 2026-10-24 — party update
+- Done (user request): §2.17. Tests in `tests/party.test.ts`; `PHASE3_POOL`
+  test now checks `SHOP_PIECES` for tile coverage (the old pool is legacy);
+  the world test expects break-off. Build, lint, tests and bench pass.
+- Not done: tuning (run `sim:balance`), checking the look in a browser, new
+  tiles in the `bench` weapon sims. Disco Robot is a plain enemy, not a boss
+  round with its own banner.
+- Follow-up (user): removed Shield Emitter, Repair Bay and Mortar (§2.17).
+  The legacy `PHASE3_POOL` lost the pieces using them and its "a third
+  support" weight test; the balance bot's archetypes use Hull and Confetti
+  Mortar instead. Run `sim:balance` before trusting any numbers.

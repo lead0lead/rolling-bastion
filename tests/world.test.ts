@@ -107,14 +107,17 @@ describe('enemies vs city', () => {
 });
 
 describe('tile damage', () => {
-  it('destroys tiles for good and takes cut-off tiles offline', () => {
+  it('destroys tiles for good and breaks cut-off tiles off for good too', () => {
     const w = worldWith(['Cab', '...', '...']);
     const bridge = tileAt(w.city, 1, 0);
     if (!bridge) throw new Error('no tile');
     damageTile(w, bridge, 1000);
     expect(tileAt(w.city, 1, 0)).toBeUndefined();
-    expect(tileAt(w.city, 2, 0)?.online).toBe(false);
+    expect(tileAt(w.city, 2, 0)).toBeUndefined();
     expect(w.events).toContainEqual(expect.objectContaining({ kind: 'tileDestroyed' }));
+    expect(w.events).toContainEqual(
+      expect.objectContaining({ kind: 'tileDestroyed', brokeOff: true }),
+    );
     expect(w.over).toBe(false);
   });
 

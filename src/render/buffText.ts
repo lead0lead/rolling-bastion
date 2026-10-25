@@ -26,7 +26,6 @@ export function comboLine(type: TileType): string {
   }
   return parts.join(' · ');
 }
-const num = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
 
 /**
  * Tooltip for a placed tile (concept-v2.md §3.3): name, level and HP, what it
@@ -51,15 +50,6 @@ export function tileDetails(city: CityState, syn: Synergies, t: PlacedTile): str
     if (dmg) line += `; +${pct(dmg.bonus * g.count)} damage`;
     received.push(line);
   }
-  if (got.shield) {
-    const s = got.shield;
-    const capped = mods && 1 - mods.damageTaken < s.total - 1e-9;
-    let line = `Shield −${pct(s.total)} damage taken ${times(s.count)}`;
-    if (capped && mods) line += `, capped at −${pct(1 - mods.damageTaken)}`;
-    received.push(line);
-  }
-  if (got.repair)
-    received.push(`Repair Bay +${num(got.repair.total)} HP/s ${times(got.repair.count)}`);
   if (got.hull)
     received.push(`Hull bracing +${pct(got.hull.total)} max HP ${times(got.hull.count)}`);
   const chain = longestChainAt(syn, t);

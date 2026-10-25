@@ -54,7 +54,7 @@ export function drawPieceOutlines(
 }
 
 /** Buff pips (concept-v2.md §3.3): which types get one, in corner order, and their look. */
-const PIP_TYPES: readonly BuffType[] = ['generator', 'shield', 'repair'];
+const PIP_TYPES: readonly BuffType[] = ['generator'];
 const PIP = { radius: 0.11, x0: 0.24, step: 0.26, y: 0.76, outline: 0.035 };
 
 /**

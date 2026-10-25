@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { playSfx } from '../audio/sfx';
+import { announce, playSfx } from '../audio/sfx';
 import { CAMERA, GRID, SIM } from '../config/balance';
-import { BOSS, ENEMIES, ENEMY_TYPES } from '../config/enemies';
+import { BOSS, ELITE, ENEMIES, ENEMY_TYPES } from '../config/enemies';
 import type { SoundKey } from '../config/audio';
 import { FX } from '../config/fx';
 import { SHOP_PIECES } from '../config/pieces';
@@ -11,7 +11,7 @@ import { clearSavedRun, writeSavedRun } from '../saveGame';
 import { saveWorld } from '../sim/save';
 import { barrelFor } from '../render/icons';
 import { drawBuffPips, drawPieceOutlines, drawSynergyLines } from '../render/lines';
-import { COLORS } from '../render/palette';
+import { COLORS, FONT } from '../render/palette';
 import { motion, particleCount } from '../render/effects';
 import { Particles } from '../render/particles';
 import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
@@ -27,6 +27,8 @@ import {
   debugSpawn,
 } from '../sim/debugActions';
 import { chargePath } from '../sim/boss';
+import { domeCircle, robotTarget } from '../sim/gadgets';
+import { streakCount } from '../sim/streak';
 import { facingAngle } from '../sim/grid';
 import { applyShopResult } from '../sim/progression';
 import { startRound } from '../sim/spawner';
@@ -53,10 +55,23 @@ const OFFLINE_TINT = COLORS.offline;
 const SHOT_SOUND: Partial<Record<TileType, SoundKey>> = {
   core: 'shot-gatling',
   gatling: 'shot-gatling',
-  cannon: 'shot-cannon',
-  mortar: 'shot-mortar',
   flamethrower: 'shot-flame',
   crossbow: 'shot-crossbow',
+  tesla: 'shot-tesla',
+  confetti: 'shot-confetti',
+  blackhole: 'shot-hole',
+  hangar: 'shot-hangar',
+};
+/** Look of the party update's effects (concept-v2.md §2.17). */
+const PARTY_LOOK = {
+  zapLife: 0.3,
+  zapHop: 0.09,
+  zapColor: 0xffe600,
+  holeColor: 0x6c6fd1,
+  domeColor: 0x4895ef,
+  domeEdge: 0x9fd0ff,
+  confetti: [0xff6b6b, 0x4cc9f0, 0xffe94d, 0x80ed99, 0xcdb4db, 0xf4a261],
+  strike: 0xf0405a,
 };
 /** Colour of the boss charge telegraph. */
 const CHARGE_COLOR = COLORS.charge;
@@ -161,7 +176,15 @@ export class RunScene extends Phaser.Scene {
     enemyShots: 0,
     boss: false,
     charge: 'walk' as string,
+    domeHit: -Infinity,
   };
+  private droneSprites!: SpritePool;
+  private botSprites!: SpritePool;
+  /** Holes, dome, lightning, disco rings, repair beams. */
+  private fxGfx!: Phaser.GameObjects.Graphics;
+  private zaps: { pts: number[]; at: number }[] = [];
+  /** Drawn position of each Repair Robot (it rolls to its patient), by tile id. */
+  private botPos = new Map<number, { x: number; y: number }>();
   private cam = { x: 0, y: 0, zoom: 1 };
   private debugEnemyIndex = 0;
 
@@ -223,7 +246,19 @@ export class RunScene extends Phaser.Scene {
     this.hpGfx = this.add.graphics().setDepth(2.7);
     this.particles = new Particles(this, 3.6, TEX.particleDot, TEX.particleSquare);
     this.blasts = [];
-    this.seen = { shots: {}, gems: 0, enemyShots: 0, boss: false, charge: 'walk' };
+    this.zaps = [];
+    this.botPos.clear();
+    this.droneSprites = new SpritePool(this, 3.3);
+    this.botSprites = new SpritePool(this, 2.8);
+    this.fxGfx = this.add.graphics().setDepth(3.45);
+    this.seen = {
+      shots: {},
+      gems: 0,
+      enemyShots: 0,
+      boss: false,
+      charge: 'walk',
+      domeHit: -Infinity,
+    };
 
     this.cam = { x: this.world.x, y: this.world.y, zoom: this.targetZoom() };
     this.cameras.main.setZoom(this.cam.zoom).centerOn(this.cam.x, this.cam.y);
@@ -594,7 +629,9 @@ export class RunScene extends Phaser.Scene {
             (1 - sinceHit / FX.squashTime) *
             (e === w.boss ? FX.bossSquashFactor : 1)
           : 0;
-      const base = 1 / FX.enemyTexScale;
+      // Blob halves are smaller than the texture they share with their parent.
+      const def = ENEMIES[e.type];
+      const base = (1 / FX.enemyTexScale) * (e.radius / (def.radius * (e.elite ? ELITE.scale : 1)));
       img.setScale(
         base * (1 + motion() * FX.wobbleAmount * wob + squash),
         base * (1 - motion() * FX.wobbleAmount * wob - squash),
@@ -602,17 +639,11 @@ export class RunScene extends Phaser.Scene {
     }
     this.enemySprites.end();
     this.drawStatuses(w, lerp);
+    this.drawGadgets(w, lerp, ox - w.x, oy - w.y, frameDt);
 
     this.shotSprites.begin();
     for (const p of w.projectiles) {
-      const key =
-        p.blast > 0
-          ? TEX.shell
-          : p.source === 'cannon'
-            ? TEX.shotBig
-            : p.source === 'crossbow'
-              ? TEX.bolt
-              : TEX.shotSmall;
+      const key = p.blast > 0 ? TEX.shell : p.source === 'crossbow' ? TEX.bolt : TEX.shotSmall;
       this.shotSprites
         .add(lerp(p.px, p.x), lerp(p.py, p.y), key)
         .setRotation(key === TEX.bolt ? Math.atan2(p.vy, p.vx) : 0);
@@ -639,6 +670,7 @@ export class RunScene extends Phaser.Scene {
           true,
         );
         playSfx(this, 'tile-lost');
+        if (ev.brokeOff) this.floatText('Broke off!', ev.x, ev.y, '#e0344b', 22);
       } else if (ev.kind === 'enemyKilled' && ENEMIES[ev.type].boss) {
         this.bossDeath(ev.x, ev.y);
       } else if (ev.kind === 'enemyKilled') {
@@ -658,9 +690,54 @@ export class RunScene extends Phaser.Scene {
       } else if (ev.kind === 'blast') {
         this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius, at: w.time });
         playSfx(this, ev.bomb ? 'bomb' : 'blast');
+        if (ev.source === 'confetti') {
+          this.particles.burst(
+            ev.x,
+            ev.y,
+            particleCount(26),
+            PARTY_LOOK.confetti,
+            280,
+            6,
+            0.8,
+            true,
+          );
+        }
       } else if (ev.kind === 'bossPhase') {
         if (motion()) camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
         playSfx(this, 'boss-phase');
+      } else if (ev.kind === 'zap') {
+        this.zaps.push({ pts: ev.pts, at: w.time });
+      } else if (ev.kind === 'streak') {
+        this.floatText(ev.label, this.cam.x, this.cam.y - 120 / this.cam.zoom, '#ff6b00', 56);
+        playSfx(this, 'streak');
+        announce(ev.label);
+      } else if (ev.kind === 'domeBreak') {
+        this.particles.burst(
+          ev.x,
+          ev.y,
+          particleCount(40),
+          [PARTY_LOOK.domeColor, PARTY_LOOK.domeEdge, 0xffffff],
+          520,
+          8,
+          0.9,
+          true,
+        );
+        this.blasts.push({ x: ev.x, y: ev.y, r: ev.radius * 1.5, at: w.time });
+        if (motion()) camera.shake(FX.shakeBossPhase.ms, FX.shakeBossPhase.intensity);
+        playSfx(this, 'dome-break');
+      } else if (ev.kind === 'steal') {
+        this.floatText(
+          ev.amount > 0 ? `-${ev.amount} coins!` : 'Nothing to steal',
+          ev.x,
+          ev.y,
+          '#e0344b',
+          26,
+        );
+        playSfx(this, 'steal');
+      } else if (ev.kind === 'discoBeat') {
+        playSfx(this, ev.strike ? 'disco-strike' : 'disco-beat');
+      } else if (ev.kind === 'droneLaunch') {
+        playSfx(this, 'drone-launch');
       }
     }
     w.events.length = 0;
@@ -669,6 +746,181 @@ export class RunScene extends Phaser.Scene {
     this.particles.draw();
     this.drawPulses(w, ox, oy, frameDt);
     this.drawFlames(w, ox - w.x, oy - w.y);
+  }
+
+  /** Text that pops up at a world position, drifts up and fades (sized for the current zoom). */
+  private floatText(text: string, x: number, y: number, color: string, size: number): void {
+    const z = this.cam.zoom;
+    const t = this.add
+      .text(x, y, text, {
+        fontFamily: FONT.family,
+        fontStyle: 'bold',
+        fontSize: `${size / z}px`,
+        color,
+        stroke: '#ffffff',
+        strokeThickness: 5 / z,
+      })
+      .setOrigin(0.5)
+      .setDepth(20);
+    this.tweens.add({
+      targets: t,
+      y: y - 70 / z,
+      alpha: 0,
+      scale: 1.25,
+      duration: 1100,
+      ease: 'Cubic.easeOut',
+      onComplete: () => t.destroy(),
+    });
+  }
+
+  /**
+   * The party update's gadgets (concept-v2.md §2.17): drones and Repair Robots
+   * as sprites; black holes, the dome, lightning, disco rings and repair
+   * beams on one graphics layer. (dx, dy) is the city's interpolation offset.
+   */
+  private drawGadgets(
+    w: World,
+    lerp: (a: number, b: number) => number,
+    dx: number,
+    dy: number,
+    frameDt: number,
+  ): void {
+    const g = this.fxGfx;
+    g.clear();
+
+    this.droneSprites.begin();
+    for (const d of w.drones) {
+      this.droneSprites.add(lerp(d.px, d.x), lerp(d.py, d.y), TEX.drone);
+    }
+    this.droneSprites.end();
+
+    // Repair Robots roll to the most damaged tile and patch it.
+    this.botSprites.begin();
+    const bots = w.cache.online.robot;
+    if (bots) {
+      const patient = robotTarget(w);
+      const follow = 1 - Math.exp(-6 * frameDt);
+      for (const bot of bots) {
+        const home = tileCentre(w, bot);
+        const goal = patient ? tileCentre(w, patient) : home;
+        const pos = this.botPos.get(bot.id) ?? { x: home.x, y: home.y };
+        this.botPos.set(bot.id, pos);
+        pos.x += (goal.x + dx - pos.x) * follow;
+        pos.y += (goal.y + dy - pos.y) * follow;
+        this.botSprites.add(pos.x, pos.y, TEX.robot);
+        if (patient && Math.hypot(goal.x + dx - pos.x, goal.y + dy - pos.y) < GRID.cellPx) {
+          g.lineStyle(3, 0x80ed99, 0.8);
+          g.strokeCircle(
+            goal.x + dx,
+            goal.y + dy,
+            GRID.cellPx * (0.35 + 0.15 * Math.sin(w.time * 12)),
+          );
+        }
+      }
+    }
+    this.botSprites.end();
+
+    for (const h of w.holes) {
+      const open = Math.min(1, (h.maxLife - h.life) / 0.3, h.life / 0.3);
+      g.fillStyle(0x14152b, 0.6 * open);
+      g.fillCircle(h.x, h.y, h.radius * 0.4 * open);
+      g.lineStyle(2, PARTY_LOOK.holeColor, 0.25 * open);
+      g.strokeCircle(h.x, h.y, h.radius);
+      for (let i = 0; i < 4; i++) {
+        g.lineStyle(3, PARTY_LOOK.holeColor, 0.6 * open);
+        g.beginPath();
+        const a = w.time * (3 + i) + i * 1.6;
+        g.arc(h.x, h.y, h.radius * (0.35 + 0.17 * i), a, a + 1.2, false);
+        g.strokePath();
+      }
+    }
+
+    if (w.dome.max > 0) {
+      const c = domeCircle(w);
+      const x = c.x + dx;
+      const y = c.y + dy;
+      if (w.dome.hp > 0) {
+        const flash = Math.max(0, 1 - (w.time - w.dome.hitAt) / 0.25);
+        g.fillStyle(PARTY_LOOK.domeColor, 0.07 + 0.2 * flash);
+        g.fillCircle(x, y, c.r);
+        g.lineStyle(3, PARTY_LOOK.domeColor, 0.35 + 0.5 * flash);
+        g.strokeCircle(x, y, c.r);
+        // The brighter arc is the charge left.
+        g.lineStyle(5, PARTY_LOOK.domeEdge, 0.85);
+        g.beginPath();
+        g.arc(
+          x,
+          y,
+          c.r,
+          -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * (w.dome.hp / w.dome.max),
+          false,
+        );
+        g.strokePath();
+      } else {
+        g.lineStyle(2, PARTY_LOOK.domeColor, 0.12);
+        g.strokeCircle(x, y, c.r);
+      }
+    }
+
+    // Disco rings: a dance floor around the robot that turns red before it strikes.
+    for (const e of w.enemies) {
+      const disco = ENEMIES[e.type].disco;
+      if (!disco) continue;
+      const phase = 1 - Math.min(1, Math.max(0, e.cooldown / disco.beat));
+      const strikeNext = (e.gen + 1) % 2 === 0;
+      const x = lerp(e.px, e.x);
+      const y = lerp(e.py, e.y);
+      const floor = Phaser.Display.Color.HSVToRGB((w.time * 0.6) % 1, 0.6, 1) as { color: number };
+      const color = strikeNext ? PARTY_LOOK.strike : floor.color;
+      g.fillStyle(color, strikeNext ? 0.06 + 0.2 * phase : 0.08);
+      g.fillCircle(x, y, disco.radius);
+      g.lineStyle(3, color, 0.7);
+      g.strokeCircle(x, y, disco.radius);
+      if (strikeNext) {
+        g.lineStyle(2, color, 0.9);
+        g.strokeCircle(x, y, disco.radius * phase);
+      }
+    }
+
+    // Lightning: the bolt leaps segment by segment (coil -> enemy -> enemy ...), each segment flashing briefly.
+    let n = 0;
+    for (const z of this.zaps) {
+      const age = w.time - z.at;
+      const segs = z.pts.length / 2 - 1;
+      if (age >= (segs - 1) * PARTY_LOOK.zapHop + PARTY_LOOK.zapLife) continue;
+      this.zaps[n++] = z;
+      for (let s = 0; s < segs; s++) {
+        const segAge = age - s * PARTY_LOOK.zapHop;
+        if (segAge < 0 || segAge >= PARTY_LOOK.zapLife) continue;
+        const fade = 1 - segAge / PARTY_LOOK.zapLife;
+        const x0 = z.pts[s * 2] ?? 0;
+        const y0 = z.pts[s * 2 + 1] ?? 0;
+        const x1 = z.pts[s * 2 + 2] ?? 0;
+        const y1 = z.pts[s * 2 + 3] ?? 0;
+        for (const [width, color, alpha] of [
+          [14, PARTY_LOOK.zapColor, 0.45],
+          [7, PARTY_LOOK.zapColor, 1],
+          [3, 0xfffbd0, 1],
+        ] as const) {
+          g.lineStyle(width / this.cam.zoom, color, alpha * fade);
+          g.beginPath();
+          g.moveTo(x0, y0);
+          for (let k = 1; k <= 4; k++) {
+            const f = k / 4;
+            const jitter = k === 4 ? 0 : (Math.random() - 0.5) * 30;
+            g.lineTo(
+              x0 + (x1 - x0) * f - (y1 - y0) * 0.03 * jitter,
+              y0 + (y1 - y0) * f + (x1 - x0) * 0.03 * jitter,
+            );
+          }
+          g.strokePath();
+        }
+        g.fillStyle(PARTY_LOOK.zapColor, 0.8 * fade);
+        g.fillCircle(x1, y1, (16 * fade + 4) / this.cam.zoom);
+      }
+    }
+    this.zaps.length = n;
   }
 
   /**
@@ -737,7 +989,10 @@ export class RunScene extends Phaser.Scene {
       if (n > (seen.shots[type] ?? 0)) playSfx(this, SHOT_SOUND[type] ?? 'shot-gatling');
       seen.shots[type] = n;
     }
-    if (w.tally.gems > seen.gems) playSfx(this, 'gem');
+    // Coins ring higher the longer the kill streak (the Mario coin trick).
+    if (w.tally.gems > seen.gems) playSfx(this, 'gem', Math.min(1200, streakCount(w) * 15));
+    if (w.dome.hitAt > seen.domeHit) playSfx(this, 'dome-hit');
+    seen.domeHit = w.dome.hitAt;
     if (w.tally.enemyShots > seen.enemyShots) playSfx(this, 'enemy-shot');
     seen.gems = w.tally.gems;
     seen.enemyShots = w.tally.enemyShots;

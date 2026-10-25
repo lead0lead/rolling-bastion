@@ -16,8 +16,7 @@ import { typedCity } from './helpers';
 const DT = 1 / 60;
 const LEGEND: Record<string, TileType> = {
   C: 'core',
-  m: 'mortar',
-  c: 'cannon',
+  m: 'confetti',
   h: 'hull',
   x: 'crossbow',
   f: 'flamethrower',
@@ -44,7 +43,7 @@ function run(w: World, ticks: number): void {
   }
 }
 
-describe('Mortar', () => {
+describe('Confetti Mortar', () => {
   it('leads a moving target', () => {
     const w = createWorld(1);
     const e = spawnEnemy(w, 'runner', 210, 0);
@@ -62,13 +61,13 @@ describe('Mortar', () => {
     e.hp = e.maxHp = 1e6;
     const mortar = tileAt(w.city, 0, 0);
     if (mortar) w.weapons.set(mortar.id, { cooldown: 2 * DT, aim: 0, aimTimer: 0 });
-    const flight = 330 / (TILES.mortar.weapon?.projectileSpeed ?? 1);
+    const flight = 330 / (TILES.confetti.weapon?.projectileSpeed ?? 1);
     let staggered = false;
-    for (let i = 0; i < (flight + 0.5) / DT && !w.damageBy.mortar; i++) {
+    for (let i = 0; i < (flight + 0.5) / DT && !w.damageBy.confetti; i++) {
       run(w, 1);
       staggered ||= hasStatus(w, e, 'staggered');
     }
-    expect(w.damageBy.mortar).toBeGreaterThan(0);
+    expect(w.damageBy.confetti).toBeGreaterThan(0);
     expect(staggered).toBe(true);
   });
 });

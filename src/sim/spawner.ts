@@ -164,6 +164,9 @@ export function spawnEnemy(
   e.burnUntil = e.snagUntil = e.staggerUntil = e.markUntil = -Infinity;
   e.burnDps = 0;
   e.damageFactor = endless * (def.boss ? 1 : pressureDamage(w));
+  e.loot = 0;
+  e.fleeing = false;
+  e.gen = 0;
   e.dead = false;
   w.enemies.push(e);
   return e;

@@ -9,7 +9,19 @@ export interface SpawnGroupDef {
 }
 
 export type SpawnGroupId =
-  'swarmer' | 'swarmerPack' | 'runnerLine' | 'brute' | 'juggernaut' | 'spitterTrio' | 'sapperPair' | 'bomberPack';
+  | 'swarmer'
+  | 'swarmerPack'
+  | 'runnerLine'
+  | 'brute'
+  | 'juggernaut'
+  | 'spitterTrio'
+  | 'sapperPair'
+  | 'bomberPack'
+  | 'penguinPack'
+  | 'thiefPair'
+  | 'mirrorKnight'
+  | 'blobPair'
+  | 'discoRobot';
 
 export const SPAWN_GROUPS: Record<SpawnGroupId, SpawnGroupDef> = {
   swarmer: { enemy: 'swarmer', count: [1, 1], formation: 'cluster' },
@@ -20,6 +32,11 @@ export const SPAWN_GROUPS: Record<SpawnGroupId, SpawnGroupDef> = {
   spitterTrio: { enemy: 'spitter', count: [2, 3], formation: 'cluster' },
   sapperPair: { enemy: 'sapper', count: [2, 2], formation: 'cluster' },
   bomberPack: { enemy: 'bomber', count: [3, 4], formation: 'line' },
+  penguinPack: { enemy: 'penguin', count: [4, 6], formation: 'line' },
+  thiefPair: { enemy: 'thief', count: [1, 2], formation: 'cluster' },
+  mirrorKnight: { enemy: 'mirror', count: [1, 1], formation: 'cluster' },
+  blobPair: { enemy: 'blob', count: [1, 2], formation: 'cluster' },
+  discoRobot: { enemy: 'disco', count: [1, 1], formation: 'cluster' },
 };
 
 /**
@@ -49,11 +66,34 @@ export interface RoundEntry {
 export const ROUND_GROUPS: RoundEntry[] = [
   { from: 1, groups: { swarmer: 1 } },
   { from: 2, groups: { swarmer: 1, swarmerPack: 0.4 } },
-  { from: 3, groups: { swarmer: 1, swarmerPack: 0.5, runnerLine: 0.2 } },
-  { from: 4, groups: { swarmer: 1, swarmerPack: 0.5, runnerLine: 0.2, brute: 0.15 } },
+  { from: 3, groups: { swarmer: 1, swarmerPack: 0.5, runnerLine: 0.2, blobPair: 0.25 } },
+  {
+    from: 4,
+    groups: { swarmer: 1, swarmerPack: 0.5, runnerLine: 0.2, brute: 0.15, blobPair: 0.25 },
+  },
+  {
+    from: 5,
+    groups: {
+      swarmer: 1,
+      swarmerPack: 0.5,
+      runnerLine: 0.2,
+      brute: 0.15,
+      blobPair: 0.25,
+      penguinPack: 0.2,
+    },
+  },
   {
     from: 6,
-    groups: { swarmer: 0.8, swarmerPack: 0.6, runnerLine: 0.25, brute: 0.15, spitterTrio: 0.2 },
+    groups: {
+      swarmer: 0.8,
+      swarmerPack: 0.6,
+      runnerLine: 0.25,
+      brute: 0.15,
+      spitterTrio: 0.2,
+      blobPair: 0.25,
+      penguinPack: 0.2,
+      thiefPair: 0.15,
+    },
   },
   {
     from: 7,
@@ -64,6 +104,10 @@ export const ROUND_GROUPS: RoundEntry[] = [
       brute: 0.15,
       spitterTrio: 0.2,
       sapperPair: 0.2,
+      blobPair: 0.25,
+      penguinPack: 0.2,
+      thiefPair: 0.15,
+      mirrorKnight: 0.12,
     },
   },
   {
@@ -76,6 +120,11 @@ export const ROUND_GROUPS: RoundEntry[] = [
       spitterTrio: 0.2,
       sapperPair: 0.2,
       bomberPack: 0.15,
+      blobPair: 0.25,
+      penguinPack: 0.2,
+      thiefPair: 0.15,
+      mirrorKnight: 0.15,
+      discoRobot: 0.04,
     },
   },
   {
@@ -89,6 +138,11 @@ export const ROUND_GROUPS: RoundEntry[] = [
       spitterTrio: 0.25,
       sapperPair: 0.25,
       bomberPack: 0.2,
+      blobPair: 0.3,
+      penguinPack: 0.25,
+      thiefPair: 0.2,
+      mirrorKnight: 0.2,
+      discoRobot: 0.06,
     },
   },
   {
@@ -102,6 +156,11 @@ export const ROUND_GROUPS: RoundEntry[] = [
       spitterTrio: 0.25,
       sapperPair: 0.25,
       bomberPack: 0.25,
+      blobPair: 0.3,
+      penguinPack: 0.25,
+      thiefPair: 0.2,
+      mirrorKnight: 0.2,
+      discoRobot: 0.08,
     },
   },
 ];

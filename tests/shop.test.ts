@@ -58,8 +58,6 @@ describe('stock', () => {
 describe('prices', () => {
   it('a piece costs the sum of its cells, the stronger tile the more', () => {
     expect(pieceCost(GUN)).toBe(GUN_COST);
-    expect(ECONOMY.cost.crossbow).toBeGreaterThan(ECONOMY.cost.cannon);
-    expect(ECONOMY.cost.gatling).toBeGreaterThan(ECONOMY.cost.cannon);
   });
 
   it('land and upgrades get dearer with every purchase', () => {

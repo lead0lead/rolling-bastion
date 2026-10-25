@@ -12,6 +12,7 @@ references, never edit it.
 - `npm run build` — type check + production build; `npm run preview` to serve it
 - `npm test` — Vitest (tests live in `tests/`, mirroring `src/sim/`)
 - `npm run sim:balance` / `npm run sim:weapons` / `npm run sim:endless` — balance, weapon and endless sims (parallel shards, minutes)
+- `npm run sim:fuzz` — balance fuzzer (hill-climbs costs, damage, enemy stats toward a flow target; `FUZZ_MINUTES=30` for longer, prints suggested numbers, changes no config)
 - `npm run bench` — simulation performance check
 - `npm run lint` / `npm run typecheck` / `npm run format`
 

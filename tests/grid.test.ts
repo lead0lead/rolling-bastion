@@ -24,7 +24,7 @@ const L_PIECE: PieceDef = {
   cells: [
     { x: 0, y: 0, tile: 'gatling', facing: 0 },
     { x: 0, y: 1, tile: 'hull', facing: 0 },
-    { x: 1, y: 1, tile: 'cannon', facing: 0 },
+    { x: 1, y: 1, tile: 'crossbow', facing: 0 },
   ],
 };
 
@@ -84,7 +84,7 @@ describe('rotateCells', () => {
     const r = rotateCells(L_PIECE.cells, 1);
     expect(r).toContainEqual({ x: 1, y: 0, tile: 'gatling', facing: 0 });
     expect(r).toContainEqual({ x: 0, y: 0, tile: 'hull', facing: 0 });
-    expect(r).toContainEqual({ x: 0, y: 1, tile: 'cannon', facing: 0 });
+    expect(r).toContainEqual({ x: 0, y: 1, tile: 'crossbow', facing: 0 });
   });
 });
 
@@ -110,7 +110,7 @@ describe('held groups', () => {
     const held = heldFromPiece(city, L_PIECE);
     expect(dropGroup(city, held, -3, -3)).toBe(true);
     expect(tileAt(city, -3, -3)).toMatchObject({ type: 'gatling', hp: 35, groupId: held.groupId });
-    expect(tileAt(city, -2, -2)?.type).toBe('cannon');
+    expect(tileAt(city, -2, -2)?.type).toBe('crossbow');
     expect(held.groupId).not.toBe(tileAt(city, 0, 0)?.groupId);
   });
 
@@ -126,21 +126,21 @@ describe('held groups', () => {
     const city = createCity(6);
     const fresh = heldFromPiece(city, L_PIECE);
     dropGroup(city, fresh, -2, -2);
-    const cannon = tileAt(city, -1, -1);
-    if (!cannon) throw new Error('missing cannon');
-    cannon.hp = 7;
+    const crossbow = tileAt(city, -1, -1);
+    if (!crossbow) throw new Error('missing crossbow');
+    crossbow.hp = 7;
     const lifted = liftGroup(city, fresh.groupId, { x: -1, y: -1 });
     expect(city.tiles).toHaveLength(1);
     expect(lifted?.anchor).toEqual({ x: 1, y: 1 });
-    expect(lifted?.tiles.find((t) => t.type === 'cannon')).toMatchObject({ id: cannon.id, hp: 7 });
+    expect(lifted?.tiles.find((t) => t.type === 'crossbow')).toMatchObject({ id: crossbow.id, hp: 7 });
   });
 
   it('rotates a held group with the anchor following its tile', () => {
     const city = createCity(6);
-    const held = { ...heldFromPiece(city, L_PIECE), anchor: { x: 1, y: 1 } }; // on the cannon
+    const held = { ...heldFromPiece(city, L_PIECE), anchor: { x: 1, y: 1 } }; // on the crossbow
     const r = rotateHeld(held, 1);
-    const cannon = r.tiles.find((t) => t.type === 'cannon');
-    expect({ x: cannon?.gx, y: cannon?.gy }).toEqual(r.anchor);
+    const crossbow = r.tiles.find((t) => t.type === 'crossbow');
+    expect({ x: crossbow?.gx, y: crossbow?.gy }).toEqual(r.anchor);
   });
 });
 

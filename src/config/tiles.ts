@@ -4,14 +4,16 @@ export type TileType =
   | 'core'
   | 'hull'
   | 'gatling'
-  | 'cannon'
-  | 'mortar'
   | 'crossbow'
   | 'flamethrower'
   | 'generator'
-  | 'shield'
-  | 'repair'
-  | 'engine';
+  | 'engine'
+  | 'tesla'
+  | 'confetti'
+  | 'blackhole'
+  | 'hangar'
+  | 'dome'
+  | 'robot';
 
 /** Compass facing in quarter turns clockwise from up: 0 up, 1 right, 2 down, 3 left. */
 export type Facing = 0 | 1 | 2 | 3;
@@ -47,6 +49,10 @@ export interface WeaponDef {
   targetsStrongest?: boolean;
   /** Targets the enemy with the most others inside the blast radius (needs `blastRadius`). */
   targetsDensest?: boolean;
+  /** Lightning: instead of a projectile, hits the target and jumps on to the nearest others (Tesla). */
+  chain?: { jumps: number; range: number; falloff: number };
+  /** Black hole: each shot opens a hole at the target that drags enemies in and hurts them (`damage` per second). */
+  hole?: { radius: number; pull: number; life: number };
 }
 
 /** How a weapon tile takes part in status combos (concept-v2.md §2.12). */
@@ -71,14 +77,9 @@ export type PerkEffect =
   | { kind: 'extraProjectiles'; count: number }
   | { kind: 'arc'; deg: number }
   | { kind: 'pierce'; count: number }
-  | { kind: 'blastRadius'; px: number }
-  | { kind: 'shells'; count: number; scatterPx: number }
   | { kind: 'contactArmour'; damageFactor: number }
   | { kind: 'neighbourDamage'; bonus: number }
   | { kind: 'raiseCap'; cap: number }
-  | { kind: 'diagonals' }
-  | { kind: 'reflect'; fraction: number }
-  | { kind: 'lowHpHealBoost'; belowFrac: number; factor: number }
   | { kind: 'sizePenalty'; factor: number }
   | { kind: 'neighbourHp'; bonus: number }
   | { kind: 'regen'; hpPerSec: number }
@@ -169,60 +170,6 @@ export const TILES: Record<TileType, TileDef> = {
       l5: { name: 'Swivel mount: arc 180° → 270°', effect: { kind: 'arc', deg: 270 } },
     },
   },
-  cannon: {
-    name: 'Cannon',
-    family: 'weapon',
-    maxHp: 35,
-    color: 0xff9933,
-    label: 'C',
-    description: '45 dmg, 1.2 shots/s, range 380, fires in a 90° arc, knockback.',
-    weapon: {
-      damage: 45,
-      fireRate: 1.2,
-      range: 380,
-      projectileSpeed: 460,
-      projectileRadius: 5,
-      spreadDeg: 0,
-      knockback: 220,
-      arcDeg: 90,
-    },
-    combo: { applies: 'staggered', profitsFrom: ['snagged'] },
-    perks: {
-      l3: { name: 'Wide traverse: arc 90° → 135°', effect: { kind: 'arc', deg: 135 } },
-      l5: { name: 'Sabot: shots pierce 3 enemies', effect: { kind: 'pierce', count: 3 } },
-    },
-  },
-  mortar: {
-    name: 'Mortar',
-    family: 'weapon',
-    maxHp: 35,
-    color: 0xf2762e,
-    label: 'M',
-    description:
-      '30 dmg in a 64 px blast, 0.5 shots/s, range 80–350, all directions; aims ahead at Bombers first, then the densest group.',
-    weapon: {
-      damage: 30,
-      fireRate: 0.5,
-      range: 350,
-      minRange: 80,
-      blastRadius: 64,
-      targetsDensest: true,
-      leadsTarget: true,
-      projectileSpeed: 420,
-      projectileRadius: 4,
-      spreadDeg: 0,
-      knockback: 0,
-      arcDeg: 360,
-    },
-    combo: { applies: 'staggered', profitsFrom: ['snagged'] },
-    perks: {
-      l3: { name: 'Heavy shells: blast radius 64 → 96', effect: { kind: 'blastRadius', px: 96 } },
-      l5: {
-        name: 'Salvo: 3 scattered shells per shot',
-        effect: { kind: 'shells', count: 3, scatterPx: 40 },
-      },
-    },
-  },
   crossbow: {
     name: 'Crossbow',
     family: 'weapon',
@@ -230,10 +177,10 @@ export const TILES: Record<TileType, TileDef> = {
     color: 0xe0a43a,
     label: 'X',
     description:
-      'Shoots Bombers first, then the toughest enemy in range: 120 dmg bolt, 0.6 shots/s, range 520, all directions.',
+      'Shoots Bombers first, then the toughest enemy in range: 120 dmg bolt, 0.53 shots/s, range 520, all directions.',
     weapon: {
       damage: 120,
-      fireRate: 0.6,
+      fireRate: 0.53,
       range: 520,
       projectileSpeed: 800,
       projectileRadius: 4,
@@ -289,38 +236,6 @@ export const TILES: Record<TileType, TileDef> = {
       l5: { name: 'Surge: fire rate cap +75% → +125%', effect: { kind: 'raiseCap', cap: 1.25 } },
     },
   },
-  shield: {
-    name: 'Shield Emitter',
-    family: 'support',
-    maxHp: 30,
-    color: 0x2ec4d6,
-    label: '◇',
-    description: 'Neighbours take −40% damage (cap −60%).',
-    support: { amount: 0.4, cap: 0.6 },
-    perks: {
-      l3: { name: 'Wide field: also covers diagonal neighbours', effect: { kind: 'diagonals' } },
-      l5: {
-        name: 'Feedback: shielded tiles return 25% of contact damage',
-        effect: { kind: 'reflect', fraction: 0.25 },
-      },
-    },
-  },
-  repair: {
-    name: 'Repair Bay',
-    family: 'support',
-    maxHp: 30,
-    color: 0x86e05a,
-    label: '+',
-    description: 'Heals neighbours 3 HP/s.',
-    support: { amount: 3 },
-    perks: {
-      l3: { name: 'Drones: also heals diagonal neighbours', effect: { kind: 'diagonals' } },
-      l5: {
-        name: 'Triage: double healing on tiles below 50% HP',
-        effect: { kind: 'lowHpHealBoost', belowFrac: 0.5, factor: 2 },
-      },
-    },
-  },
   engine: {
     name: 'Engine',
     family: 'support',
@@ -335,5 +250,100 @@ export const TILES: Record<TileType, TileDef> = {
       },
       l5: { name: 'Overdrive: no size speed penalty', effect: { kind: 'sizePenalty', factor: 0 } },
     },
+  },
+
+  tesla: {
+    name: 'Tesla Coil',
+    family: 'weapon',
+    maxHp: 35,
+    color: 0xffe94d,
+    label: 'Z',
+    description:
+      'Lightning: 9 dmg, 1.5 shots/s, range 240; jumps to 4 more enemies (−20% each) and stuns them.',
+    weapon: {
+      damage: 9,
+      fireRate: 1.5,
+      range: 240,
+      projectileSpeed: 0,
+      projectileRadius: 0,
+      spreadDeg: 0,
+      knockback: 0,
+      arcDeg: 360,
+      chain: { jumps: 4, range: 110, falloff: 0.8 },
+    },
+    combo: { applies: 'staggered', profitsFrom: ['snagged'] },
+  },
+  confetti: {
+    name: 'Confetti Mortar',
+    family: 'weapon',
+    maxHp: 35,
+    color: 0xf4a261,
+    label: '✦',
+    description:
+      'Party shell: 10 dmg in a 72 px blast, 0.7 shots/s, range 70–340. Hit enemies stop and dance.',
+    weapon: {
+      damage: 10,
+      fireRate: 0.7,
+      range: 340,
+      minRange: 70,
+      blastRadius: 72,
+      targetsDensest: true,
+      leadsTarget: true,
+      projectileSpeed: 380,
+      projectileRadius: 4,
+      spreadDeg: 0,
+      knockback: 0,
+      arcDeg: 360,
+    },
+    combo: { applies: 'staggered' },
+  },
+  blackhole: {
+    name: 'Black Hole',
+    family: 'weapon',
+    maxHp: 35,
+    color: 0x4a4e8c,
+    label: '●',
+    description:
+      'Every 5 s opens a hole in the densest group (range 380): drags enemies in for 2.5 s and crushes them for 40 dmg/s.',
+    weapon: {
+      damage: 40,
+      fireRate: 0.2,
+      range: 380,
+      blastRadius: 110,
+      targetsDensest: true,
+      projectileSpeed: 0,
+      projectileRadius: 0,
+      spreadDeg: 0,
+      knockback: 0,
+      arcDeg: 360,
+      hole: { radius: 110, pull: 260, life: 2.5 },
+    },
+  },
+  hangar: {
+    name: 'Drone Hangar',
+    family: 'support',
+    maxHp: 40,
+    color: 0x4cc9f0,
+    label: '✈',
+    description:
+      'Launches a drone every 6 s (up to 3) that circles the city and shoots nearby enemies. Generators speed it up, levels hit harder.',
+  },
+  dome: {
+    name: 'Dome Emitter',
+    family: 'support',
+    maxHp: 30,
+    color: 0x4895ef,
+    label: '◠',
+    description:
+      'Wraps the whole city in an energy dome (150 HP per emitter) that stops enemies and shots, recharges when left alone and bursts into a shockwave when it breaks.',
+  },
+  robot: {
+    name: 'Repair Robot',
+    family: 'support',
+    maxHp: 30,
+    color: 0x80ed99,
+    label: '☺',
+    description:
+      'A little robot rolls to the most damaged tile anywhere in the city and patches it, 8 HP/s.',
   },
 };

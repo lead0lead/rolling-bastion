@@ -1,5 +1,17 @@
 export type EnemyType =
-  'swarmer' | 'runner' | 'brute' | 'juggernaut' | 'spitter' | 'sapper' | 'bomber' | 'colossus';
+  | 'swarmer'
+  | 'runner'
+  | 'brute'
+  | 'juggernaut'
+  | 'spitter'
+  | 'sapper'
+  | 'bomber'
+  | 'penguin'
+  | 'thief'
+  | 'mirror'
+  | 'blob'
+  | 'disco'
+  | 'colossus';
 
 /** Keeps its distance and shoots the nearest tile (Spitter). */
 export interface RangedDef {
@@ -45,6 +57,14 @@ export interface EnemyDef {
   split?: { into: EnemyType; count: number };
   /** Walks to the nearest bridge tile instead of the nearest tile (Sapper). */
   targetsBridges?: boolean;
+  /** Steals up to `steal` coins on touching the city, then runs off; killed with the loot it pays it back doubled (Thief). */
+  thief?: { steal: number; fleeSpeed: number };
+  /** Bounces projectiles back instead of taking their damage (Mirror Knight). */
+  mirror?: boolean;
+  /** Splits in two on every hit that doesn't kill it, each half with half the HP and 80% of the size (Blob). */
+  splitsOnHit?: { maxGen: number; minHp: number };
+  /** Dances: every `beat` s a ring of `radius` px around it pulses, and every other beat it strikes the tiles inside for `damage` (Disco Robot). */
+  disco?: { beat: number; radius: number; damage: number };
   /**
    * The boss: one at a time, no HP growth over time, no knockback, and too big
    * for the spatial hash queries (handled separately).
@@ -135,6 +155,61 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     cost: 2.5,
     color: 0xd62839,
     bomb: { damage: 40, radiusCells: 1 },
+  },
+  penguin: {
+    name: 'Kamikaze Penguin',
+    maxHp: 14,
+    speed: 105,
+    contactDps: 0,
+    xp: 3,
+    radius: 8,
+    cost: 1.5,
+    color: 0xb5446e,
+    bomb: { damage: 30, radiusCells: 0 },
+  },
+  thief: {
+    name: 'Thief',
+    maxHp: 40,
+    speed: 85,
+    contactDps: 0,
+    xp: 4,
+    radius: 8,
+    cost: 3,
+    color: 0xff8fab,
+    thief: { steal: 25, fleeSpeed: 130 },
+  },
+  mirror: {
+    name: 'Mirror Knight',
+    maxHp: 90,
+    speed: 50,
+    contactDps: 12,
+    xp: 8,
+    radius: 12,
+    cost: 6,
+    color: 0xd8b4e2,
+    mirror: true,
+  },
+  blob: {
+    name: 'Blob',
+    maxHp: 40,
+    speed: 55,
+    contactDps: 6,
+    xp: 4,
+    radius: 11,
+    cost: 3,
+    color: 0xe0559b,
+    splitsOnHit: { maxGen: 3, minHp: 5 },
+  },
+  disco: {
+    name: 'Disco Robot',
+    maxHp: 1500,
+    speed: 40,
+    contactDps: 20,
+    xp: 40,
+    radius: 22,
+    cost: 35,
+    color: 0xa23bd4,
+    disco: { beat: 0.7, radius: 150, damage: 16 },
   },
   colossus: {
     name: 'Colossus',

@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { BOSS, ENEMIES } from '../config/enemies';
 import { SIM } from '../config/balance';
-import { PRESSURE } from '../config/pressure';
 import { COLORS, FONT } from '../render/palette';
 import { coreTile } from '../sim/grid';
 import { settings } from '../settings';
@@ -148,7 +147,7 @@ export class HudScene extends Phaser.Scene {
     this.level.setText(`Coins ${Math.floor(w.coins)}`);
     this.drawSpeed(ui);
     this.info.setText(
-      `Threat ${Math.round((w.pressure / PRESSURE.max) * 100)}%  ·  Board ${w.city.board.size}  ·  Tiles ${w.city.tiles.length}  ·  Speed ${Math.round(w.cache.syn.speedFactor * 100)}%\nLeft ${w.enemies.length + (w.spawn.done ? 0 : 1)}  ·  Kills ${w.kills}${endlessLine(w)}`,
+      `Kills ${w.kills}${endlessLine(w)}`,
     );
 
     const core = coreTile(w.city);
@@ -160,10 +159,11 @@ export class HudScene extends Phaser.Scene {
     g.fillRect(x, CORE_BAR.y - CORE_BAR.h, CORE_BAR.w * frac, CORE_BAR.h);
     this.coreText.setText(`Core ${Math.ceil(core?.hp ?? 0)} / ${Math.round(core?.maxHp ?? 0)}`);
 
-    const boss = w.boss;
+    // The Disco Robot gets the boss bar too (the first live one if there are several).
+    const boss = w.boss ?? w.enemies.find((e) => !e.dead && ENEMIES[e.type].disco);
     this.bossText.setVisible(!!boss);
     if (boss) {
-      const enraged = bossEnraged(w);
+      const enraged = boss === w.boss && bossEnraged(w);
       const bx = 640 - BOSS_BAR.w / 2;
       g.fillStyle(COLORS.barBack, 1);
       g.fillRect(bx, BOSS_BAR.y, BOSS_BAR.w, BOSS_BAR.h);

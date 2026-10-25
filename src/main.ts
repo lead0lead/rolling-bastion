@@ -3,6 +3,7 @@ import { COLORS, css, FONT } from './render/palette';
 import { settings, updateSettings } from './settings';
 import { BootScene } from './scenes/BootScene';
 import { BuildScene } from './scenes/BuildScene';
+import { CasinoScene } from './scenes/CasinoScene';
 import { HudScene } from './scenes/HudScene';
 import { PauseScene } from './scenes/PauseScene';
 import { RunScene } from './scenes/RunScene';
@@ -44,6 +45,7 @@ new Phaser.Game({
     RunScene,
     HudScene,
     BuildScene,
+    CasinoScene,
     PauseScene,
     SettingsScene,
     SummaryScene,

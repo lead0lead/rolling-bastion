@@ -9,7 +9,7 @@ import { cityChanged, createWorld, type World, type WeaponState } from './world'
  */
 
 /** Bump when the saved shape changes; older saves are then ignored. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** Keys of `World` that are not copied as they are. */
 const SPECIAL = [

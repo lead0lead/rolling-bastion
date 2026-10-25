@@ -10,10 +10,11 @@ import { drawCracks, drawOfflineMark, drawTile, outlineOf } from './tiles';
 export const TEX = {
   bgGrid: 'bg-grid',
   shotSmall: 'shot-small',
-  shotBig: 'shot-big',
   shell: 'shell',
   /** Crossbow bolt, drawn pointing right (rotated to its flight direction). */
   bolt: 'bolt',
+  drone: 'drone',
+  robot: 'robot',
   enemy: (type: string, elite = false) => `enemy-${type}${elite ? '-elite' : ''}`,
   /** Colossus look per phase (1 = the plain enemy texture). */
   boss: (phase: number) => (phase <= 1 ? 'enemy-colossus' : `enemy-colossus-p${phase}`),
@@ -61,7 +62,6 @@ export function createTextures(scene: Phaser.Scene): void {
   for (const [key, color, r] of [
     [TEX.enemyShot, COLORS.enemyShot, 4.5],
     [TEX.shotSmall, COLORS.shot, 3.5],
-    [TEX.shotBig, COLORS.shotBig, 5.5],
     [TEX.shell, COLORS.shell, 5.5],
   ] as const) {
     const size = Math.ceil(r * 2 + 4);
@@ -78,6 +78,32 @@ export function createTextures(scene: Phaser.Scene): void {
   g.fillTriangle(16, 0, 24, 4.5, 16, 9);
   g.strokeTriangle(16, 0, 24, 4.5, 16, 9);
   g.generateTexture(TEX.bolt, 25, 9);
+  g.clear();
+
+  // Drone: a round body with two rotors.
+  g.lineStyle(2, COLORS.ink, 1);
+  g.lineBetween(1, 5, 15, 5);
+  g.lineBetween(1, 5, 1, 7);
+  g.lineBetween(15, 5, 15, 7);
+  g.fillStyle(0x4cc9f0, 1);
+  g.fillCircle(8, 9, 5.5);
+  g.strokeCircle(8, 9, 5.5);
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(8, 9, 2);
+  g.generateTexture(TEX.drone, 16, 16);
+  g.clear();
+
+  // Repair robot: a little box with a screen face.
+  g.fillStyle(0x80ed99, 1);
+  g.fillRoundedRect(1, 3, 18, 14, 4);
+  g.lineStyle(2, COLORS.ink, 1);
+  g.strokeRoundedRect(1, 3, 18, 14, 4);
+  g.fillStyle(COLORS.ink, 1);
+  g.fillCircle(7, 9, 2);
+  g.fillCircle(13, 9, 2);
+  g.fillRect(7, 13, 6, 1.5);
+  g.lineBetween(10, 3, 10, 0);
+  g.generateTexture(TEX.robot, 20, 20);
   g.clear();
 
   // White particle shapes, tinted per particle.
@@ -171,6 +197,65 @@ function drawEnemy(
   }
 
   switch (type) {
+    case 'penguin':
+      // White belly, orange beak.
+      g.fillStyle(0xffffff, 1);
+      g.fillEllipse(c, c + r * 0.38, r * 1.1, r * 1.0);
+      g.fillStyle(0xff9f1c, 1);
+      g.fillTriangle(c - r * 0.16, c + r * 0.1, c + r * 0.16, c + r * 0.1, c, c + r * 0.34);
+      break;
+    case 'thief':
+      // Bandit mask over the eyes and a coin-bag grin.
+      g.fillStyle(ink, 1);
+      g.fillRect(c - r * 0.78, eyeY - eyeR * 1.2, r * 1.56, eyeR * 2.1);
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(c - eyeX, eyeY, eyeR * 0.7);
+      g.fillCircle(c + eyeX, eyeY, eyeR * 0.7);
+      g.lineStyle(r * 0.1, ink, 1);
+      g.lineBetween(c - r * 0.3, c + r * 0.5, c + r * 0.3, c + r * 0.5);
+      break;
+    case 'mirror':
+      // Visor and a shine across the armour.
+      g.fillStyle(0xffffff, 0.55);
+      g.fillPoints(
+        toPoints([
+          c - r * 0.6,
+          c - r * 0.7,
+          c - r * 0.25,
+          c - r * 0.8,
+          c + r * 0.15,
+          c + r * 0.3,
+          c - r * 0.2,
+          c + r * 0.45,
+        ]),
+        true,
+      );
+      g.fillStyle(ink, 1);
+      g.fillRect(c - r * 0.5, c + r * 0.38, r, r * 0.12);
+      break;
+    case 'blob':
+      // Goofy open grin.
+      g.fillStyle(ink, 1);
+      g.slice(c, c + r * 0.3, r * 0.34, 0, Math.PI, false);
+      g.fillPath();
+      break;
+    case 'disco':
+      // Mirror-ball sparkle, antenna and a wide grin.
+      g.fillStyle(0xffffff, 0.8);
+      for (const [x, y] of [
+        [-0.6, -0.6],
+        [0.62, -0.5],
+        [0.55, 0.55],
+        [-0.55, 0.5],
+      ] as const) {
+        g.fillRect(c + x * r - r * 0.06, c + y * r - r * 0.06, r * 0.12, r * 0.12);
+      }
+      g.lineStyle(r * 0.1, ink, 1);
+      g.lineBetween(c, c - r, c, c - r * 1.25);
+      g.fillStyle(COLORS.bridge, 1);
+      g.fillCircle(c, c - r * 1.28, r * 0.14);
+      g.lineBetween(c - r * 0.4, c + r * 0.4, c + r * 0.4, c + r * 0.4);
+      break;
     case 'spitter':
       // O-mouth.
       g.fillStyle(ink, 1);

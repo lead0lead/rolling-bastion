@@ -1,13 +1,8 @@
 import { MOVE } from '../config/balance';
 import { updateBoss } from './boss';
-import {
-  healTiles,
-  removeDead,
-  updateBurns,
-  updateProjectiles,
-  updateWeapons,
-} from './combat';
+import { healTiles, removeDead, updateBurns, updateProjectiles, updateWeapons } from './combat';
 import { updateEnemies } from './enemies';
+import { healByRobots, updateGadgets } from './gadgets';
 import { updatePressure } from './pressure';
 import { updateSpawner } from './spawner';
 import type { World } from './world';
@@ -28,10 +23,12 @@ export function step(w: World, input: MoveInput, dt: number): void {
   updateEnemies(w, dt);
   if (w.over) return;
   updatePressure(w, dt);
+  updateGadgets(w, dt);
   updateWeapons(w, dt);
   updateProjectiles(w, dt);
   updateBurns(w, dt);
   healTiles(w, dt);
+  healByRobots(w, dt);
   removeDead(w);
   // Everything spawned and dead: the round is won, time to shop (the boss win ends the run first).
   if (w.spawn.done && w.enemies.length === 0 && !w.over) w.roundClear = true;

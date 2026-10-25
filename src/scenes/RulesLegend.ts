@@ -19,8 +19,6 @@ const CHARS: Record<string, TileType> = {
   C: 'core',
   g: 'gatling',
   e: 'generator',
-  d: 'shield',
-  r: 'repair',
   h: 'hull',
   H: 'hull',
   f: 'flamethrower',
@@ -81,8 +79,6 @@ function comboText(): string {
 
 function sections(): { rows: string[]; bridges?: boolean; text: string }[] {
   const gen = TILES.generator.support;
-  const shield = TILES.shield.support;
-  const repair = TILES.repair.support;
   const step = LINES.chainBonusStep;
   return [
     {
@@ -92,14 +88,13 @@ function sections(): { rows: string[]; bridges?: boolean; text: string }[] {
         `get +${pct(step)} / +${pct(2 * step)} / +${pct(LINES.chainMaxBonus)} for ` +
         `${LINES.chainMin} / ${LINES.chainMin + 1} / ${LINES.chainMin + 2}+. Weapons gain damage. ` +
         'Generators and Engines chain too (facing ignored), boosting their own effect. ' +
-        'Mortars and Crossbows ignore facing.',
+        'Crossbows ignore facing.',
     },
     {
-      rows: ['dg.', 'Ceg', '.gr'],
+      rows: ['hg.', 'Ceg', '.gh'],
       text:
         `Neighbour buffs: Generators give the 4 tiles next to them +${pct(gen?.amount ?? 0)} fire rate ` +
-        `(cap +${pct(gen?.cap ?? 0)}), Shield Emitters −${pct(shield?.amount ?? 0)} damage taken ` +
-        `(cap −${pct(shield?.cap ?? 0)}), Repair Bays ${repair?.amount ?? 0} HP/s. ` +
+        `(cap +${pct(gen?.cap ?? 0)}). ` +
         'A coloured pip per buff type shows what a tile gets. Hover a tile for the numbers.',
     },
     {
@@ -107,7 +102,8 @@ function sections(): { rows: string[]; bridges?: boolean; text: string }[] {
       bridges: true,
       text:
         'Connected or useless: every tile must link to the Core. A bridge (ringed; B shows all) ' +
-        'holds other tiles on, and losing it cuts them off. Offline tiles (grey) do nothing.',
+        'holds other tiles on: lose it in a fight and everything it held breaks off for good. ' +
+        'Offline tiles (grey) do nothing.',
     },
     {
       rows: ['gfC'],

@@ -44,6 +44,8 @@ export type HeldOrigin =
 export interface ShopState {
   coins: number;
   landsBought: number;
+  /** Casino spins this visit (not undoable). */
+  spins?: number;
 }
 
 /** State of one build pause (concept.md §2.3). */

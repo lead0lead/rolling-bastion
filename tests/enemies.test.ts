@@ -3,8 +3,9 @@ import { SPAWN } from '../src/config/balance';
 import { ELITE, ENEMIES } from '../src/config/enemies';
 import { ECONOMY } from '../src/config/economy';
 import { ROUND_GROUPS, SPAWN_GROUPS } from '../src/config/waves';
-import { TILES, type TileType } from '../src/config/tiles';
+import type { TileType } from '../src/config/tiles';
 import { removeDead } from '../src/sim/combat';
+import { updateGadgets } from '../src/sim/gadgets';
 import { updateEnemies } from '../src/sim/enemies';
 import { tileAt } from '../src/sim/grid';
 import { spawnEnemy, spawnRing, updateSpawner } from '../src/sim/spawner';
@@ -12,7 +13,7 @@ import { cityChanged, createWorld, tileCentre, type World } from '../src/sim/wor
 import { typedCity } from './helpers';
 
 const DT = 1 / 60;
-const LEGEND: Record<string, TileType> = { C: 'core', h: 'hull', d: 'shield', f: 'flamethrower' };
+const LEGEND: Record<string, TileType> = { C: 'core', h: 'hull', d: 'dome', f: 'flamethrower' };
 
 function worldOf(rows: string[]): World {
   const w = createWorld(1);
@@ -60,7 +61,7 @@ describe('Spitter', () => {
     expect(core.hp).toBeLessThan(core.maxHp);
   });
 
-  it('shots are reduced by Shield Emitters', () => {
+  it('shots are absorbed by the dome', () => {
     const w = worldOf(['...', 'dC.', '...']);
     const core = tile(w, 1, 1);
     const c = tileCentre(w, core);
@@ -77,8 +78,10 @@ describe('Spitter', () => {
       life: 1,
       dead: false,
     });
+    updateGadgets(w, DT);
     for (let i = 0; i < 30; i++) updateEnemies(w, DT);
-    expect(core.hp).toBeCloseTo(core.maxHp - 10 * (1 - (TILES.shield.support?.amount ?? 0)));
+    expect(core.hp).toBe(core.maxHp);
+    expect(w.dome.hp).toBeCloseTo(w.dome.max - 10);
     expect(w.enemyShots).toHaveLength(0);
   });
 });

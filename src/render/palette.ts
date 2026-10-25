@@ -40,7 +40,6 @@ export const COLORS = {
   ink: 0x2b2f3a,
   /** Player shots, Mortar shells, enemy shots (own colour families). */
   shot: 0xffd23f,
-  shotBig: 0xff9f1c,
   shell: 0x8d5a2b,
   enemyShot: 0xe5383b,
   blast: 0xff9f1c,

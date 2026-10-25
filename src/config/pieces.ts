@@ -45,14 +45,16 @@ function piece(
 const L = {
   h: 'hull',
   g: 'gatling',
-  c: 'cannon',
-  m: 'mortar',
   x: 'crossbow',
   f: 'flamethrower',
   e: 'generator',
-  d: 'shield',
-  r: 'repair',
   n: 'engine',
+  t: 'tesla',
+  k: 'confetti',
+  o: 'blackhole',
+  a: 'hangar',
+  y: 'dome',
+  i: 'robot',
 } as const satisfies Record<string, TileType>;
 
 /** The shop's stock (concept-v2.md §2.13): every tile type except the Core, one cell each, always on sale. */
@@ -68,28 +70,20 @@ export const SANDBOX_POOL: PieceDef[] = [
   piece('mono-hull', ['h'], L),
   piece('domino-hull', ['hh'], L),
   piece('i3-gatling', ['ggg'], L),
-  piece('l3-cannon', ['c.', 'hh'], L),
   piece('i4-gatling', ['hggh'], L),
   piece('o-generator', ['ge', 'gg'], L),
-  piece('t-cannon', ['hch', '.h.'], L),
   piece('z-crossbow', ['.hx', 'xh.'], L),
-  piece('z-shield', ['gd.', '.hg'], L),
   piece('l-gatling', ['g.', 'g.', 'ge'], L),
-  piece('t-mortar', ['rmr', '.h.'], L),
   piece('l3-engine', ['n.', 'hh'], L),
   piece('l3-flamer', ['f.', 'hf'], L),
 ];
 
-/** Phase 2 pool (concept.md §4.2): Gatling and Cannon pieces plus pure Hull. */
+/** Phase 2 pool (concept.md §4.2): Gatling pieces plus pure Hull. */
 export const PHASE2_POOL: PieceDef[] = [
   piece('domino-gatling', ['gh'], L),
   piece('l3-gatling', ['g.', 'hg'], L),
   piece('i4-gatling', ['hggh'], L),
   piece('t-gatling', ['ggg', '.h.'], L),
-  piece('domino-cannon', ['ch'], L),
-  piece('l3-cannon', ['c.', 'hh'], L),
-  piece('t-cannon', ['hch', '.h.'], L),
-  piece('s-cannon', ['.ch', 'hc.'], L),
   piece('mono-hull', ['h'], L, 0.5),
   piece('domino-hull', ['hh'], L, 0.5),
   piece('i3-hull', ['hhh'], L, 0.5),
@@ -109,12 +103,8 @@ export const PHASE3_POOL: PieceDef[] = [
   piece('domino-gatling', ['gh'], L),
   piece('l3-gatling', ['g.', 'hg'], L),
   piece('i3-gatling', ['ggg'], L, 0.6),
-  piece('t-cannon', ['hch', '.h.'], L),
-  piece('s-cannon', ['.ch', 'hc.'], L, 0.8),
-  piece('l3-mortar', ['m.', 'hh'], L, 0.8),
   piece('domino-crossbow', ['xh'], L, 0.8),
   piece('i4-gatling', ['hggh'], L, 0.6),
-  piece('l4-cannon', ['c.', 'c.', 'hh'], L, 0.6),
   piece('domino-flamer', ['fh'], L, 0.8),
   piece('l3-flamer', ['f.', 'hh'], L, 0.6),
   // Structure
@@ -122,15 +112,9 @@ export const PHASE3_POOL: PieceDef[] = [
   piece('o-hull', ['hh', 'hh'], L, 0.3),
   // Support
   piece('domino-generator', ['eg'], L, 0.8),
-  piece('domino-shield', ['dh'], L, 0.8),
-  piece('l3-repair', ['r.', 'hh'], L, 0.8),
   piece('domino-engine', ['nh'], L, 0.8),
-  piece('z4-shield', ['dh.', '.hg'], L, 0.6),
-  piece('j4-repair', ['.r', '.h', 'hh'], L, 0.5),
   // Pentominoes, from 4:00
   piece('i5-gatling', ['hgggh'], L, 0.6, PENTOMINO_TIME),
-  piece('t5-cannon', ['ccc', '.h.', '.h.'], L, 0.5, PENTOMINO_TIME),
-  piece('u5-mortar', ['h.h', 'mmm'], L, 0.5, PENTOMINO_TIME),
   piece('x5-generator', ['.g.', 'geg', '.g.'], L, 0.4, PENTOMINO_TIME),
   piece('p5-gatling', ['eg', 'gg', 'h.'], L, 0.4, PENTOMINO_TIME),
 ];

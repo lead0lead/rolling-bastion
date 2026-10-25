@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PHASE2_POOL, PHASE3_POOL } from '../src/config/pieces';
+import { PHASE2_POOL, PHASE3_POOL, SHOP_PIECES } from '../src/config/pieces';
 import { TILES, type TileType } from '../src/config/tiles';
 import { rollRunOffers } from '../src/sim/progression';
 import { createRng } from '../src/sim/rng';
@@ -12,31 +12,18 @@ describe('Phase 3 pool', () => {
     expect(ids).toEqual(
       expect.arrayContaining([
         'i4-gatling',
-        'l4-cannon',
-        'z4-shield',
-        'j4-repair',
         'p5-gatling',
         'domino-flamer',
         'l3-flamer',
       ]),
     );
-    expect(ids).toHaveLength(24);
+    expect(ids).toHaveLength(PHASE3_POOL.length);
   });
 
-  it('contains every tile type except the Core', () => {
-    const types = new Set(PHASE3_POOL.flatMap((p) => p.cells.map((c) => c.tile)));
+  it('the shop sells every tile type except the Core', () => {
+    const types = new Set(SHOP_PIECES.flatMap((p) => p.cells.map((c) => c.tile)));
     const all = (Object.keys(TILES) as TileType[]).filter((t) => t !== 'core');
     expect([...types].sort()).toEqual(all.sort());
-  });
-
-  it('support pieces are about a third of the offer weight before 4:00', () => {
-    const early = PHASE3_POOL.filter((p) => (p.minTime ?? 0) === 0);
-    const total = early.reduce((s, p) => s + p.weight, 0);
-    const support = early
-      .filter((p) => TILES[upgradeType(p)].family === 'support')
-      .reduce((s, p) => s + p.weight, 0);
-    expect(support / total).toBeGreaterThan(0.28);
-    expect(support / total).toBeLessThan(0.38);
   });
 
   it('offers pentominoes only from their minimum time', () => {

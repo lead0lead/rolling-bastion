@@ -17,6 +17,7 @@
     "format:check": "prettier --check .",
     "sim:balance": "vitest run -c vitest.sim.config.ts --silent=false balance",
     "sim:weapons": "vitest run -c vitest.sim.config.ts --silent=false weapons",
+    "sim:fuzz": "vitest run -c vitest.sim.config.ts --silent=false fuzz",
     "sim:endless": "SIM_ENDLESS=12 vitest run -c vitest.sim.config.ts --silent=false balance"
   },
   "dependencies": {

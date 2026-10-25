@@ -128,6 +128,7 @@ const CARDS = {
 };
 const REPAIR = { x: 1010, y: 512, w: 240, h: 30 };
 const LAND = { x: 1010, y: 548, w: 240, h: 30 };
+const CASINO_BTN = { x: 1010, y: 584, w: 240, h: 30 };
 const CONFIRM = { x: 1010, y: 640, w: 240, h: 56 };
 const SCRAP = { x: 30, y: 590, w: 250, h: 106 };
 /** Arc wedges in the build screen: radius in cells and opacity (direction and width only, not range). */
@@ -243,6 +244,7 @@ export class BuildScene extends Phaser.Scene {
   private confirmText!: Phaser.GameObjects.Text;
   private repairText!: Phaser.GameObjects.Text;
   private landText!: Phaser.GameObjects.Text;
+  private casinoText!: Phaser.GameObjects.Text;
   private coinText!: Phaser.GameObjects.Text;
   /** Quarter turns the part in hand has been rotated, kept when the next copy is picked up. */
   private heldTurns = 0;
@@ -330,19 +332,8 @@ export class BuildScene extends Phaser.Scene {
         90,
         [
           ...(this.run
-            ? [
-                'Enter: start the round',
-                'Esc: put back · R rotate · X scrap',
-                'Ctrl+Z undo · H rules',
-              ]
-            : [
-                'Pick a piece: click or 1/2/3',
-                'Confirm: Enter',
-                'R rotate · Esc put back · X scrap · Ctrl+Z undo',
-                'Drag to move · Shift+click or drag a box to select',
-                'B bridges · V arcs · F fit · H rules',
-              ]),
-          ...(DEBUG ? ['Debug: K destroys hovered tile · F2 offers land · G +100 coins'] : []),
+            ? ['Enter: start the round', 'R rotate · X scrap · H rules']
+            : ['Pick a piece: click or 1/2/3', 'R rotate · X scrap · H rules']),
         ].join('\n'),
         { ...text, fontSize: '14px', color: COLORS.textDim, lineSpacing: 6 },
       )
@@ -376,6 +367,12 @@ export class BuildScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.landText = this.add
       .text(LAND.x + LAND.w / 2, LAND.y + LAND.h / 2, '', { ...text, fontSize: '14px' })
+      .setOrigin(0.5);
+    this.casinoText = this.add
+      .text(CASINO_BTN.x + CASINO_BTN.w / 2, CASINO_BTN.y + CASINO_BTN.h / 2, 'Casino 🎰', {
+        ...text,
+        fontSize: '14px',
+      })
       .setOrigin(0.5);
     this.coinText = this.add
       .text(1250, 28, '', { ...text, fontStyle: FONT.bold, fontSize: '24px' })
@@ -697,6 +694,10 @@ export class BuildScene extends Phaser.Scene {
         this.tryLand();
         return;
       }
+      if (this.hasRunOptions() && inRect(CASINO_BTN, p.x, p.y)) {
+        this.openCasino();
+        return;
+      }
       const up = this.upgradeAt(p.x, p.y);
       if (up >= 0) {
         this.tryUpgrade(this.session.upgrades[up]);
@@ -933,6 +934,14 @@ export class BuildScene extends Phaser.Scene {
     if (repairAmount(this.city) <= 0) this.showFlash('The Core is at full HP');
     else if (!canAfford(s, ECONOMY.repairPrice)) this.showFlash('Not enough coins');
     else if (buyRepair(s)) playSfx(this, 'upgrade');
+  }
+
+  private openCasino(): void {
+    if (this.session.held || this.session.land) return;
+    playSfx(this, 'ui-toggle');
+    this.scene.launch('Casino', { session: this.session });
+    this.scene.bringToTop('Casino');
+    this.scene.pause();
   }
 
   private tryLand(): void {
@@ -1455,6 +1464,7 @@ export class BuildScene extends Phaser.Scene {
     const runOptions = this.hasRunOptions();
     this.repairText.setVisible(runOptions);
     this.landText.setVisible(runOptions);
+    this.casinoText.setVisible(runOptions);
     this.coinText.setVisible(!!s.shop);
     if (s.shop) this.coinText.setText(`Coins ${Math.floor(s.shop.coins)}`);
     if (runOptions && s.shop) {
@@ -1464,6 +1474,7 @@ export class BuildScene extends Phaser.Scene {
       const landOn = !s.held && canAfford(s, price);
       this.drawButton(REPAIR, repairOn, false);
       this.drawButton(LAND, landOn, false);
+      this.drawButton(CASINO_BTN, true, false);
       this.repairText
         .setText(`Repair Core  +${heal} HP  ·  ${ECONOMY.repairPrice}`)
         .setAlpha(repairOn ? 1 : 0.4);
@@ -1594,18 +1605,7 @@ export class BuildScene extends Phaser.Scene {
 
   private updateStatus(): void {
     const city = this.city;
-    const d = (this.registry.get('pauseDurations') as number[] | undefined) ?? [];
-    const avg = d.length ? d.reduce((a, b) => a + b, 0) / d.length : 0;
-    const lines = [
-      `${city.tiles.length} tiles  ·  speed ${Math.round(this.syn.speedFactor * 100)}%`,
-      ...(this.run
-        ? []
-        : [`Undo ${this.session.history.length} · Redo ${this.session.future.length}`]),
-      levelSummary(city),
-      `Chains: ${this.syn.chains.length}`,
-      // How long build pauses take (a Phase 2 measurement), for debugging only.
-      DEBUG && d.length ? `Pause: last ${d.at(-1)?.toFixed(1)} s · avg ${avg.toFixed(1)} s` : '',
-    ];
+    const lines = [levelSummary(city)];
     if (this.flash && this.time.now < this.flash.until) lines.push('', this.flash.text);
     this.statusText.setText(lines.join('\n'));
   }
@@ -1650,7 +1650,7 @@ function pieceDetails(def: PieceDef, city: CityState, upgrade: TileType | null):
     const t = TILES[type];
     const level = typeLevel(city, type);
     const combo = comboLine(type);
-    return `${n}× ${t.name} L${level} — ${t.maxHp} HP\n   ${t.description}${combo ? `\n   ${combo}` : ''}`;
+    return `${n}× ${t.name} L${level}\n   ${t.description}${combo ? `\n   ${combo}` : ''}`;
   });
   if (upgrade) {
     const next = typeLevel(city, upgrade) + 1;
@@ -1679,7 +1679,7 @@ function pieceDetails(def: PieceDef, city: CityState, upgrade: TileType | null):
   return lines.join('\n');
 }
 
-/** "Levels: Gatling 3 · Cannon 2" for every type above level 1, or ''. */
+/** "Levels: Gatling 3 · Crossbow 2" for every type above level 1, or ''. */
 function levelSummary(city: CityState): string {
   const up = (Object.keys(TILES) as TileType[]).filter((t) => typeLevel(city, t) > 1);
   return up.length

@@ -47,8 +47,8 @@ export function levelHpBonus(city: CityState, type: TileType): number {
 
 /**
  * The tile type an "Upgrade" on this piece would level: the type with the
- * most cells, preferring anything over Hull (a Cannon + 3 Hull piece
- * upgrades Cannons).
+ * most cells, preferring anything over Hull (a Flamethrower + 3 Hull piece
+ * upgrades Flamethrowers).
  */
 export function upgradeType(def: PieceDef): TileType {
   const counts = new Map<TileType, number>();
