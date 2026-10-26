@@ -17,11 +17,30 @@ references, never edit it.
 - `npm run lint` / `npm run typecheck` / `npm run format`
 
 ## Rules (summary of concept-v2.md §10 and concept.md §9–§10)
+
+- **No direct work on `main`** — every push to `main` redeploys the live
+  game. Work happens on `v2` (the integration branch) and branches from it;
+  `v2` is merged into `main` only on the user's explicit go.
+- Work only on the next unfinished spike or phase (concept-v2.md §11); stop
+  at the end of each and hand the build to the user. The v2 plan (Phases
+  1–6) is complete; new work starts with planning it with the user.
+- Spikes: `v2-spike-<letter>-<topic>` from `v2`, quick and throwaway (logic in
+  scenes, hard-coded numbers and missing tests are fine; the build and type
+  check must still pass). Never merged; kept ideas are rebuilt in phases.
+- Phases: `v2-phase-N-<topic>` from `v2`, merged into `v2` after the user has
+  tried them. `v2` must always build and run.
+- In phases: one commit per step; build, type check, lint and tests must pass
+  first. Imperative short subject lines.
+- Never change the git author identity. No history rewrites unless asked.
+- `src/sim/` is pure TypeScript with **no Phaser imports** (lint-enforced).
+  Fixed 60 Hz timestep, seeded RNG (`src/sim/rng.ts`) for all gameplay
+  randomness, all tuning numbers in `src/config/` — no magic numbers in logic.
+- Ask before adding any library not listed in concept.md §9.
+- Decisions about feel and taste belong to the user; hand over a build instead
+  of judging it. Report changed tuning values.
 - Three failed fix attempts on the same problem → stop and report. Never weaken
   tests, type checks or lint rules to get past an error.
 - Keep concept-v2.md current: update §0 after each step that changes project
   state; at spike/phase end and session end update §0, the session log, the
   affected sections and open questions. Commit doc updates with the code they
   describe.
-
-macOS-sed mag das \n nicht; nehme stattdessen Edit.
