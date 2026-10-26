@@ -107,12 +107,14 @@ describe('build session', () => {
     expect(tileAt(s.city, -1, -2)?.type).toBe('gatling');
   });
 
-  it('keeps the Core fixed: it can be neither moved nor scrapped', () => {
+  it('moves the Core but never scraps it', () => {
     const s = session();
     expect(scrapAt(s, 0, 0)).toBe(false);
-    expect(pickUpAt(s, 0, 0)).toBe(false);
-    expect(s.held).toBeNull();
-    expect(tileAt(s.city, 0, 0)?.type).toBe('core');
+    expect(pickUpAt(s, 0, 0)).toBe(true);
+    expect(scrapHeld(s)).toBe(false);
+    expect(dropAt(s, 1, 1)).toBe(true);
+    expect(tileAt(s.city, 0, 0)).toBeUndefined();
+    expect(tileAt(s.city, 1, 1)?.type).toBe('core');
   });
 
   it('scraps placed groups for good', () => {
@@ -185,26 +187,29 @@ describe('build session: selection', () => {
   const group = (s: ReturnType<typeof startBuild>, x: number, y: number) =>
     tileAt(s.city, x, y)?.groupId as number;
 
-  it('Shift+click toggles groups but never the Core', () => {
+  it('Shift+click toggles groups, the Core included', () => {
     const s = startBuild(city(), []);
     expect(toggleSelectAt(s, 0, 0)).toBe(true);
     expect(toggleSelectAt(s, 4, 0)).toBe(true);
-    expect(toggleSelectAt(s, 2, 2)).toBe(false);
-    expect(selectedGroups(s).sort()).toEqual([group(s, 0, 0), group(s, 4, 0)].sort());
+    expect(toggleSelectAt(s, 2, 2)).toBe(true);
+    expect(selectedGroups(s)).toHaveLength(3);
     toggleSelectAt(s, 0, 0);
+    toggleSelectAt(s, 2, 2);
     expect(selectedGroups(s)).toEqual([group(s, 4, 0)]);
   });
 
   it('box select takes every group with a tile in the box, replacing or adding', () => {
     const s = startBuild(city(), []);
-    selectBox(s, 0, 0, 4, 2); // top half, Core included in the box but not selected
-    expect(selectedGroups(s).sort()).toEqual([group(s, 0, 0), group(s, 4, 0)].sort());
+    selectBox(s, 0, 0, 4, 2); // top half, Core included
+    expect(selectedGroups(s).sort()).toEqual([group(s, 0, 0), group(s, 4, 0), group(s, 2, 2)].sort());
     selectBox(s, 4, 4, 0, 3, true);
-    expect(selectedGroups(s)).toHaveLength(4);
+    expect(selectedGroups(s)).toHaveLength(5);
     selectBox(s, 0, 4, 0, 4);
     expect(selectedGroups(s)).toEqual([group(s, 0, 4)]);
     selectAll(s);
-    expect(selectedGroups(s)).toHaveLength(4);
+    expect(selectedGroups(s)).toHaveLength(5);
+    expect(scrapSelection(s)).toBe(4);
+    expect(tileAt(s.city, 2, 2)?.type).toBe('core');
     clearSelection(s);
     expect(selectedGroups(s)).toEqual([]);
   });

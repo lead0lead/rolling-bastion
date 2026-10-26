@@ -1,5 +1,7 @@
 import { GRID, LEVEL_UP } from '../config/balance';
+import { roundBudget } from './endless';
 import { BOSS, type EnemyType } from '../config/enemies';
+import { ECONOMY } from '../config/economy';
 import { TILES, type TileType } from '../config/tiles';
 import type { SpawnGroupId } from '../config/waves';
 import { findBridges, updateOnline } from './connectivity';
@@ -19,7 +21,7 @@ export interface Enemy {
   maxHp: number;
   /** Collision radius (px); larger for elites. */
   radius: number;
-  /** XP dropped on death. */
+  /** Coins paid on death. */
   xp: number;
   elite: boolean;
   /** Seconds until a ranged enemy may shoot again. */
@@ -40,7 +42,36 @@ export interface Enemy {
   burnDps: number;
   /** Multiplier on its contact, shot and bomb damage (endless growth, concept-v2.md §2.11). */
   damageFactor: number;
+  /** Coins a Thief carries off (paid back doubled if it is killed), and whether it is running away. */
+  loot: number;
+  fleeing: boolean;
+  /** Blob generation (0 = the original); for a Disco Robot, the beat count. */
+  gen: number;
   dead: boolean;
+}
+
+/** A drone from a Drone Hangar: circles the city and shoots enemies. */
+export interface Drone {
+  /** Id of the hangar that launched it. */
+  home: number;
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  /** Orbit / attack angle (rad). */
+  angle: number;
+  cooldown: number;
+}
+
+/** A black hole: drags enemies within `radius` toward its centre for `life` more seconds and deals `dps`. */
+export interface Hole {
+  x: number;
+  y: number;
+  radius: number;
+  pull: number;
+  dps: number;
+  life: number;
+  maxLife: number;
 }
 
 export interface Projectile {
@@ -87,21 +118,18 @@ export interface EnemyShot {
   dead: boolean;
 }
 
-export interface Gem {
-  x: number;
-  y: number;
-  value: number;
-  /** Pulled in by a Magnet pulse; flies to the city until collected. */
-  pulled?: boolean;
-}
-
 export type WorldEvent =
-  | { kind: 'tileDestroyed'; x: number; y: number; type: TileType }
+  | { kind: 'tileDestroyed'; x: number; y: number; type: TileType; brokeOff?: boolean }
+  | { kind: 'zap'; pts: number[] }
+  | { kind: 'streak'; label: string; count: number }
+  | { kind: 'domeBreak'; x: number; y: number; radius: number }
+  | { kind: 'steal'; x: number; y: number; amount: number }
+  | { kind: 'discoBeat'; x: number; y: number; strike: boolean }
+  | { kind: 'droneLaunch' }
   | { kind: 'enemyKilled'; x: number; y: number; type: EnemyType }
-  | { kind: 'blast'; x: number; y: number; radius: number; bomb: boolean }
+  | { kind: 'blast'; x: number; y: number; radius: number; bomb: boolean; source?: TileType }
   | { kind: 'levelUp'; level: number }
-  | { kind: 'bossPhase'; phase: number }
-  | { kind: 'magnetPulse'; x: number; y: number; radius: number };
+  | { kind: 'bossPhase'; phase: number };
 
 /** City-derived data, recomputed only when the city changes (concept.md §9). */
 export interface CityCache {
@@ -116,12 +144,10 @@ export interface CityCache {
   maxRy: number;
   /** Online tiles that have a weapon. */
   weapons: PlacedTile[];
-  /** Online Magnets. */
-  magnets: PlacedTile[];
-  /** Online tiles with a blade (Saws). */
-  blades: PlacedTile[];
-  /** Online tiles that thrust (Spears). */
-  thrusters: PlacedTile[];
+  /** Online tiles by type (for the gadget tiles). */
+  online: Partial<Record<TileType, PlacedTile[]>>;
+  /** Farthest tile centre from the middle of the bounding box (px): the dome's inner radius. */
+  reach: number;
   /** Bridge tiles (Sapper targets) and their centres relative to the origin. */
   bridges: Set<number>;
   bridgeCentres: { rx: number; ry: number }[];
@@ -144,18 +170,39 @@ export interface World {
   enemies: Enemy[];
   projectiles: Projectile[];
   enemyShots: EnemyShot[];
-  gems: Gem[];
   enemyPool: Enemy[];
   projectilePool: Projectile[];
   enemyShotPool: EnemyShot[];
   hash: SpatialHash;
-  spawn: { budget: number; next: { id: SpawnGroupId; count: number } | null; spikeIndex: number };
-  /** Seconds until each Magnet's next pulse, by tile id (concept-v2.md §2.9). */
-  magnetTimers: Map<number, number>;
-  /** Per Saw blade (tile id × stride + index): enemies it hit recently and when (concept-v2.md §2.12). */
-  bladeHits: Map<number, Map<Enemy, number>>;
+  /** The round's spawning (concept-v2.md §2.16): bank, total and unspawned budget, the next group, and whether all has spawned. */
+  spawn: {
+    budget: number;
+    total: number;
+    left: number;
+    next: { id: SpawnGroupId; count: number } | null;
+    done: boolean;
+  };
+  /** The current round (1-based), and whether it is over: everything spawned and dead, time to shop. */
+  round: number;
+  roundClear: boolean;
   /** State of each weapon tile, by tile id. */
   weapons: Map<number, WeaponState>;
+  drones: Drone[];
+  /** Seconds until each Drone Hangar (by tile id) launches its next drone. */
+  hangarTimers: Record<number, number>;
+  holes: Hole[];
+  /** The Dome Emitters' shared bubble: HP, total max HP, game time of the last hit, and when a broken dome is back (0 = up). */
+  dome: { hp: number; max: number; hitAt: number; downUntil: number };
+  /** Kill streak: kills in a row, game time of the last, and the highest announced tier (−1 = none). */
+  streak: { count: number; at: number; tier: number };
+  /** Coins to spend in the shop (concept-v2.md §2.13), and all coins picked up so far. */
+  coins: number;
+  coinsEarned: number;
+  /** Game time the city last took damage, and the adaptive pressure it builds up (§2.14). */
+  lastHitAt: number;
+  pressure: number;
+  /** Lands bought so far (each costs more). */
+  landsBought: number;
   xp: number;
   level: number;
   pendingLevelUps: number;
@@ -169,7 +216,7 @@ export interface World {
   bossState: BossState;
   /** The boss was defeated: the run is won. */
   won: boolean;
-  /** Game time the player chose "Keep going" (concept-v2.md §2.11), or null. */
+  /** Round in which the player chose "Keep going" (concept-v2.md §2.11), or null. */
   endlessSince: number | null;
   /** Colossi that returned in endless so far. */
   bossReturns: number;
@@ -182,7 +229,7 @@ export interface World {
   /**
    * Running counts the renderer compares between frames to play sounds,
    * without allocating an event per shot: weapon volleys per tile type,
-   * gem pickups (ticks with any), enemy shots fired.
+   * ticks with coins earned (`gems`), enemy shots fired.
    */
   tally: { shots: Partial<Record<TileType, number>>; gems: number; enemyShots: number };
   rerolls: number;
@@ -212,22 +259,31 @@ export function createWorld(seed: number): World {
     enemies: [],
     projectiles: [],
     enemyShots: [],
-    gems: [],
     enemyPool: [],
     projectilePool: [],
     enemyShotPool: [],
     hash: new SpatialHash(GRID.cellPx),
-    spawn: { budget: 0, next: null, spikeIndex: 0 },
+    spawn: { budget: 0, total: roundBudget(1), left: roundBudget(1), next: null, done: false },
+    round: 1,
+    roundClear: false,
     weapons: new Map(),
-    bladeHits: new Map(),
-    magnetTimers: new Map(),
+    drones: [],
+    hangarTimers: {},
+    holes: [],
+    dome: { hp: 0, max: 0, hitAt: -Infinity, downUntil: 0 },
+    streak: { count: 0, at: -Infinity, tier: -1 },
+    coins: ECONOMY.startCoins,
+    coinsEarned: 0,
+    lastHitAt: 0,
+    pressure: 0,
+    landsBought: 0,
     xp: 0,
     level: 1,
     pendingLevelUps: 0,
     pendingLand: 0,
     boss: null,
     bossSpawned: false,
-    bossSpawnedAt: BOSS.at,
+    bossSpawnedAt: 0,
     bossState: newBossState(),
     won: false,
     endlessSince: null,
@@ -246,21 +302,10 @@ export function createWorld(seed: number): World {
   return world;
 }
 
-/** Blades per tile id, for unique blade ids (`tile id × this + blade index`). */
-export const BLADE_ID_STRIDE = 8;
-
 /** Call after any change to the city's tiles (destruction, build pause). */
 export function cityChanged(w: World): void {
   updateOnline(w.city);
   w.cache = buildCache(w.city);
-  for (const id of w.magnetTimers.keys()) {
-    if (!w.cache.magnets.some((t) => t.id === id)) w.magnetTimers.delete(id);
-  }
-  // Forget the hit memory of blades whose Saw is gone or offline.
-  for (const id of w.bladeHits.keys()) {
-    const tileId = Math.floor(id / BLADE_ID_STRIDE);
-    if (!w.cache.blades.some((t) => t.id === tileId)) w.bladeHits.delete(id);
-  }
 }
 
 /** The Colossus's phase and attack timers (concept.md §4.3). */
@@ -292,11 +337,11 @@ export function newBossState(): BossState {
 }
 
 /**
- * The boss enrages if still alive at BOSS.enrageAt (concept.md §2.6); a
- * returning Colossus in endless after the same time from its arrival.
+ * The boss enrages if still alive BOSS.enrageAfter seconds after it arrived
+ * (concept.md §2.6).
  */
 export function bossEnraged(w: World): boolean {
-  return w.boss !== null && w.time >= w.bossSpawnedAt + BOSS.enrageAt - BOSS.at;
+  return w.boss !== null && w.time >= w.bossSpawnedAt + BOSS.enrageAfter;
 }
 
 /** Tile modifiers; falls back to neutral values for a tile not in the cache. */
@@ -307,13 +352,9 @@ export function modsOf(w: World, t: PlacedTile): TileMods {
 const NEUTRAL_MODS: TileMods = {
   damage: 1,
   fireRate: 1,
-  damageTaken: 1,
   contactTaken: 1,
-  heal: 0,
   regen: 0,
   maxHp: 0,
-  thorns: 0,
-  reflect: 0,
   chainBonus: 0,
 };
 
@@ -322,9 +363,7 @@ function buildCache(city: CityState): CityCache {
   const cells = new Map<number, PlacedTile>();
   const centres: CityCache['centres'] = [];
   const weapons: PlacedTile[] = [];
-  const magnets: PlacedTile[] = [];
-  const blades: PlacedTile[] = [];
-  const thrusters: PlacedTile[] = [];
+  const online: CityCache['online'] = {};
   let minRx = Infinity;
   let maxRx = -Infinity;
   let minRy = Infinity;
@@ -343,14 +382,18 @@ function buildCache(city: CityState): CityCache {
     minRy = Math.min(minRy, ry);
     maxRy = Math.max(maxRy, ry);
     if (!t.online) continue;
+    (online[t.type] ??= []).push(t);
     if (TILES[t.type].weapon) weapons.push(t);
-    if (t.type === 'magnet') magnets.push(t);
-    if (TILES[t.type].blade) blades.push(t);
-    if (TILES[t.type].thrust) thrusters.push(t);
     if (bridges.has(t.id)) bridgeCentres.push({ rx, ry });
   }
   if (centres.length === 0) minRx = maxRx = minRy = maxRy = 0;
+  const mx = (minRx + maxRx) / 2;
+  const my = (minRy + maxRy) / 2;
+  let reach = 0;
+  for (const c of centres) reach = Math.max(reach, Math.hypot(c.rx - mx, c.ry - my));
   return {
+    online,
+    reach,
     cells,
     centres,
     minRx,
@@ -358,9 +401,6 @@ function buildCache(city: CityState): CityCache {
     minRy,
     maxRy,
     weapons,
-    magnets,
-    blades,
-    thrusters,
     bridges,
     bridgeCentres,
     syn,

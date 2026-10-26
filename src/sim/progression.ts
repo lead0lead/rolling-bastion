@@ -1,11 +1,12 @@
-import { GRID, LEVEL_UP, XP } from '../config/balance';
+import { LEVEL_UP, XP } from '../config/balance';
 import type { PieceDef } from '../config/pieces';
 import type { TileType } from '../config/tiles';
+import { repairAmount } from './economy';
 import { coreTile } from './grid';
 import type { Rng } from './rng';
 import { isLandLevel } from './land';
 import { applyUpgrade, upgradeType } from './upgrades';
-import { cityCentre, cityChanged, cellOrigin, tileAtCell, tileCentre, type World } from './world';
+import { cityChanged, type World } from './world';
 
 /** Weighted random pick of `count` distinct pieces from the pool. */
 export function rollOffers(rng: Rng, pool: readonly PieceDef[], count: number): PieceDef[] {
@@ -66,99 +67,21 @@ export function addXp(w: World, amount: number): void {
   }
 }
 
-export function dropGem(w: World, x: number, y: number, value: number): void {
-  if (w.gems.length >= XP.maxGems) {
-    const gem = w.gems[w.rng.int(0, w.gems.length - 1)];
-    if (gem) gem.value += value;
-    return;
-  }
-  w.gems.push({ x, y, value });
-}
-
-/**
- * Magnet pulses (concept-v2.md §2.9): each online Magnet counts down its own
- * timer (starting at a random offset) and, when it runs out, marks every gem
- * within the pulse radius of its own tile as pulled.
- */
-export function pulseMagnets(w: World, dt: number): void {
-  const pulse = w.cache.syn.magnetPulse;
-  const r2 = pulse.radius * pulse.radius;
-  for (const t of w.cache.magnets) {
-    let timer = w.magnetTimers.get(t.id) ?? w.rng.next() * pulse.intervalSec;
-    timer = Math.min(timer, pulse.intervalSec) - dt;
-    if (timer <= 0) {
-      timer += pulse.intervalSec;
-      const c = tileCentre(w, t);
-      for (const gem of w.gems) {
-        if ((gem.x - c.x) ** 2 + (gem.y - c.y) ** 2 <= r2) gem.pulled = true;
-      }
-      w.events.push({ kind: 'magnetPulse', x: c.x, y: c.y, radius: pulse.radius });
-    }
-    w.magnetTimers.set(t.id, timer);
-  }
-}
-
-/**
- * A gem is collected when it is within the pickup radius of any tile.
- * Gems pulled by a Magnet pulse fly to the city until collected.
- */
-export function collectGems(w: World, dt = 0): void {
-  const syn = w.cache.syn;
-  const cell = GRID.cellPx;
-  const radius = XP.pickupRadius;
-  const reach = Math.ceil(radius / cell);
-  const { left, top } = cellOrigin(w);
-  const centre = cityCentre(w);
-
-  pulseMagnets(w, dt);
-
-  let gained = 0;
-  let n = 0;
-  for (const gem of w.gems) {
-    const gx = Math.floor((gem.x - left) / cell);
-    const gy = Math.floor((gem.y - top) / cell);
-    let best2 = Infinity;
-    for (let dy = -reach; dy <= reach; dy++) {
-      for (let dx = -reach; dx <= reach; dx++) {
-        const t = tileAtCell(w, gx + dx, gy + dy);
-        if (!t) continue;
-        const minX = left + t.gx * cell;
-        const minY = top + t.gy * cell;
-        const qx = Math.min(Math.max(gem.x, minX), minX + cell);
-        const qy = Math.min(Math.max(gem.y, minY), minY + cell);
-        best2 = Math.min(best2, (gem.x - qx) ** 2 + (gem.y - qy) ** 2);
-      }
-    }
-    if (best2 <= radius * radius) {
-      gained += gem.value;
-      continue;
-    }
-    if (gem.pulled) {
-      const speed = syn.magnetPulse.gemSpeed;
-      const d = Math.hypot(centre.x - gem.x, centre.y - gem.y) || 1;
-      const step = Math.min(d, speed * dt);
-      gem.x += ((centre.x - gem.x) / d) * step;
-      gem.y += ((centre.y - gem.y) / d) * step;
-    }
-    w.gems[n++] = gem;
-  }
-  w.gems.length = n;
-  if (gained > 0) {
-    w.tally.gems++;
-    addXp(w, gained);
-  }
-}
-
-/** XP refunded per placed piece scrapped during a build pause. */
+/** XP refunded per placed piece scrapped during a build pause (legacy level-up flow, used by the sim bots). */
 export function scrapRefund(w: World): number {
   return Math.round(xpToNext(w.level) * LEVEL_UP.scrapRefund);
 }
 
 /** HP the Repair Core option would heal right now. */
 export function repairCoreAmount(w: World): number {
-  const core = coreTile(w.city);
-  if (!core) return 0;
-  return Math.min(core.maxHp - core.hp, core.maxHp * LEVEL_UP.repairCoreFraction);
+  return repairAmount(w.city);
+}
+
+/** Takes over what a shop visit left: coins and lands bought (the city was edited in place). */
+export function applyShopResult(w: World, shop: { coins: number; landsBought: number }): void {
+  w.coins = shop.coins;
+  w.landsBought = shop.landsBought;
+  cityChanged(w);
 }
 
 export interface BuildResult {

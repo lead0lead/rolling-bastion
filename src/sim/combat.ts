@@ -3,12 +3,13 @@ import { STATUS, type StatusType } from '../config/statuses';
 import { ELITE, ENEMIES } from '../config/enemies';
 import { TILES, type TileType, type WeaponDef } from '../config/tiles';
 import { destroyTile, facingAngle, type PlacedTile } from './grid';
-import { dropGem } from './progression';
+import { spawnEnemy } from './spawner';
+import { registerKill } from './streak';
 import type { WeaponStats } from './synergies';
 import {
-  BLADE_ID_STRIDE,
   cityChanged,
   modsOf,
+  tileAtCell,
   tileCentre,
   type Enemy,
   type EnemyShot,
@@ -73,7 +74,71 @@ export function nearestEnemy(
 }
 
 /**
- * Online weapon tiles auto-target the nearest enemy in range and inside their
+ * Live enemy within `range` of (x, y), inside `arc` and beyond `minRange`, that maximises `score`
+ * (Bombers always beat everything else; ties go to the first found). Crossbow targeting.
+ */
+function bestEnemy(
+  w: World,
+  x: number,
+  y: number,
+  range: number,
+  arc: Arc | null,
+  minRange: number,
+  score: (e: Enemy) => number,
+): Enemy | undefined {
+  let best: Enemy | undefined;
+  let bestScore = -Infinity;
+  const range2 = range * range;
+  const min2 = minRange * minRange;
+  for (const e of w.enemies) {
+    if (e.dead) continue;
+    const dx = e.x - x;
+    const dy = e.y - y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 > range2 || d2 < min2 || !inArc(arc, dx, dy, d2)) continue;
+    const sc = score(e) + (ENEMIES[e.type].bomb ? 1e9 : 0);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = e;
+    }
+  }
+  return best;
+}
+
+/** Bombers first, then the enemy with the most HP (Crossbow). */
+export function strongestEnemy(
+  w: World,
+  x: number,
+  y: number,
+  range: number,
+  arc: Arc | null = null,
+): Enemy | undefined {
+  return bestEnemy(w, x, y, range, arc, 0, (e) => e.hp);
+}
+
+/** Bombers first, then the enemy with the most others within `blastRadius` of it (Confetti Mortar, Black Hole). */
+export function densestEnemy(
+  w: World,
+  x: number,
+  y: number,
+  range: number,
+  arc: Arc | null,
+  minRange: number,
+  blastRadius: number,
+): Enemy | undefined {
+  const r2 = blastRadius * blastRadius;
+  return bestEnemy(w, x, y, range, arc, minRange, (e) => {
+    let n = 0;
+    w.hash.query(e.x, e.y, blastRadius + MAX_ENEMY_RADIUS, (i) => {
+      const o = w.enemies[i];
+      if (o && !o.dead && (o.x - e.x) ** 2 + (o.y - e.y) ** 2 <= r2) n++;
+    });
+    return n;
+  });
+}
+
+/**
+ * Online weapon tiles auto-target the nearest enemy (Crossbow: the toughest, Confetti Mortar and Black Hole: the densest group; both Bombers first) in range and inside their
  * firing arc (concept.md §2.6, §2.10). While cooling down they still re-aim
  * every `aimInterval` so barrels can track targets.
  */
@@ -94,14 +159,12 @@ export function updateWeapons(w: World, dt: number): void {
     if (!ready && st.aimTimer > 0) continue;
 
     const c = tileCentre(w, t);
-    const target = nearestEnemy(
-      w,
-      c.x,
-      c.y,
-      weapon.range,
-      weaponArc(t, weapon),
-      weapon.minRange ?? 0,
-    );
+    const arc = weaponArc(t, weapon);
+    const target = weapon.targetsStrongest
+      ? strongestEnemy(w, c.x, c.y, weapon.range, arc)
+      : weapon.targetsDensest && weapon.blastRadius
+        ? densestEnemy(w, c.x, c.y, weapon.range, arc, weapon.minRange ?? 0, weapon.blastRadius)
+        : nearestEnemy(w, c.x, c.y, weapon.range, arc, weapon.minRange ?? 0);
     st.aimTimer = COMBAT.aimInterval;
     st.aim = target ? Math.atan2(target.y - c.y, target.x - c.x) : facingAngle(t.facing);
     if (!ready) continue;
@@ -112,18 +175,26 @@ export function updateWeapons(w: World, dt: number): void {
 
     const damage = weapon.damage * mods.damage;
     st.firedAt = w.time;
-    if (weapon.coneDeg) {
+    if (weapon.chain) {
+      zapChain(w, t.type, weapon.chain, damage, target, c.x, c.y);
+    } else if (weapon.hole) {
+      const h = weapon.hole;
+      w.holes.push({
+        x: target.x,
+        y: target.y,
+        radius: h.radius,
+        pull: h.pull,
+        dps: damage,
+        life: h.life,
+        maxLife: h.life,
+      });
+    } else if (weapon.coneDeg) {
       sprayCone(w, t.type, weapon, damage, c.x, c.y, st.aim);
     } else if (weapon.blastRadius) {
       const aim = weapon.leadsTarget
         ? leadPoint(target, c.x, c.y, weapon.projectileSpeed, dt)
         : target;
-      for (let i = 0; i < weapon.shells; i++) {
-        const s = i === 0 ? 0 : weapon.shellScatter;
-        const tx = aim.x + (w.rng.next() * 2 - 1) * s;
-        const ty = aim.y + (w.rng.next() * 2 - 1) * s;
-        fireShell(w, t, weapon, damage, c.x, c.y, tx, ty);
-      }
+      fireShell(w, t, weapon, damage, c.x, c.y, aim.x, aim.y);
     } else {
       for (let i = 0; i < weapon.projectiles; i++) {
         const spreadDeg = weapon.spreadDeg * (weapon.projectiles > 1 ? 2 : 1);
@@ -196,109 +267,46 @@ function sprayCone(
 }
 
 /**
- * Spears (concept-v2.md §2.12): each online Spear thrusts along its facing
- * every `interval` (Generators shorten it), with `jabs` jabs `jabGap` apart
- * per cycle, hitting every enemy within the line. `WeaponState.cooldown`
- * counts down to the next jab, `aimTimer` holds the jabs left in the cycle,
- * `firedAt` the last jab (for the drawn shaft).
+ * Lightning: hits `first`, then jumps to the nearest enemy not yet hit within
+ * `chain.range`, each jump with `falloff` of the last damage. Reports the path
+ * as a `zap` event for the renderer.
  */
-export function updateThrusts(w: World, dt: number): void {
-  for (const t of w.cache.thrusters) {
-    const thrust = w.cache.syn.thrusts[t.type];
-    if (!thrust) continue;
-    const mods = modsOf(w, t);
-    const interval = thrust.interval / mods.fireRate;
-    const aim = facingAngle(t.facing);
-    let st = w.weapons.get(t.id);
-    if (!st) {
-      st = { cooldown: w.rng.next() * interval, aim, aimTimer: 0 };
-      w.weapons.set(t.id, st);
-    }
-    st.aim = aim;
-    st.cooldown -= dt;
-    if (st.cooldown > 0) continue;
-    st.firedAt = w.time;
-    if (st.aimTimer <= 0) st.aimTimer = thrust.jabs;
-    st.aimTimer--;
-    const gap = Math.min(thrust.jabGap, interval / thrust.jabs);
-    st.cooldown += st.aimTimer > 0 ? gap : interval - gap * (thrust.jabs - 1);
-    const c = tileCentre(w, t);
-    const fx = Math.cos(aim);
-    const fy = Math.sin(aim);
-    const damage = thrust.damage * mods.damage;
-    const midX = c.x + (fx * thrust.reach) / 2;
-    const midY = c.y + (fy * thrust.reach) / 2;
-    const stab = (e: Enemy) => {
-      if (e.dead) return;
-      const dx = e.x - c.x;
-      const dy = e.y - c.y;
-      const along = dx * fx + dy * fy;
-      const across = Math.abs(dx * fy - dy * fx);
-      if (along < -e.radius || along > thrust.reach + e.radius) return;
-      if (across > thrust.width / 2 + e.radius) return;
-      hitEnemy(w, e, damage, 0, 0, 0, t.type);
-    };
-    w.hash.query(midX, midY, thrust.reach / 2 + MAX_ENEMY_RADIUS, (i) => {
-      const e = w.enemies[i];
-      if (e && e !== w.boss) stab(e);
-    });
-    if (w.boss) stab(w.boss);
-    w.tally.shots[t.type] = (w.tally.shots[t.type] ?? 0) + 1;
-  }
-}
-
-/**
- * Saw blades (concept-v2.md §2.12): each online Saw's blades circle its
- * centre (Generators speed the spin up) and hit every enemy they pass, each
- * blade at most once per `hitCooldown` per enemy (each blade remembers its
- * own recent hits, so a big enemy under several blades is hit once by each).
- * The angle lives in the tile's `WeaponState.aim` for the renderer. Uses the
- * enemy hash built this tick.
- */
-export function updateBlades(w: World, dt: number): void {
-  for (const t of w.cache.blades) {
-    const blade = w.cache.syn.blades[t.type];
-    if (!blade) continue;
-    const mods = modsOf(w, t);
-    let st = w.weapons.get(t.id);
-    if (!st) {
-      st = { cooldown: 0, aim: w.rng.next() * Math.PI * 2, aimTimer: 0 };
-      w.weapons.set(t.id, st);
-    }
-    st.aim = (st.aim + Math.PI * 2 * blade.turnsPerSec * mods.fireRate * dt) % (Math.PI * 2);
-    const c = tileCentre(w, t);
-    const damage = blade.damage * mods.damage;
-    let hits = 0;
-    for (let b = 0; b < blade.count; b++) {
-      const a = st.aim + (b * Math.PI * 2) / blade.count;
-      const bx = c.x + Math.cos(a) * blade.orbit;
-      const by = c.y + Math.sin(a) * blade.orbit;
-      const id = t.id * BLADE_ID_STRIDE + b;
-      let recent = w.bladeHits.get(id);
-      if (!recent) w.bladeHits.set(id, (recent = new Map()));
-      for (const [e, at] of recent) {
-        if (w.time - at >= blade.hitCooldown || e.dead) recent.delete(e);
+function zapChain(
+  w: World,
+  source: TileType,
+  chain: NonNullable<WeaponDef['chain']>,
+  damage: number,
+  first: Enemy,
+  x: number,
+  y: number,
+): void {
+  const pts = [x, y];
+  const hit = new Set<Enemy>();
+  let e: Enemy | undefined = first;
+  let dmg = damage;
+  for (let i = 0; e && i <= chain.jumps; i++) {
+    hit.add(e);
+    pts.push(e.x, e.y);
+    hitEnemy(w, e, dmg, 0, 0, 0, source);
+    dmg *= chain.falloff;
+    let best: Enemy | undefined;
+    let bestD2 = chain.range * chain.range;
+    const from: Enemy = e;
+    w.hash.query(from.x, from.y, chain.range + MAX_ENEMY_RADIUS, (j) => {
+      const o = w.enemies[j];
+      if (!o || o.dead || hit.has(o)) return;
+      const d2 = (o.x - from.x) ** 2 + (o.y - from.y) ** 2;
+      if (d2 <= bestD2) {
+        bestD2 = d2;
+        best = o;
       }
-      const hitBefore = recent;
-      const strike = (e: Enemy) => {
-        if (e.dead || hitBefore.has(e)) return;
-        const r = blade.radius + e.radius;
-        if ((e.x - bx) ** 2 + (e.y - by) ** 2 > r * r) return;
-        hitBefore.set(e, w.time);
-        hitEnemy(w, e, damage, 0, 0, 0, t.type);
-        hits++;
-      };
-      w.hash.query(bx, by, blade.radius + MAX_ENEMY_RADIUS, (i) => {
-        const e = w.enemies[i];
-        if (e && e !== w.boss) strike(e);
-      });
-      if (w.boss) strike(w.boss);
-    }
-    if (hits > 0) w.tally.shots[t.type] = (w.tally.shots[t.type] ?? 0) + 1;
+    });
+    e = best;
   }
+  w.events.push({ kind: 'zap', pts });
 }
 
-function newProjectile(w: World, t: PlacedTile, x: number, y: number): Projectile {
+export function newProjectile(w: World, t: PlacedTile, x: number, y: number): Projectile {
   const p = w.projectilePool.pop() ?? ({ hits: [] } as unknown as Projectile);
   p.x = p.px = x;
   p.y = p.py = y;
@@ -390,7 +398,17 @@ export function updateProjectiles(w: World, dt: number): void {
       const r = p.radius + boss.radius;
       if ((boss.x - p.x) ** 2 + (boss.y - p.y) ** 2 <= r * r) hit = boss;
     }
-    if (hit) {
+    if (hit && ENEMIES[hit.type].mirror) {
+      // A Mirror Knight bounces the shot away (it keeps flying and may hit something else) and takes a tenth.
+      const nx = p.x - hit.x;
+      const ny = p.y - hit.y;
+      const n = Math.hypot(nx, ny) || 1;
+      const dot = (p.vx * nx + p.vy * ny) / n;
+      p.vx -= (2 * dot * nx) / n;
+      p.vy -= (2 * dot * ny) / n;
+      p.hits.push(hit);
+      hitEnemy(w, hit, p.damage * 0.1, 0, 0, 0, p.source);
+    } else if (hit) {
       const speed = Math.hypot(p.vx, p.vy) || 1;
       hitEnemy(w, hit, p.damage, p.knockback, p.vx / speed, p.vy / speed, p.source);
       if (p.pierce > 0) {
@@ -422,7 +440,7 @@ export function explode(
   if (boss && !boss.dead && (boss.x - x) ** 2 + (boss.y - y) ** 2 <= (radius + boss.radius) ** 2) {
     hitEnemy(w, boss, damage, 0, 0, 0, source);
   }
-  w.events.push({ kind: 'blast', x, y, radius, bomb: false });
+  w.events.push({ kind: 'blast', x, y, radius, bomb: false, source });
 }
 
 /** True if the enemy has the status right now. */
@@ -497,6 +515,23 @@ export function hitEnemy(
     e.kvx += dirX * knockback;
     e.kvy += dirY * knockback;
   }
+  if (!e.dead) splitOnHit(w, e);
+}
+
+/** A Blob that survives a hit splits in two: each half has half the HP and 80% of the size. */
+function splitOnHit(w: World, e: Enemy): void {
+  const rule = ENEMIES[e.type].splitsOnHit;
+  if (!rule || e.elite || e.gen >= rule.maxGen || e.hp < rule.minHp * 2) return;
+  const half = spawnEnemy(w, e.type, e.x + e.radius * 0.5, e.y);
+  e.gen = half.gen = e.gen + 1;
+  e.hp = half.hp = e.hp / 2;
+  e.maxHp = half.maxHp = e.maxHp / 2;
+  e.radius = half.radius = e.radius * 0.8;
+  e.xp = half.xp = e.xp / 2;
+  half.damageFactor = e.damageFactor;
+  half.hitTime = e.hitTime;
+  half.kvx = e.kvx;
+  half.kvy = e.kvy;
 }
 
 /** Plain damage, no combos or statuses (burn ticks); credits `source` with damage up to the enemy's HP. */
@@ -526,14 +561,18 @@ export function statusSpeed(w: World, e: Enemy): number {
 }
 
 /**
- * Damages a tile (after its Shield reduction); at 0 HP it is destroyed for
+ * Damages a tile; at 0 HP it is destroyed for
  * good and connectivity is recomputed. Losing the Core ends the run.
  */
 export function damageTile(w: World, t: PlacedTile, amount: number): void {
   if (t.type === 'core' && w.godMode) return;
-  t.hp -= amount * modsOf(w, t).damageTaken;
+  // Already gone this tick (destroyed or broken off): nothing left to hit.
+  if (tileAtCell(w, t.gx, t.gy) !== t) return;
+  if (amount > 0) w.lastHitAt = w.time;
+  t.hp -= amount;
   if (t.hp > 0) return;
   const c = tileCentre(w, t);
+  const connected = w.city.tiles.filter((o) => o.online && o !== t);
   destroyTile(w.city, t.id);
   w.weapons.delete(t.id);
   cityChanged(w);
@@ -541,22 +580,34 @@ export function damageTile(w: World, t: PlacedTile, amount: number): void {
   if (t.type === 'core') {
     w.coreLostAt = { gx: t.gx, gy: t.gy };
     w.over = true;
+    return;
   }
+  breakOff(w, connected);
 }
 
-/** Repair Bays heal their neighbours; Hull L5 regenerates (concept.md §2.6: nothing else heals). */
+/** Tiles that were connected to the Core before a loss and no longer are break off and are gone for good. */
+function breakOff(w: World, wereConnected: readonly PlacedTile[]): void {
+  const lost = wereConnected.filter((o) => !o.online);
+  if (lost.length === 0) return;
+  for (const o of lost) {
+    const c = tileCentre(w, o);
+    destroyTile(w.city, o.id);
+    w.weapons.delete(o.id);
+    w.events.push({ kind: 'tileDestroyed', x: c.x, y: c.y, type: o.type, brokeOff: true });
+  }
+  cityChanged(w);
+}
+
+/** Hull L5 regenerates (concept.md §2.6: nothing else heals except Repair Robots). */
 export function healTiles(w: World, dt: number): void {
-  const boost = w.cache.syn.lowHpHealBoost;
   for (const t of w.city.tiles) {
     const m = modsOf(w, t);
-    if (m.heal === 0 && m.regen === 0) continue;
-    if (t.hp >= t.maxHp) continue;
-    const heal = boost && t.hp < t.maxHp * boost.belowFrac ? m.heal * boost.factor : m.heal;
-    t.hp = Math.min(t.maxHp, t.hp + (heal + m.regen) * dt);
+    if (m.regen === 0 || t.hp >= t.maxHp) continue;
+    t.hp = Math.min(t.maxHp, t.hp + m.regen * dt);
   }
 }
 
-/** Removes dead enemies (dropping gems) and spent projectiles, returning them to their pools. */
+/** Removes dead enemies (paying their coins) and spent projectiles, returning them to their pools. */
 export function removeDead(w: World): void {
   let n = 0;
   for (const e of w.enemies) {
@@ -568,15 +619,25 @@ export function removeDead(w: World): void {
     if (e === w.boss) {
       w.boss = null;
       w.bossKills++;
-      // The first kill wins the run; in endless the Colossus just returns later.
-      if (w.endlessSince === null) {
-        w.won = true;
-        w.over = true;
-      }
+      // The first kill only starts endless scaling; the run goes on until the Core falls.
+      w.won = true;
+      w.endlessSince ??= w.round;
     }
     if (e.noDrop) continue;
     w.kills++;
-    dropGem(w, e.x, e.y, e.xp);
+    // The kill pays straight into the account (no orbs to pick up); a Thief's loot comes back doubled.
+    const pay = e.xp + e.loot * 2;
+    w.coins += pay;
+    w.coinsEarned += pay;
+    w.tally.gems++;
+    registerKill(w);
+    const split = ENEMIES[e.type].split;
+    if (split && !e.elite) {
+      for (let i = 0; i < split.count; i++) {
+        const a = w.rng.next() * Math.PI * 2;
+        spawnEnemy(w, split.into, e.x + Math.cos(a) * e.radius, e.y + Math.sin(a) * e.radius);
+      }
+    }
     w.events.push({ kind: 'enemyKilled', x: e.x, y: e.y, type: e.type });
   }
   w.enemies.length = n;

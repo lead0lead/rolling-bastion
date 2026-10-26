@@ -5,12 +5,14 @@ import { barrelFor } from '../render/icons';
 import { COLORS, FONT } from '../render/palette';
 import { createTextures, TEX } from '../render/textures';
 import { outlineOf, showsCracks } from '../render/tiles';
+import { loadWorld } from '../sim/save';
 import { cellFromId, facingAngle, type PlacedTile } from '../sim/grid';
 
 export interface SummaryData {
-  time: number;
+  round: number;
   kills: number;
-  level: number;
+  /** All coins picked up during the run. */
+  coins: number;
   /** The boss was defeated. */
   won: boolean;
   /** Colossi defeated (more than one in endless). */
@@ -22,16 +24,19 @@ export interface SummaryData {
   coreLostAt: { gx: number; gy: number } | null;
   /** Damage dealt per tile type. */
   damageBy: Partial<Record<TileType, number>>;
+  /** The run saved as the lost round began (restart target), or null. */
+  roundStart: string | null;
 }
 
 // Layout (1280×720).
 const CITY_BOX = { x: 130, y: 190, size: 380 };
 const BARS = { x: 640, y: 215, w: 520, rowH: 46, barH: 18, labelW: 140, max: 7 };
 const BUTTONS = [
-  { label: 'Play again  (Enter)', x: 470, scene: 'Run' },
-  { label: 'Title  (Esc)', x: 810, scene: 'Title' },
+  { label: 'Restart round  (R)', scene: 'Retry' },
+  { label: 'Play again  (Enter)', scene: 'Run' },
+  { label: 'Title  (Esc)', scene: 'Title' },
 ] as const;
-const BUTTON = { y: 640, w: 300, h: 60 };
+const BUTTON = { y: 640, w: 300, h: 60, gap: 20 };
 
 /** Win / lose screen (concept.md §8, decided 2026-10-20). */
 export class SummaryScene extends Phaser.Scene {
@@ -48,10 +53,6 @@ export class SummaryScene extends Phaser.Scene {
     const fallen = data.coreLostAt !== null;
     playSfx(this, fallen ? 'lose' : 'win');
 
-    const mins = Math.floor(data.time / 60);
-    const secs = Math.floor(data.time % 60)
-      .toString()
-      .padStart(2, '0');
     this.add
       .text(width / 2, 70, fallen ? 'The Core has fallen.' : 'The city rolls on.', {
         ...text,
@@ -65,9 +66,9 @@ export class SummaryScene extends Phaser.Scene {
         width / 2,
         125,
         [
-          `Survived ${mins}:${secs}`,
+          `Reached round ${data.round}`,
           ...(data.won ? [`Boss defeated${data.bossKills > 1 ? ` ×${data.bossKills}` : ''}`] : []),
-          `Level ${data.level}`,
+          `Coins ${Math.floor(data.coins)}`,
           `Kills ${data.kills}`,
         ].join('   ·   '),
         { ...text, fontSize: '22px', color: COLORS.textDim },
@@ -76,7 +77,7 @@ export class SummaryScene extends Phaser.Scene {
 
     this.drawCity(data);
     this.drawDamage(data);
-    this.makeButtons();
+    this.makeButtons(data);
   }
 
   /** The final city, drawn with the tile textures, scaled to fit the box. */
@@ -173,12 +174,18 @@ export class SummaryScene extends Phaser.Scene {
     }
   }
 
-  private makeButtons(): void {
+  private makeButtons(data: SummaryData): void {
+    // The round is lost with the Core: offer to replay it from its start (same coins, same city).
+    const retry = data.coreLostAt && data.roundStart ? loadWorld(data.roundStart) : null;
     const go = (scene: string) => {
       playSfx(this, 'ui-confirm');
-      this.scene.start(scene);
+      if (scene === 'Retry') this.scene.start('Run', { world: retry, restart: true });
+      else this.scene.start(scene);
     };
-    for (const b of BUTTONS) {
+    const buttons = BUTTONS.filter((b) => b.scene !== 'Retry' || retry);
+    const step = BUTTON.w + BUTTON.gap;
+    buttons.forEach((b, i) => {
+      const x = this.scale.width / 2 + (i - (buttons.length - 1) / 2) * step;
       const g = this.add.graphics();
       const draw = (hover: boolean) => {
         g.clear();
@@ -186,13 +193,13 @@ export class SummaryScene extends Phaser.Scene {
           b.scene === 'Run' ? (hover ? COLORS.confirmHover : COLORS.confirm) : COLORS.panel,
           1,
         );
-        g.fillRoundedRect(b.x - BUTTON.w / 2, BUTTON.y - BUTTON.h / 2, BUTTON.w, BUTTON.h, 16);
+        g.fillRoundedRect(x - BUTTON.w / 2, BUTTON.y - BUTTON.h / 2, BUTTON.w, BUTTON.h, 16);
         g.lineStyle(3, hover ? COLORS.hover : COLORS.panelBorder, 1);
-        g.strokeRoundedRect(b.x - BUTTON.w / 2, BUTTON.y - BUTTON.h / 2, BUTTON.w, BUTTON.h, 16);
+        g.strokeRoundedRect(x - BUTTON.w / 2, BUTTON.y - BUTTON.h / 2, BUTTON.w, BUTTON.h, 16);
       };
       draw(false);
       this.add
-        .text(b.x, BUTTON.y, b.label, {
+        .text(x, BUTTON.y, b.label, {
           fontFamily: FONT.family,
           fontStyle: FONT.bold,
           fontSize: '22px',
@@ -200,14 +207,15 @@ export class SummaryScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
       const zone = this.add
-        .zone(b.x, BUTTON.y, BUTTON.w, BUTTON.h)
+        .zone(x, BUTTON.y, BUTTON.w, BUTTON.h)
         .setInteractive({ useHandCursor: true });
       zone.on('pointerover', () => draw(true));
       zone.on('pointerout', () => draw(false));
       zone.on('pointerdown', () => go(b.scene));
-    }
+    });
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
-      if (e.code === 'Enter' || e.code === 'Space') go('Run');
+      if (e.code === 'KeyR' && retry) go('Retry');
+      else if (e.code === 'Enter' || e.code === 'Space') go('Run');
       else if (e.code === 'Escape') go('Title');
     });
   }

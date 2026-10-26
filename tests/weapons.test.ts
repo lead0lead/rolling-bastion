@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { UPGRADES } from '../src/config/balance';
 import { TILES, type TileType } from '../src/config/tiles';
 import {
   hasStatus,
   updateBurns,
-  updateThrusts,
   leadPoint,
-  updateBlades,
   updateProjectiles,
   updateWeapons,
 } from '../src/sim/combat';
@@ -19,13 +16,10 @@ import { typedCity } from './helpers';
 const DT = 1 / 60;
 const LEGEND: Record<string, TileType> = {
   C: 'core',
-  m: 'mortar',
-  c: 'cannon',
+  m: 'confetti',
   h: 'hull',
-  s: 'saw',
   x: 'crossbow',
   f: 'flamethrower',
-  k: 'spear',
 };
 
 function worldOf(rows: string[]): World {
@@ -44,13 +38,12 @@ function run(w: World, ticks: number): void {
     w.time += DT;
     updateEnemies(w, DT);
     updateWeapons(w, DT);
-    updateBlades(w, DT);
     updateProjectiles(w, DT);
     for (const t of w.city.tiles) t.hp = t.maxHp;
   }
 }
 
-describe('Mortar', () => {
+describe('Confetti Mortar', () => {
   it('leads a moving target', () => {
     const w = createWorld(1);
     const e = spawnEnemy(w, 'runner', 210, 0);
@@ -68,110 +61,49 @@ describe('Mortar', () => {
     e.hp = e.maxHp = 1e6;
     const mortar = tileAt(w.city, 0, 0);
     if (mortar) w.weapons.set(mortar.id, { cooldown: 2 * DT, aim: 0, aimTimer: 0 });
-    const flight = 330 / (TILES.mortar.weapon?.projectileSpeed ?? 1);
+    const flight = 330 / (TILES.confetti.weapon?.projectileSpeed ?? 1);
     let staggered = false;
-    for (let i = 0; i < (flight + 0.5) / DT && !w.damageBy.mortar; i++) {
+    for (let i = 0; i < (flight + 0.5) / DT && !w.damageBy.confetti; i++) {
       run(w, 1);
       staggered ||= hasStatus(w, e, 'staggered');
     }
-    expect(w.damageBy.mortar).toBeGreaterThan(0);
+    expect(w.damageBy.confetti).toBeGreaterThan(0);
     expect(staggered).toBe(true);
   });
 });
 
-describe('Saw blade', () => {
-  const blade = TILES.saw.blade;
-  if (!blade) throw new Error('no blade');
-
-  /** A Saw at (1, 1) with the Core below it, and a parked enemy at `dist` px from the Saw. */
-  function sawWith(dist: number, type: 'runner' | 'brute' = 'brute') {
-    const w = worldOf(['...', '.s.', '.C.']);
-    const saw = tileAt(w.city, 1, 1);
-    if (!saw) throw new Error('no saw');
-    const c = tileCentre(w, saw);
-    const e = spawnEnemy(w, type, c.x, c.y - dist);
-    e.hp = e.maxHp = 1e6;
-    return { w, e };
-  }
-
-  /** Blades only (enemies stay where they are). */
-  function spin(w: World, seconds: number) {
-    for (let i = 0; i < seconds / DT; i++) {
-      w.time += DT;
-      w.hash.clear();
-      w.enemies.forEach((e, idx) => w.hash.insert(idx, e.x, e.y));
-      updateBlades(w, DT);
-    }
-  }
-
-  it('hits an enemy on its path once per pass, and snags it', () => {
-    const { w, e } = sawWith(blade.orbit);
-    spin(w, 2 / blade.turnsPerSec);
-    expect(w.damageBy.saw).toBeCloseTo(2 * blade.damage);
-    expect(hasStatus(w, e, 'snagged')).toBe(true);
-  });
-
-  it('reaches an enemy touching the Saw, but not one far outside the orbit', () => {
-    const close = sawWith(16 + 6 + 1, 'runner');
-    spin(close.w, 1 / blade.turnsPerSec);
-    expect(close.w.damageBy.saw).toBeGreaterThan(0);
-    const far = sawWith(blade.orbit + blade.radius + 40);
-    spin(far.w, 1 / blade.turnsPerSec);
-    expect(far.w.damageBy.saw ?? 0).toBe(0);
-  });
-
-  it('several blades over the Colossus each hit it once per pass, not every tick', () => {
-    const w = worldOf(['.....', '.sss.', '.sCs.', '.sss.', '.....']);
-    const core = tileAt(w.city, 2, 2);
-    if (!core) throw new Error('no core');
-    const c = tileCentre(w, core);
-    const boss = spawnEnemy(w, 'colossus', c.x, c.y - 70);
-    const seconds = 2 / blade.turnsPerSec;
-    spin(w, seconds);
-    const saws = 8;
-    // At most one hit per blade per cooldown window, per Saw.
-    const cap = saws * Math.ceil(seconds / blade.hitCooldown) * blade.damage;
-    expect(boss.maxHp - boss.hp).toBeGreaterThan(0);
-    expect(boss.maxHp - boss.hp).toBeLessThanOrEqual(cap);
-  });
-
-  it('L3 adds a second blade; L5 lengthens the orbit', () => {
-    const { w } = sawWith(blade.orbit);
-    w.city.typeLevels.saw = 3;
-    cityChanged(w);
-    expect(w.cache.syn.blades.saw?.count).toBe(2);
-    spin(w, 2 / blade.turnsPerSec);
-    expect(w.damageBy.saw).toBeCloseTo(4 * blade.damage * (1 + 2 * UPGRADES.damagePerLevel));
-    w.city.typeLevels.saw = 5;
-    cityChanged(w);
-    expect(w.cache.syn.blades.saw?.orbit).toBeGreaterThan(blade.orbit);
-  });
-});
-
 describe('Crossbow', () => {
-  it('fires a bolt through every enemy in a line and marks them', () => {
+  const bow = TILES.crossbow.weapon;
+  if (!bow) throw new Error('no weapon');
+
+  /** A Crossbow at (0, 0) whose first shot is due now. */
+  function bowWorld() {
     const w = worldOf(['x..', 'C..', '...']);
-    const bow = tileAt(w.city, 0, 0);
-    if (!bow) throw new Error('no crossbow');
-    w.weapons.set(bow.id, { cooldown: 0, aim: 0, aimTimer: 0 });
-    const c = tileCentre(w, bow);
-    const line = [100, 150, 200, 250].map((d) => {
-      const e = spawnEnemy(w, 'brute', c.x, c.y - d);
-      e.hp = e.maxHp = 1e6;
-      return e;
-    });
-    for (let i = 0; i < 0.5 / DT; i++) {
-      w.time += DT;
-      w.hash.clear();
-      w.enemies.forEach((e, idx) => w.hash.insert(idx, e.x, e.y));
-      updateWeapons(w, DT);
-      updateProjectiles(w, DT);
-    }
-    const dmg = TILES.crossbow.weapon?.damage ?? 0;
-    for (const e of line) {
-      expect(e.maxHp - e.hp).toBeCloseTo(dmg);
-      expect(hasStatus(w, e, 'marked')).toBe(true);
-    }
+    const tile = tileAt(w.city, 0, 0);
+    if (!tile) throw new Error('no crossbow');
+    w.weapons.set(tile.id, { cooldown: 0, aim: 0, aimTimer: 0 });
+    return { w, c: tileCentre(w, tile) };
+  }
+
+  it('shoots the enemy with the most HP in range, not the nearest, in any direction', () => {
+    const { w, c } = bowWorld();
+    spawnEnemy(w, 'swarmer', c.x + 60, c.y);
+    const tough = spawnEnemy(w, 'brute', c.x - 300, c.y - 100);
+    updateWeapons(w, DT);
+    const shot = w.projectiles[0];
+    if (!shot) throw new Error('no shot');
+    expect(Math.atan2(shot.vy, shot.vx)).toBeCloseTo(Math.atan2(tough.y - c.y, tough.x - c.x));
+    expect(shot.damage).toBe(bow.damage);
+  });
+
+  it('ignores enemies beyond its range, however tough', () => {
+    const { w, c } = bowWorld();
+    const near = spawnEnemy(w, 'swarmer', c.x + 100, c.y);
+    spawnEnemy(w, 'juggernaut', c.x + bow.range + 50, c.y);
+    updateWeapons(w, DT);
+    const shot = w.projectiles[0];
+    if (!shot) throw new Error('no shot');
+    expect(Math.atan2(shot.vy, shot.vx)).toBeCloseTo(Math.atan2(near.y - c.y, near.x - c.x));
   });
 });
 
@@ -222,64 +154,5 @@ describe('Flamethrower', () => {
       updateBurns(w, DT);
     }
     expect(before - e.hp).toBeCloseTo(TILES.flamethrower.combo?.burnDps ?? 0, 0);
-  });
-});
-
-describe('Spear', () => {
-  const thrust = TILES.spear.thrust;
-  if (!thrust) throw new Error('no thrust');
-
-  function spearWorld() {
-    const w = worldOf(['k..', 'C..', '...']);
-    const spear = tileAt(w.city, 0, 0);
-    if (!spear) throw new Error('no spear');
-    const c = tileCentre(w, spear);
-    const spawn = (dx: number, dy: number) => {
-      const e = spawnEnemy(w, 'brute', c.x + dx, c.y + dy);
-      e.hp = e.maxHp = 1e6;
-      return e;
-    };
-    const jab = (seconds: number) => {
-      for (let i = 0; i < seconds / DT; i++) {
-        w.time += DT;
-        w.hash.clear();
-        w.enemies.forEach((e, idx) => w.hash.insert(idx, e.x, e.y));
-        updateThrusts(w, DT);
-      }
-    };
-    return { w, spawn, jab };
-  }
-
-  it('stabs every enemy on the line ahead once per cycle, and snags them', () => {
-    const { w, spawn, jab } = spearWorld();
-    const line = [30, 60, 90].map((d) => spawn(0, -d));
-    const aside = spawn(40, -50);
-    const behind = spawn(0, 60);
-    jab(2 * thrust.interval);
-    for (const e of line) {
-      expect(e.maxHp - e.hp).toBeCloseTo(2 * thrust.damage);
-      expect(hasStatus(w, e, 'snagged')).toBe(true);
-    }
-    expect(aside.hp).toBe(aside.maxHp);
-    expect(behind.hp).toBe(behind.maxHp);
-  });
-
-  it('L5 jabs twice per cycle; L3 reaches further', () => {
-    const { w, spawn, jab } = spearWorld();
-    const far = spawn(0, -120);
-    w.city.typeLevels.spear = 5;
-    cityChanged(w);
-    jab(thrust.interval);
-    const level = 1 + 4 * UPGRADES.damagePerLevel;
-    expect(far.maxHp - far.hp).toBeCloseTo(2 * thrust.damage * level);
-  });
-
-  it('chains only with the same facing', () => {
-    const w = worldOf(['kkk', 'C..', '...']);
-    expect(w.cache.syn.chains.map((c) => c.type)).toEqual(['spear']);
-    const t = tileAt(w.city, 1, 0);
-    if (t) t.facing = 1;
-    cityChanged(w);
-    expect(w.cache.syn.chains).toEqual([]);
   });
 });

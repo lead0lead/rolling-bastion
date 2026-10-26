@@ -62,8 +62,8 @@ with no memory of earlier ones; this file and the git history are all it has.
 | | |
 |---|---|
 | **Status** | **v2 is live** (2.0.0): Phases 1–6 merged into `v2`, and `v2` merged into `main` on 2026-10-23 (user: "merge and deploy"), replacing v1. v1's last commit is tagged `v0.8.0`. |
-| **Current step** | v2 2.0.0 released to GitHub Pages. The v2 plan (§11) is complete. |
-| **Next step** | None planned. New work (endless tuning, Spear/Flamethrower vs the Colossus, other §12 items) starts with planning it with the user. |
+| **Current step** | **Casino (2026-10-24, §2.18), uncommitted:** shop roulette replaces the Wheel of Fortune tile. Before that: **Party update (2026-10-24, §2.17), uncommitted:** new tiles, enemies, break-off, kill streaks, synth sounds; untuned. Before that: **Round-based run (2026-10-24, §2.16), uncommitted:** waves instead of a clock, shop only between rounds, kills pay coins directly, Saw and Magnet removed, Crossbow back. Before that: v2 2.0.0 released to GitHub Pages. The v2 plan (§11) is complete. **Coin economy and shop** (§2.13) and the **speed slider** built on `main` locally on the user's explicit instruction (2026-10-24), not yet committed or pushed. Then (2026-10-24): enemy splitting (Brute → 3 Swarmers, new Juggernaut → 2 Brutes), logarithmic endless spawn budget and ever-shorter Colossus returns, Magnets on evenly staggered timers whose interval shrinks with level; uncommitted. |
+| **Next step** | Playtest the round-based run (§2.16) and tune it by feel. None otherwise planned. New work (endless tuning, Spear/Flamethrower vs the Colossus, other §12 items) starts with planning it with the user. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts); v2 replaced v1 on 2026-10-23. |
 | **Branches** | `main` = live game (every push redeploys), now v2. `v2` = integration branch; merged into `main` only on the user's go. New phases/spikes branch from `v2`. |
 | **Version** | `2.0.0` (released). Further labels to agree with the user. |
@@ -508,7 +508,169 @@ then change numbers and mechanics in config with tests per weapon, and
 re-run the sim. New weapons need icons, barrels and projectiles in the
 existing style, and sounds from the existing set.
 
+### 2.13 Coins and the shop (user request 2026-10-24; replaces level-ups in the run)
+
+The user asked for an economy instead of the random level-up offers, and told
+Claude to work directly on `main` without further questions ("if I don't like
+it, we try something else"). It reverses the Spike A drop (§13) on purpose.
+Everything below is Claude's draft, numbers to tune by playing.
+
+- **Coins:** gems pay coins (their value) instead of XP; no levels, no
+  level-up pauses. The run starts with 30 coins. `World.coins` /
+  `coinsEarned` (the end screens show the latter).
+- **Shop:** key **E** in a run (S and WASD drive) freezes the game and opens
+  the build screen with prices (`BuildSceneData.shop`). No randomness
+  (user, 2026-10-24): the right-hand list sells **every tile type except the
+  Core, one cell each, always** (`SHOP_PIECES`; a piece of several cells is
+  built by placing tiles next to each other). Clicking a row picks the part up
+  (coins leave at once; putting it back or undo refunds them), the click on
+  the board places it. Close with Enter / E / the button; no purchase needed.
+  The left text block was cut to a few lines of key hints.
+- **Hotkeys and keeping the part:** every row shows its key (1–9, 0 and -
+  for the 11 parts); a click or the key buys. The part stays in hand after
+  placing (rotation too) and a new copy is bought as long as the coins last;
+  Esc puts it back, another row or key swaps it, Close shop returns it. Coins
+  show top right in the shop.
+- **Prices per cell** (`ECONOMY.cost`; a piece is the sum of its cells):
+  Hull 3, Saw / Magnet 10, Flamethrower / Generator / Engine 12, Cannon /
+  Shield / Repair 14, Gatling 16, Mortar 18. Scrapping pays back 50%.
+- **Land (grid expansion):** the Buy land button buys 3 land shapes to place (the old
+  land step); price 50 + 40 per land bought so far. Undo refunds.
+- **Upgrades:** price 3 × cell cost × current level, bought via the strip on
+  the small button at the right of its row or **U** over any placed tile (tooltip shows it).
+  Applied at once to the city (`typeLevels`), undoable. Only types the city owns.
+- **Repair Core:** 25 coins, heals 35% of max HP, as often as needed.
+- **Speed slider** (HUD top right): 1×, 2×, 5×, 10× (`SIM.speeds`); above 1×
+  a frame stops simulating after 12 ms (`SIM.frameBudgetMs`), so a heavy
+  fight at 10× slows down instead of freezing.
+- Code: `src/config/economy.ts`, `src/sim/economy.ts` (prices),
+  `ShopState` and `buyUpgrade` / `buyRepair` / `buyLand` in
+  `src/sim/build.ts` (the sandbox keeps the old single-pick rules when there
+  is no shop), tests in `tests/shop.test.ts`. Debug: G +100 coins,
+  F2 +1000 coins, N spawns an enemy (was E).
+- **Not done / known:** XP, levels, land levels and the level-up build flow
+  still exist in the sim (`addXp`, `LAND.atLevels`, `toggleUpgrade`, ...)
+  only because the balance bots (`bench/`) use them; the game never levels.
+  The balance sim was **not** rebalanced for coins: prices are estimates from
+  the old XP curve (about 2700 coins by 9:00 for a bot that picks up
+  everything). Elite spike rewards (`spawner.ts`) use level 1's XP, so they
+  no longer grow. Endless pacing assumed level-based land; land is now bought.
+
+### 2.14 Removed tiles and adaptive pressure (user request 2026-10-24)
+
+- **Spear, Crossbow and Plating are gone** from the game: tile types, pieces,
+  icons, the thrust mechanic (`updateThrusts`), piercing bolts, the Plating
+  thorns perk, their sounds and tests; the balance bots' Crossbow and Spear
+  builds are dropped and Plating became Hull there. Combo table without them:
+  Marked is applied by nobody (Cannon now profits from Snagged instead of
+  Marked), Staggered is profited from by the Saw (with Burning). The status
+  `marked` stays defined but unused.
+- **Pressure** (`src/config/pressure.ts`, `src/sim/pressure.ts`): while no tile
+  took damage for 6 s, `World.pressure` grows by 1 per 45 s (cap 4); while the
+  city is being hit it drains by 1 per 15 s. Each point makes the spawn
+  budget +20%, new enemies' HP +15% and their damage +10% (not the Colossus).
+  Shown in the HUD as "Threat n%". On top of the existing time ramp (budget by
+  minute, +6% HP per minute) and endless growth.
+
+### 2.15 Saving the run (user request 2026-10-24; §8 "Saving: none" no longer holds)
+
+- The run is written to localStorage (`rolling-bastion:run`, JSON via
+  `src/sim/save.ts`, wrapper `src/saveGame.ts`) every 5 s, when the tab is
+  hidden and on `beforeunload`; not while the shop is open (its purchases are
+  not in the world yet, so the last save from before the shop stands) and not
+  once the run is over. Left out: city cache, spatial hash, pools, events,
+  Saw blade hit memory, the enemies a piercing shot had already hit (they
+  count as fresh after a load).
+- A reloaded tab resumes the saved run straight away, **paused** (the pause
+  menu opens); "Quit to title", the end of the run and a new run clear it.
+  Settings are saved as before. Saves carry `SAVE_VERSION`; other versions
+  are ignored. The speed slider is not saved.
+
+### 2.16 Rounds (user request 2026-10-24; replaces the 12:00 clock)
+
+- **Rounds:** the run is a series of rounds. A round spawns `roundBudget(n)`
+  points of enemies over `ROUNDS.spawnSec` (28 s), then ends once all are
+  dead. Budget: 20 × 1.18^(n−1); group mix from `ROUND_GROUPS`; enemy HP
+  +8% per round (`SPAWN.hpGrowthPerRound`). The Colossus comes in round 12
+  (plus 40% of that round's budget); beating it does **not** end the run (user, 2026-10-24: no victory screen): endless scaling just starts and the game goes on until the Core falls. `VictoryScene` and "Keep going" are gone. Config
+  `src/config/waves.ts` (`ROUNDS`), `src/sim/endless.ts` (`roundBudget`),
+  `startRound` in `src/sim/spawner.ts`. `World.round`, `roundClear`.
+- **Shop only between rounds:** a fresh run opens it before round 1, each
+  cleared round opens it again (title "Round n cleared"); **Enter** or the
+  button starts the next round, **Esc does not** (it only puts a held part
+  back). The E key is gone. The step function does nothing while
+  `roundClear`. The run is saved when the shop is due; a reloaded tab with a
+  cleared round reopens the shop (save version 2).
+- **Coins:** a kill pays its coins at once; no orbs, no Magnet (removed with
+  its pulse, gems, textures, sound use). Saw removed too (blades, tile,
+  tests). Start coins 40.
+- **Crossbow** back (not the old piercing one): always shoots the live enemy
+  with the most HP in range, 120 dmg, 0.6/s, range 520, 360°, 45 coins per
+  cell (Cannon 20, Gatling 30). L3 +1 bolt, L5 pierce 3.
+- **Endless:** rounds go on; enemies ×1.1 HP/damage per round past the boss
+  round, regular budget +12% of the boss round's per round, the Colossus
+  returns every 4 rounds (×1.5 HP each time). Elite spikes (150 s swarm,
+  7:00 Elite Brute) are gone.
+- **Restart round (user request 2026-10-24):** the world is saved (`saveWorld`) each time a round starts, after the shop. When the Core falls, the summary offers "Restart round" (**R**): it reloads that snapshot (city, coins, kills, RNG as at the round's start) and plays at once, endless included. A tab reloaded mid-round has no snapshot, so no button for that round.
+- **Display:** damaged tiles get an HP bar (cracks alone were too faint and
+  short-lived on 30-HP tiles). Shop left text shortened.
+- **Bug fixed:** after a reload-resume, every later "new run" restarted the
+  saved world, because Phaser keeps the old `scene.start` data when none is
+  given; `RunScene.init` now clears it.
+- Balance sim (`bench/balance.ts`) now plays rounds: crude bots die in
+  rounds 6–12, the best reach the Colossus with ~35–45% of its HP gone.
+  Feel not tested by a player.
+
 ---
+
+### 2.17 Party update (user request 2026-10-24, uncommitted)
+
+Funnier, crazier content, all in `src/config/gadgets.ts` (numbers) and
+`src/sim/gadgets.ts`, `streak.ts` (logic). Starting values, untuned.
+
+- **Tiles (shop, one cell each):** Tesla Coil (chain lightning, 4 jumps,
+  stuns), Confetti Mortar (blast, hit enemies stop and "dance"), Black Hole
+  Projector (every 5 s a hole drags enemies in and crushes them), Drone
+  Hangar (up to 3 drones that circle the city and shoot; Generators speed it
+  up), Dome Emitter (one city-wide bubble, 150 HP per emitter, stops enemies
+  and shots, recharges after 3 s, breaks into a shockwave and is back after
+  6 s; the Colossus ignores it), Repair Robot (patches the most damaged tile
+  anywhere, 8 HP/s, drawn as a rolling robot).
+- **Enemies:** Kamikaze Penguin (a Bomber that only hits one tile), Thief
+  (steals up to 25 coins on touching the city and runs; killed with the loot
+  it pays it back doubled; a dome blocks it), Mirror Knight (bounces shots, takes
+  10 %; lightning, flame and blasts get through), Blob (splits in two on every
+  hit, up to 3 generations), Disco Robot (mini-boss, 1500 HP, from round 8:
+  rhythmic ring that turns red before it strikes the tiles inside).
+- **Break-off:** tiles that were connected and lose their link to the Core in
+  a fight now break off and are gone for good (`breakOff` in `combat.ts`);
+  offline tiles from the shop are untouched until then.
+- **Kill streaks:** kills within 1.5 s continue a streak; "Double!" (10),
+  "Mega!" (25), "Ludicrous!" (50), "Monster!" (100), "Godlike!" (200) pop up
+  and are spoken (browser speech synthesis); coin sounds rise in pitch with the streak.
+- **Sound:** the new sounds are synthesised with Web Audio (`synth` in
+  `config/audio.ts`), no files.
+- **Dropped on request:** Fridge Cannon, Magnet enemy, UFO abductor, and
+  (after a first build) Catapult, Cheer Flag, Boxing Glove (with bowling) and
+  Rubber Duck Launcher.
+- **Removed on request (2026-10-24):** Shield Emitter, Repair Bay and the
+  plain Mortar (Dome Emitter, Repair Robot and Confetti Mortar take their
+  places), with everything only they used: damage-taken, heal and reflect
+  mods, diagonal/low-HP perks, shell salvos, buff pips for them, the
+  `shot-mortar` sound. Older sections of this document that mention them
+  describe the state before this change.
+- Saves: `SAVE_VERSION` is 3; older saves are ignored.
+
+### 2.18 Casino (user request 2026-10-24, uncommitted; replaces the Wheel of Fortune tile)
+
+The Wheel of Fortune tile is gone. Instead the shop has a **Casino** button
+(under Buy land) that opens a roulette wheel over the paused build screen
+(`CasinoScene`, `config/casino.ts`, `sim/casino.ts`). Pick a bet (5/10/25/50),
+SPIN (Enter/Space), Esc leaves. 20 segments: 12 busts, 2× ½, 4× ×2, 1× ×3,
+1× ×5 → expected payout 85 % of the bet, so the house wins in the long run;
+at most 6 spins per shop visit. The result is rolled first, the wheel then
+spins to it (marquee lights, tick sounds, coin burst, shake on ×3+). A spin
+clears the undo history, so a loss cannot be undone. Untuned.
 
 ## 3. Controls & Camera
 
@@ -702,7 +864,7 @@ legend open/close (`ui-toggle`), hint closed (`ui-click`). Claude's call.
 - **Build pause:** the board view in the middle (pan/zoom), cards and
   options at the side as v1; land cards first at land levels.
 - **End screen:** as v1; the final city is drawn on its board.
-- **Saving:** none (unchanged). Settings key unchanged.
+- **Saving:** the run in progress is saved to localStorage (§2.15); settings key unchanged.
 - **Debug** (v1 keys, changes): `F2` = level-up with land (was: grow the
   grid); `F4` = fill the board with every weapon type (Phase 4); in the build screen `F2` offers land; `F3` fills every empty board
   cell with Gatlings. `?sandbox=1` opens the build screen alone.
@@ -898,6 +1060,25 @@ start early if the user asks.
 ## 14. Session Log
 
 Same format as v1 (`concept.md` §14). Newest first.
+
+### 2026-10-24 — rounds (on `main`, uncommitted)
+
+User: make it round-based (builder only at round end, ever harder waves),
+drop the Magnet and orb pickup (coins go straight to the account), remove the
+Saw, bring the Crossbow back (targets the highest-HP enemy, 360°, long range,
+dearer), balance the waves by feel, fix "cannot restart after a finished run"
+and tile damage display; then: Esc must not start the round, clean up the
+shop's left text. Built as §2.16. Build, lint and 186 tests pass; balance
+sim run. Not played in a browser.
+
+### 2026-10-24 — coin economy, shop and speed slider (on `main`, uncommitted)
+
+User: add a speed slider (1×/2×/5×/10×) and replace the random level-ups by
+coins and a shop (pieces, land, upgrades; Railgun-like weapons dear, Spears
+cheap; opened by a key), and explicitly: ignore CLAUDE.md, work on `main`,
+decide alone. Built as §2.13; later the same day: fixed all-parts shop with hotkeys, Spear / Crossbow / Plating removed and Gatling dearer than Cannon, adaptive pressure (§2.14), run saving (§2.15). Build, type check, lint and tests pass;
+driven once in headless Chrome (run, slider, shop buy / place / land / undo,
+10× speed). Not tested: long runs, balance, feel. Nothing pushed.
 
 ### 2026-10-23 — v2 released (2.0.0)
 - Playtest of the bigger victory moment (user): "nice, merge and deploy".
@@ -1217,3 +1398,30 @@ Same format as v1 (`concept.md` §14). Newest first.
 - Next: Spike A on `v2-spike-a-shop`.
 - Watch out: never commit v2 work to `main` (it redeploys the live game);
   `concept.md` is the frozen v1 record.
+
+### 2026-10-24 — late-game pressure, splitting enemies, Magnet timing
+- Done (user request): enemies can `split` on death into smaller ones (not
+  elites); new Juggernaut (600 HP, from 8:00); endless spawn budget grows with
+  ln(1 + minutes) (`ENDLESS.budgetLogPerMinute`); Colossus returns after
+  300 s, then gaps shrink ×0.8 down to 90 s; Magnets start on evenly spread
+  timers (N Magnets = N evenly spaced pulses per interval) and their interval
+  shrinks with `1 + 0.25·ln(level)`. The 5 s autosave (§2.15) was already built.
+- Not tuned: run `npm run sim:endless` / `sim:balance` before trusting numbers.
+- Follow-up (user): upgrades have no level cap any more (`UPGRADES.maxLevel`
+  removed); the price grows ×1.25 per level (was 1.6, too steep) on top of the linear factor
+  (`ECONOMY.upgradePriceGrowth`), effects stay linear per level. Bug fixed:
+  the Juggernaut (cost 30) could never be afforded because the budget bank was
+  capped at 20, so spawning stopped for good (seen at 20:00); the bank cap is
+  now at least the next group's price.
+
+### 2026-10-24 — party update
+- Done (user request): §2.17. Tests in `tests/party.test.ts`; `PHASE3_POOL`
+  test now checks `SHOP_PIECES` for tile coverage (the old pool is legacy);
+  the world test expects break-off. Build, lint, tests and bench pass.
+- Not done: tuning (run `sim:balance`), checking the look in a browser, new
+  tiles in the `bench` weapon sims. Disco Robot is a plain enemy, not a boss
+  round with its own banner.
+- Follow-up (user): removed Shield Emitter, Repair Bay and Mortar (§2.17).
+  The legacy `PHASE3_POOL` lost the pieces using them and its "a third
+  support" weight test; the balance bot's archetypes use Hull and Confetti
+  Mortar instead. Run `sim:balance` before trusting any numbers.

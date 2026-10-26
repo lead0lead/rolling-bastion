@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { LINES, MOVE, UPGRADES } from '../src/config/balance';
+import { LINES, MOVE } from '../src/config/balance';
 import { TILES, type TileType } from '../src/config/tiles';
-import { damageTile, healTiles, updateProjectiles, updateWeapons } from '../src/sim/combat';
+import { updateProjectiles, updateWeapons } from '../src/sim/combat';
 import { tileAt, turnFacing } from '../src/sim/grid';
 import { buffsReceived } from '../src/sim/synergies';
-import { collectGems } from '../src/sim/progression';
 import { spawnEnemy } from '../src/sim/spawner';
 import { cityChanged, createWorld, modsOf, tileCentre, type World } from '../src/sim/world';
 import { typedCity } from './helpers';
@@ -14,15 +13,11 @@ const DT = 1 / 60;
 const LEGEND: Record<string, TileType> = {
   C: 'core',
   h: 'hull',
-  p: 'plating',
   g: 'gatling',
-  c: 'cannon',
-  m: 'mortar',
-  s: 'saw',
+  m: 'confetti',
+  y: 'dome',
+  x: 'crossbow',
   e: 'generator',
-  d: 'shield',
-  r: 'repair',
-  u: 'magnet',
   n: 'engine',
 };
 
@@ -76,65 +71,6 @@ describe('adjacency buffs', () => {
     expect(modsOf(w, tile(w, 1, 2)).fireRate).toBe(1);
   });
 
-  it('Shield Emitters reduce damage taken by neighbours, capped', () => {
-    const w = worldOf(['dhd', 'C..', '...']);
-    const hull = tile(w, 1, 0);
-    expect(modsOf(w, hull).damageTaken).toBeCloseTo(1 - (TILES.shield.support?.cap ?? 0));
-    const one = worldOf(['dh.', 'C..', '...']);
-    const h = tile(one, 1, 0);
-    damageTile(one, h, 10);
-    expect(h.hp).toBeCloseTo(TILES.hull.maxHp - 6);
-  });
-
-  it('Repair Bays heal damaged neighbours up to max HP', () => {
-    const w = worldOf(['rh.', 'C..', '...']);
-    const hull = tile(w, 1, 0);
-    hull.hp = 10;
-    for (let i = 0; i < 60; i++) healTiles(w, DT);
-    expect(hull.hp).toBeCloseTo(10 + (TILES.repair.support?.amount ?? 0));
-    for (let i = 0; i < 60 * 60; i++) healTiles(w, DT);
-    expect(hull.hp).toBe(hull.maxHp);
-  });
-
-  it('a Magnet pulse pulls in gems within its radius of the Magnet, once per interval', () => {
-    const w = worldOf(['u..', 'C..', '...']);
-    const pulse = TILES.magnet.pulse;
-    if (!pulse) throw new Error('no pulse');
-    const m = tileCentre(w, tile(w, 0, 0));
-    w.gems.push({ x: m.x, y: m.y - (pulse.radius - 10), value: 2 });
-    w.gems.push({ x: m.x, y: m.y - (pulse.radius + 40), value: 5 });
-    let pulses = 0;
-    for (let i = 0; i < 60 * (pulse.intervalSec * 3 + 0.5); i++) {
-      collectGems(w, DT);
-      pulses += w.events.filter((e) => e.kind === 'magnetPulse').length;
-      w.events.length = 0;
-    }
-    expect(pulses).toBe(3);
-    expect(w.xp).toBe(2);
-    expect(w.gems).toHaveLength(1);
-  });
-
-  it('Magnets keep their own timers; offline Magnets do not pulse', () => {
-    const w = worldOf(['uhu', 'C..', '..u']);
-    expect(w.cache.magnets).toHaveLength(2);
-    collectGems(w, DT);
-    const timers = [...w.magnetTimers.values()];
-    expect(timers).toHaveLength(2);
-    expect(timers[0]).not.toBeCloseTo(timers[1] as number);
-  });
-
-  it('Magnet levels widen the pulse; L3 pulses faster, L5 raises the base radius', () => {
-    const pulse = TILES.magnet.pulse;
-    if (!pulse) throw new Error('no pulse');
-    const l2 = worldOf(['u..', 'C..', '...'], { magnet: 2 }).cache.syn.magnetPulse;
-    expect(l2.radius).toBeCloseTo(pulse.radius * (1 + UPGRADES.effectPerLevel));
-    expect(l2.intervalSec).toBe(pulse.intervalSec);
-    const l3 = worldOf(['u..', 'C..', '...'], { magnet: 3 }).cache.syn.magnetPulse;
-    expect(l3.intervalSec).toBeLessThan(pulse.intervalSec);
-    const l5 = worldOf(['u..', 'C..', '...'], { magnet: 5 }).cache.syn.magnetPulse;
-    expect(l5.radius).toBeGreaterThan(pulse.radius * (1 + 4 * UPGRADES.effectPerLevel));
-  });
-
   it('Engines add speed after the size penalty', () => {
     const w = worldOf(['nn.', 'C..', '...']);
     expect(w.cache.syn.speedFactor).toBeCloseTo(1 + 2 * MOVE.engineBonus);
@@ -142,7 +78,7 @@ describe('adjacency buffs', () => {
 });
 
 describe('new weapons', () => {
-  it('Mortar shells ignore close enemies and blast everything at the target', () => {
+  it('Confetti Mortar shells ignore close enemies and blast everything at the target', () => {
     const w = worldOf(['m..', 'C..', '...']);
     silence(w, 0, 1);
     ready(w, 0, 0);
@@ -169,8 +105,8 @@ describe('perks', () => {
     expect(w.projectiles).toHaveLength(2);
   });
 
-  it('Cannon L5 shots pierce', () => {
-    const w = worldOf(['c..', 'C..', '...'], { cannon: 5 });
+  it('Crossbow L5 bolts pierce', () => {
+    const w = worldOf(['x..', 'C..', '...'], { crossbow: 5 });
     const c = tileCentre(w, tile(w, 0, 0));
     silence(w, 0, 1);
     ready(w, 0, 0);
@@ -181,10 +117,10 @@ describe('perks', () => {
   });
 
   it('Hull L3 raises neighbour max HP and the gain is added as HP', () => {
-    const w = worldOf(['hp.', 'C..', '...'], { hull: 3 });
-    const plating = tile(w, 1, 0);
-    expect(plating.maxHp).toBeCloseTo(TILES.plating.maxHp * 1.1);
-    expect(plating.hp).toBeCloseTo(plating.maxHp);
+    const w = worldOf(['hx.', 'C..', '...'], { hull: 3 });
+    const bow = tile(w, 1, 0);
+    expect(bow.maxHp).toBeCloseTo(TILES.crossbow.maxHp * 1.1);
+    expect(bow.hp).toBeCloseTo(bow.maxHp);
   });
 
   it('Engine L5 removes the size penalty', () => {
@@ -207,15 +143,15 @@ describe('weapon chains', () => {
 
   it('two in a line, mixed types or a gap do not chain', () => {
     expect(worldOf(['gg.g', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
-    expect(worldOf(['ggc.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+    expect(worldOf(['ggx.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
   });
 
-  it('arc weapons need the same facing; Mortars chain whatever their facing', () => {
+  it('arc weapons need the same facing; Confetti Mortars chain whatever their facing', () => {
     const w = worldOf(['ggg.', 'mmm.', 'C...', '....']);
     tile(w, 1, 0).facing = turnFacing(0, 1);
     tile(w, 1, 1).facing = turnFacing(0, 2);
     cityChanged(w);
-    expect(w.cache.syn.chains.map((c) => c.type)).toEqual(['mortar']);
+    expect(w.cache.syn.chains.map((c) => c.type)).toEqual(['confetti']);
   });
 
   it('a tile in two chains keeps the higher bonus', () => {
@@ -232,21 +168,15 @@ describe('weapon chains', () => {
 
 describe('buff links', () => {
   it('records each adjacency buff from an online support tile', () => {
-    const w = worldOf(['ege.', 'Cd..', '....', '....']);
+    const w = worldOf(['ege.', 'C...', '....', '....']);
     const gun = tile(w, 1, 0);
     const got = buffsReceived(w.cache.syn, gun.id);
     expect(got.generator?.count).toBe(2);
     expect(got.generator?.total).toBeCloseTo(2 * (TILES.generator.support?.amount ?? 0));
-    expect(got.shield).toEqual({ count: 1, total: TILES.shield.support?.amount });
-    expect(got.repair).toBeUndefined();
-    const fromShield = w.cache.syn.links.filter((l) => l.from === tile(w, 1, 1).id);
-    expect(fromShield.map((l) => l.to).sort()).toEqual([tile(w, 0, 1).id, gun.id].sort());
   });
 
-  it('diagonal perks add diagonal links; offline sources give none', () => {
-    const w = worldOf(['h.h.', 'Cd..', 'h.h.', '....'], { shield: 3 });
-    expect(w.cache.syn.links.filter((l) => l.type === 'shield')).toHaveLength(5);
-    const off = worldOf(['C...', '....', '.dh.', '....']);
+  it('offline sources give no links', () => {
+    const off = worldOf(['C...', '....', '.eh.', '....']);
     expect(off.cache.syn.links).toEqual([]);
   });
 });
@@ -281,9 +211,7 @@ describe('support chains', () => {
   });
 
   it('other support tiles do not chain', () => {
-    expect(worldOf(['ddd.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
-    expect(worldOf(['rrr.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
-    expect(worldOf(['uuu.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
+    expect(worldOf(['yyy.', 'C...', '....', '....']).cache.syn.chains).toEqual([]);
   });
 });
 

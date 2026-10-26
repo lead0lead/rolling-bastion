@@ -1,16 +1,9 @@
 import { MOVE } from '../config/balance';
 import { updateBoss } from './boss';
-import {
-  healTiles,
-  removeDead,
-  updateBlades,
-  updateThrusts,
-  updateBurns,
-  updateProjectiles,
-  updateWeapons,
-} from './combat';
+import { healTiles, removeDead, updateBurns, updateProjectiles, updateWeapons } from './combat';
 import { updateEnemies } from './enemies';
-import { collectGems } from './progression';
+import { healByRobots, updateGadgets } from './gadgets';
+import { updatePressure } from './pressure';
 import { updateSpawner } from './spawner';
 import type { World } from './world';
 
@@ -22,21 +15,23 @@ export interface MoveInput {
 
 /** Advances the world by one fixed tick. */
 export function step(w: World, input: MoveInput, dt: number): void {
-  if (w.over) return;
+  if (w.over || w.roundClear) return;
   w.time += dt;
   moveCity(w, input, dt);
   updateSpawner(w, dt);
   updateBoss(w, dt);
   updateEnemies(w, dt);
   if (w.over) return;
+  updatePressure(w, dt);
+  updateGadgets(w, dt);
   updateWeapons(w, dt);
-  updateBlades(w, dt);
-  updateThrusts(w, dt);
   updateProjectiles(w, dt);
   updateBurns(w, dt);
   healTiles(w, dt);
+  healByRobots(w, dt);
   removeDead(w);
-  collectGems(w, dt);
+  // Everything spawned and dead: the round is won, time to shop (the boss win ends the run first).
+  if (w.spawn.done && w.enemies.length === 0 && !w.over) w.roundClear = true;
 }
 
 /** Free 8-direction driving with a short ease and the size penalty (concept.md §2.5). */

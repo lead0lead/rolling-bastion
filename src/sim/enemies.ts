@@ -2,8 +2,18 @@ import { ENEMY_PHYSICS, GRID } from '../config/balance';
 import { ENEMIES, type EnemyDef, type RangedDef } from '../config/enemies';
 import type { PlacedTile } from './grid';
 import { bossContactFactor, bossMove } from './boss';
-import { damageTile, fireEnemyShot, hitEnemy, MAX_ENEMY_RADIUS, statusSpeed } from './combat';
-import { cellOrigin, modsOf, tileAtCell, type Enemy, type World } from './world';
+import { damageTile, fireEnemyShot, MAX_ENEMY_RADIUS, statusSpeed } from './combat';
+import { domeCircle, domeUp, hitDome } from './gadgets';
+import { spawnRingRadius } from './spawner';
+import {
+  cellOrigin,
+  cityCentre,
+  modsOf,
+  tileAtCell,
+  tileCentre,
+  type Enemy,
+  type World,
+} from './world';
 
 /** What an enemy touched this tick (reused, no allocation). */
 interface Contact {
@@ -11,11 +21,9 @@ interface Contact {
   tile: PlacedTile | undefined;
   /** A touched bridge tile, if any (Sappers attack it first). */
   bridge: PlacedTile | undefined;
-  /** Summed damage/s from touching spiked Plating. */
-  thorns: number;
 }
 
-const contact: Contact = { tile: undefined, bridge: undefined, thorns: 0 };
+const contact: Contact = { tile: undefined, bridge: undefined };
 
 /**
  * Enemy movement, ranged attacks, separation, collision with the city's
@@ -31,6 +39,12 @@ export function updateEnemies(w: World, dt: number): void {
     e.py = e.y;
     const def = ENEMIES[e.type];
     if (e === w.boss && bossMove(w, e, dt)) continue;
+    if (e.fleeing) {
+      flee(w, e, dt);
+      continue;
+    }
+    if (def.disco) discoBeat(w, e, def.disco, dt);
+    if (w.over) return;
     let mx = 0;
     let my = 0;
     const d2 =
@@ -58,10 +72,17 @@ export function updateEnemies(w: World, dt: number): void {
   rebuildHash(w);
   separate(w);
 
+  const dome = domeUp(w) ? domeCircle(w) : null;
   for (const e of w.enemies) {
     if (e.dead) continue;
-    collideWithCity(w, e, contact);
     const def = ENEMIES[e.type];
+    // The dome stops everything but the Colossus before it reaches a tile.
+    if (dome && e !== w.boss && domeUp(w) && domeContact(w, e, def, dome, dt)) continue;
+    collideWithCity(w, e, contact);
+    if (def.thief) {
+      if (contact.tile && !e.fleeing) steal(w, e, def.thief);
+      continue;
+    }
     const t = (def.targetsBridges && contact.bridge) || contact.tile;
     if (!t) continue;
     if (def.bomb) {
@@ -73,8 +94,6 @@ export function updateEnemies(w: World, dt: number): void {
     const dps = def.contactDps * e.damageFactor * (e === w.boss ? bossContactFactor(w) : 1);
     damageTile(w, t, dps * mods.contactTaken * dt);
     if (w.over) return;
-    if (contact.thorns > 0) hitEnemy(w, e, contact.thorns * dt, 0, 0, 0, 'plating');
-    if (mods.reflect > 0) hitEnemy(w, e, dps * mods.reflect * dt, 0, 0, 0, 'shield');
   }
 
   updateEnemyShots(w, dt);
@@ -138,6 +157,7 @@ function rangedAttack(
 function updateEnemyShots(w: World, dt: number): void {
   const cell = GRID.cellPx;
   const { left, top } = cellOrigin(w);
+  const dome = domeUp(w) ? domeCircle(w) : null;
   let n = 0;
   for (const s of w.enemyShots) {
     s.px = s.x;
@@ -146,6 +166,10 @@ function updateEnemyShots(w: World, dt: number): void {
     s.y += s.vy * dt;
     s.life -= dt;
     if (s.life <= 0) s.dead = true;
+    if (!s.dead && dome && domeUp(w) && (s.x - dome.x) ** 2 + (s.y - dome.y) ** 2 <= dome.r ** 2) {
+      hitDome(w, s.damage);
+      s.dead = true;
+    }
     if (!s.dead && !w.over) {
       const t = tileAtCell(w, Math.floor((s.x - left) / cell), Math.floor((s.y - top) / cell));
       if (t) {
@@ -182,6 +206,90 @@ function detonate(w: World, e: Enemy, def: EnemyDef, t: PlacedTile): void {
   e.noDrop = true;
   for (const o of hit) {
     damageTile(w, o, bomb.damage * e.damageFactor);
+    if (w.over) return;
+  }
+}
+
+/** Dome contact: the enemy is held at the dome's edge and wears it down (a bomb goes off against it). True if it touched. */
+function domeContact(
+  w: World,
+  e: Enemy,
+  def: EnemyDef,
+  dome: { x: number; y: number; r: number },
+  dt: number,
+): boolean {
+  const dx = e.x - dome.x;
+  const dy = e.y - dome.y;
+  const reach = dome.r + e.radius;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= reach * reach) return false;
+  const d = Math.sqrt(d2) || 1;
+  e.x = dome.x + (dx / d) * reach;
+  e.y = dome.y + (dy / d) * reach;
+  if (def.bomb) {
+    e.dead = true;
+    e.noDrop = true;
+    w.events.push({ kind: 'blast', x: e.x, y: e.y, radius: 40, bomb: true });
+    hitDome(w, def.bomb.damage * e.damageFactor);
+  } else {
+    hitDome(w, def.contactDps * e.damageFactor * dt);
+  }
+  return true;
+}
+
+/** A Thief grabs coins from the account and runs for it. */
+function steal(w: World, e: Enemy, thief: NonNullable<EnemyDef['thief']>): void {
+  e.loot = Math.min(w.coins, thief.steal);
+  w.coins -= e.loot;
+  e.fleeing = true;
+  w.events.push({ kind: 'steal', x: e.x, y: e.y, amount: e.loot });
+}
+
+/** A fleeing Thief runs straight away from the city and is gone (with the loot) once it leaves the spawn ring. */
+function flee(w: World, e: Enemy, dt: number): void {
+  const c = cityCentre(w);
+  const dx = e.x - c.x;
+  const dy = e.y - c.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const speed = ENEMIES[e.type].thief?.fleeSpeed ?? 0;
+  e.x += ((dx / d) * speed + e.kvx) * dt;
+  e.y += ((dy / d) * speed + e.kvy) * dt;
+  e.kvx *= Math.exp(-ENEMY_PHYSICS.knockbackDecay * dt);
+  e.kvy *= Math.exp(-ENEMY_PHYSICS.knockbackDecay * dt);
+  if (d > spawnRingRadius(w)) {
+    e.dead = true;
+    e.noDrop = true;
+  }
+}
+
+/**
+ * The Disco Robot's beat (concept-v2.md §2.17): every beat it pulses; every
+ * other beat it strikes everything within its ring — the dome if there is one, else the tiles.
+ * `gen` counts the beats, `cooldown` is the time to the next.
+ */
+function discoBeat(w: World, e: Enemy, disco: NonNullable<EnemyDef['disco']>, dt: number): void {
+  e.cooldown -= dt;
+  if (e.cooldown > 0) return;
+  e.cooldown += disco.beat;
+  e.gen++;
+  const strike = e.gen % 2 === 0;
+  w.events.push({ kind: 'discoBeat', x: e.x, y: e.y, strike });
+  if (!strike) return;
+  const damage = disco.damage * e.damageFactor;
+  if (domeUp(w)) {
+    const dome = domeCircle(w);
+    if (Math.hypot(e.x - dome.x, e.y - dome.y) <= dome.r + disco.radius) {
+      hitDome(w, damage * 4);
+      return;
+    }
+  }
+  const reach = disco.radius + GRID.cellPx / 2;
+  const hit = w.city.tiles.filter((t) => {
+    const c = tileCentre(w, t);
+    return Math.hypot(c.x - e.x, c.y - e.y) <= reach;
+  });
+  for (const t of hit) {
+    damageTile(w, t, damage);
     if (w.over) return;
   }
 }
@@ -232,7 +340,7 @@ function separate(w: World): void {
 /**
  * Pushes the enemy out of any tile it overlaps (tiles are solid squares) and
  * records what it touches in `out`: the first tile (the one it attacks), a
- * touched bridge, plus thorns from all touched tiles.
+ * touched bridge.
  */
 function collideWithCity(w: World, e: Enemy, out: Contact): void {
   const cell = GRID.cellPx;
@@ -244,7 +352,6 @@ function collideWithCity(w: World, e: Enemy, out: Contact): void {
   const span = Math.ceil(reach / cell);
   out.tile = undefined;
   out.bridge = undefined;
-  out.thorns = 0;
   for (let dy = -span; dy <= span; dy++) {
     for (let dx = -span; dx <= span; dx++) {
       const t = tileAtCell(w, gx + dx, gy + dy);
@@ -261,8 +368,6 @@ function collideWithCity(w: World, e: Enemy, out: Contact): void {
       if (d2 > reach * reach) continue;
       out.tile ??= t;
       if (!out.bridge && w.cache.bridges.has(t.id)) out.bridge = t;
-      const m = modsOf(w, t);
-      out.thorns += m.thorns;
       if (d2 >= r * r) continue;
       if (d2 > 0) {
         const d = Math.sqrt(d2);

@@ -3,12 +3,12 @@ import { COLORS, css, FONT } from './render/palette';
 import { settings, updateSettings } from './settings';
 import { BootScene } from './scenes/BootScene';
 import { BuildScene } from './scenes/BuildScene';
+import { CasinoScene } from './scenes/CasinoScene';
 import { HudScene } from './scenes/HudScene';
 import { PauseScene } from './scenes/PauseScene';
 import { RunScene } from './scenes/RunScene';
 import { SettingsScene } from './scenes/SettingsScene';
 import { SummaryScene } from './scenes/SummaryScene';
-import { VictoryScene } from './scenes/VictoryScene';
 import { TitleScene } from './scenes/TitleScene';
 
 // Phaser draws text to canvases, so the bundled font must be loaded first (concept.md §6).
@@ -45,9 +45,9 @@ new Phaser.Game({
     RunScene,
     HudScene,
     BuildScene,
+    CasinoScene,
     PauseScene,
     SettingsScene,
     SummaryScene,
-    VictoryScene,
   ],
 });

@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { SPAWN } from '../src/config/balance';
 import { ELITE, ENEMIES } from '../src/config/enemies';
-import { SPAWN_GROUPS, SPIKES, WAVES } from '../src/config/waves';
-import { TILES, type TileType } from '../src/config/tiles';
+import { ECONOMY } from '../src/config/economy';
+import { ROUND_GROUPS, SPAWN_GROUPS } from '../src/config/waves';
+import type { TileType } from '../src/config/tiles';
 import { removeDead } from '../src/sim/combat';
+import { updateGadgets } from '../src/sim/gadgets';
 import { updateEnemies } from '../src/sim/enemies';
 import { tileAt } from '../src/sim/grid';
-import { xpToNext } from '../src/sim/progression';
 import { spawnEnemy, spawnRing, updateSpawner } from '../src/sim/spawner';
 import { cityChanged, createWorld, tileCentre, type World } from '../src/sim/world';
 import { typedCity } from './helpers';
 
 const DT = 1 / 60;
-const LEGEND: Record<string, TileType> = { C: 'core', h: 'hull', d: 'shield', p: 'plating' };
+const LEGEND: Record<string, TileType> = { C: 'core', h: 'hull', d: 'dome', f: 'flamethrower' };
 
 function worldOf(rows: string[]): World {
   const w = createWorld(1);
@@ -60,7 +61,7 @@ describe('Spitter', () => {
     expect(core.hp).toBeLessThan(core.maxHp);
   });
 
-  it('shots are reduced by Shield Emitters', () => {
+  it('shots are absorbed by the dome', () => {
     const w = worldOf(['...', 'dC.', '...']);
     const core = tile(w, 1, 1);
     const c = tileCentre(w, core);
@@ -77,16 +78,18 @@ describe('Spitter', () => {
       life: 1,
       dead: false,
     });
+    updateGadgets(w, DT);
     for (let i = 0; i < 30; i++) updateEnemies(w, DT);
-    expect(core.hp).toBeCloseTo(core.maxHp - 10 * (1 - (TILES.shield.support?.amount ?? 0)));
+    expect(core.hp).toBe(core.maxHp);
+    expect(w.dome.hp).toBeCloseTo(w.dome.max - 10);
     expect(w.enemyShots).toHaveLength(0);
   });
 });
 
 describe('Bomber', () => {
-  it('damages every tile in a 3×3 square on contact, then dies without a gem', () => {
-    // Plating survives the blast (Hull has exactly the bomb's damage in HP).
-    const w = worldOf(['pppp', 'pCpp', 'pppp', 'pppp']);
+  it('damages every tile in a 3×3 square on contact, then dies without paying coins', () => {
+    // Flamethrowers survive the blast (a Hull has exactly the bomb's damage in HP).
+    const w = worldOf(['ffff', 'fCff', 'ffff', 'ffff']);
     const centre = tile(w, 3, 1);
     const c = tileCentre(w, centre);
     spawnEnemy(w, 'bomber', c.x + 16 + ENEMIES.bomber.radius, c.y);
@@ -99,7 +102,7 @@ describe('Bomber', () => {
     expect(tile(w, 1, 1).hp).toBe(tile(w, 1, 1).maxHp);
     expect(tile(w, 0, 0).hp).toBe(tile(w, 0, 0).maxHp);
     expect(w.enemies).toHaveLength(0);
-    expect(w.gems).toHaveLength(0);
+    expect(w.coins).toBe(ECONOMY.startCoins);
     expect(w.kills).toBe(0);
   });
 });
@@ -108,7 +111,6 @@ describe('elites', () => {
   it('spawn groups above the enemy cap arrive as one elite', () => {
     const w = createWorld(1);
     spawnRing(w, 'swarmer', SPAWN.maxEnemies);
-    w.time = 30;
     w.spawn.budget = 10;
     w.spawn.next = { id: 'swarmer', count: 1 };
     updateSpawner(w, DT);
@@ -118,36 +120,21 @@ describe('elites', () => {
     expect(elite?.radius).toBeCloseTo(ENEMIES.swarmer.radius * ELITE.scale);
     expect(elite?.xp).toBe(ENEMIES.swarmer.xp * ELITE.minMultiplier);
   });
-
-  it('the 7:00 Elite Brute is worth several level-ups', () => {
-    const spike = SPIKES.find((s) => s.elite);
-    if (!spike?.elite) throw new Error('no elite spike');
-    const w = createWorld(1);
-    w.level = 10;
-    w.spawn.spikeIndex = SPIKES.indexOf(spike);
-    w.time = spike.at;
-    updateSpawner(w, DT);
-    const brute = w.enemies.find((e) => e.elite);
-    let xp = 0;
-    for (let i = 0; i < spike.elite.levels; i++) xp += xpToNext(10 + i);
-    expect(brute?.type).toBe(spike.enemy);
-    expect(brute?.xp).toBe(xp);
-  });
 });
 
-describe('wave table', () => {
+describe('round table', () => {
   it('is sorted and introduces the new enemy types on schedule', () => {
-    const times = WAVES.map((e) => e.at);
-    expect(times).toEqual([...times].sort((a, b) => a - b));
+    const rounds = ROUND_GROUPS.map((e) => e.from);
+    expect(rounds).toEqual([...rounds].sort((a, b) => a - b));
     const firstAt = (enemy: string) =>
-      WAVES.find((e) =>
+      ROUND_GROUPS.find((e) =>
         Object.keys(e.groups).some(
           (g) => SPAWN_GROUPS[g as keyof typeof SPAWN_GROUPS].enemy === enemy,
         ),
-      )?.at;
-    expect(firstAt('brute')).toBe(150);
-    expect(firstAt('spitter')).toBe(240);
-    expect(firstAt('sapper')).toBe(330);
-    expect(firstAt('bomber')).toBe(420);
+      )?.from;
+    expect(firstAt('brute')).toBe(4);
+    expect(firstAt('spitter')).toBe(6);
+    expect(firstAt('sapper')).toBe(7);
+    expect(firstAt('bomber')).toBe(8);
   });
 });

@@ -73,18 +73,13 @@ it('simulation step stays well inside the frame budget', () => {
 const MIX: TileType[] = [
   'gatling',
   'hull',
-  'cannon',
   'generator',
-  'mortar',
-  'plating',
-  'saw',
-  'shield',
+  'tesla',
   'crossbow',
-  'repair',
+  'dome',
+  'robot',
   'flamethrower',
   'engine',
-  'spear',
-  'magnet',
 ];
 
 /**

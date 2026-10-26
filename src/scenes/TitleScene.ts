@@ -12,13 +12,12 @@ import { BG_GRID_SIZE, createTextures, TEX } from '../render/textures';
 import { outlineOf } from '../render/tiles';
 
 /** Demo city on the title screen: rows of tile letters (see LEGEND), '.' empty. */
-const DEMO_CITY = ['.g.g.', 'gegeg', 'hdCdh', 'gegeg', '.g.g.'];
+const DEMO_CITY = ['.g.g.', 'gegeg', 'hhChh', 'gegeg', '.g.g.'];
 const LEGEND: Record<string, TileType> = {
   C: 'core',
   h: 'hull',
   g: 'gatling',
   e: 'generator',
-  d: 'shield',
 };
 const DEMO = {
   cell: 36,
@@ -41,7 +40,7 @@ const DEMO = {
 const BLOB_TYPES: EnemyType[] = ['swarmer', 'runner', 'spitter', 'sapper', 'bomber', 'brute'];
 
 /** Candy colours for the title letters, from the tile palette. */
-const LETTER_COLORS: TileType[] = ['gatling', 'cannon', 'generator', 'shield', 'plating', 'repair'];
+const LETTER_COLORS: TileType[] = ['gatling', 'tesla', 'generator', 'dome', 'hull', 'robot'];
 const TITLE = {
   text: 'Rolling Bastion',
   y: 150,

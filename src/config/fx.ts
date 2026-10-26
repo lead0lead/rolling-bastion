@@ -27,10 +27,6 @@ export const FX = {
   corePulse: { amount: 0.05, speed: 3.2 },
   /** Generator pulse rings: period (s), max radius (cells), start alpha. */
   generatorPulse: { period: 1.2, radius: 1.4, alpha: 0.45 },
-  /** Magnet pulse ring: grows to the pulse radius over `time` (s) while fading. */
-  magnetPulse: { time: 0.6, alpha: 0.7, width: 3 },
-  /** Gem sparkle: scale amount and speed (rad/s). */
-  gemSparkle: { amount: 0.18, speed: 6 },
   /** Bounce of a piece just placed in the build screen: overshoot and duration (s). */
   placeBounce: { amount: 0.2, time: 0.25 },
   /** Screen shake (duration ms, intensity): tile lost, boss phase change. */

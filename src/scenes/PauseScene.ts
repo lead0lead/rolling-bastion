@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { MenuPanel, WAKE_KEY_GRACE_MS } from '../render/menu';
+import { clearSavedRun } from '../saveGame';
 
 /** How long a "click again to confirm" stays armed (ms). */
 const CONFIRM_MS = 3000;
@@ -78,6 +79,7 @@ export class PauseScene extends Phaser.Scene {
   }
 
   private quit(): void {
+    clearSavedRun();
     this.scene.stop('Hud');
     this.scene.stop('Run');
     this.scene.start('Title');

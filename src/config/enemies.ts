@@ -1,5 +1,17 @@
 export type EnemyType =
-  'swarmer' | 'runner' | 'brute' | 'spitter' | 'sapper' | 'bomber' | 'colossus';
+  | 'swarmer'
+  | 'runner'
+  | 'brute'
+  | 'juggernaut'
+  | 'spitter'
+  | 'sapper'
+  | 'bomber'
+  | 'penguin'
+  | 'thief'
+  | 'mirror'
+  | 'blob'
+  | 'disco'
+  | 'colossus';
 
 /** Keeps its distance and shoots the nearest tile (Spitter). */
 export interface RangedDef {
@@ -28,7 +40,7 @@ export interface EnemyDef {
   speed: number;
   /** Contact damage per second to the touched tile. */
   contactDps: number;
-  /** XP gem value dropped on death. */
+  /** Coins paid on death. */
   xp: number;
   /** Collision radius (px). */
   radius: number;
@@ -41,8 +53,18 @@ export interface EnemyDef {
   color: number;
   ranged?: RangedDef;
   bomb?: BombDef;
+  /** When killed it pops into `count` smaller enemies (balloons-TD style); elites and the boss don't. */
+  split?: { into: EnemyType; count: number };
   /** Walks to the nearest bridge tile instead of the nearest tile (Sapper). */
   targetsBridges?: boolean;
+  /** Steals up to `steal` coins on touching the city, then runs off; killed with the loot it pays it back doubled (Thief). */
+  thief?: { steal: number; fleeSpeed: number };
+  /** Bounces projectiles back instead of taking their damage (Mirror Knight). */
+  mirror?: boolean;
+  /** Splits in two on every hit that doesn't kill it, each half with half the HP and 80% of the size (Blob). */
+  splitsOnHit?: { maxGen: number; minHp: number };
+  /** Dances: every `beat` s a ring of `radius` px around it pulses, and every other beat it strikes the tiles inside for `damage` (Disco Robot). */
+  disco?: { beat: number; radius: number; damage: number };
   /**
    * The boss: one at a time, no HP growth over time, no knockback, and too big
    * for the spatial hash queries (handled separately).
@@ -57,7 +79,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     maxHp: 10,
     speed: 60,
     contactDps: 5,
-    xp: 1,
+    xp: 2,
     radius: 7,
     cost: 1,
     color: 0xff5d73,
@@ -67,7 +89,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     maxHp: 6,
     speed: 140,
     contactDps: 4,
-    xp: 1,
+    xp: 2,
     radius: 6,
     cost: 0.8,
     color: 0xc77dff,
@@ -81,6 +103,18 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     radius: 13,
     cost: 8,
     color: 0xe63946,
+    split: { into: 'swarmer', count: 3 },
+  },
+  juggernaut: {
+    name: 'Juggernaut',
+    maxHp: 600,
+    speed: 38,
+    contactDps: 45,
+    xp: 30,
+    radius: 20,
+    cost: 30,
+    color: 0x7b2cbf,
+    split: { into: 'brute', count: 2 },
   },
   spitter: {
     name: 'Spitter',
@@ -116,18 +150,73 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     maxHp: 20,
     speed: 80,
     contactDps: 0,
-    xp: 3,
+    xp: 5,
     radius: 9,
     cost: 2.5,
     color: 0xd62839,
     bomb: { damage: 40, radiusCells: 1 },
   },
+  penguin: {
+    name: 'Kamikaze Penguin',
+    maxHp: 14,
+    speed: 105,
+    contactDps: 0,
+    xp: 3,
+    radius: 8,
+    cost: 1.5,
+    color: 0xb5446e,
+    bomb: { damage: 30, radiusCells: 0 },
+  },
+  thief: {
+    name: 'Thief',
+    maxHp: 40,
+    speed: 85,
+    contactDps: 0,
+    xp: 4,
+    radius: 8,
+    cost: 3,
+    color: 0xff8fab,
+    thief: { steal: 25, fleeSpeed: 130 },
+  },
+  mirror: {
+    name: 'Mirror Knight',
+    maxHp: 90,
+    speed: 50,
+    contactDps: 12,
+    xp: 8,
+    radius: 12,
+    cost: 6,
+    color: 0xd8b4e2,
+    mirror: true,
+  },
+  blob: {
+    name: 'Blob',
+    maxHp: 40,
+    speed: 55,
+    contactDps: 6,
+    xp: 4,
+    radius: 11,
+    cost: 3,
+    color: 0xe0559b,
+    splitsOnHit: { maxGen: 3, minHp: 5 },
+  },
+  disco: {
+    name: 'Disco Robot',
+    maxHp: 1500,
+    speed: 40,
+    contactDps: 20,
+    xp: 40,
+    radius: 22,
+    cost: 35,
+    color: 0xa23bd4,
+    disco: { beat: 0.7, radius: 150, damage: 16 },
+  },
   colossus: {
     name: 'Colossus',
-    maxHp: 50000,
+    maxHp: 42000,
     speed: 35,
     contactDps: 60,
-    xp: 0,
+    xp: 200,
     radius: 36,
     cost: 0,
     color: 0xb5179e,
@@ -143,10 +232,8 @@ export const ENEMY_TYPES = Object.keys(ENEMIES) as EnemyType[];
  */
 export const BOSS = {
   type: 'colossus' as EnemyType,
-  /** Spawns at this game time (s); regular spawns stop. */
-  at: 720,
-  /** Still alive at this time (s): enrages. */
-  enrageAt: 840,
+  /** Still alive this long (s) after its arrival: enrages. */
+  enrageAfter: 120,
   /** Enraged contact damage multiplier (+100%). */
   enrageDamage: 2,
   /** HP fractions below which phase 2 and phase 3 start. */

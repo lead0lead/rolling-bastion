@@ -80,7 +80,7 @@ describe('combos', () => {
 
   it("hits put the source's status on the enemy", () => {
     const { w, e } = oneEnemy('brute');
-    hitEnemy(w, e, 1, 0, 0, 0, 'cannon');
+    hitEnemy(w, e, 1, 0, 0, 0, 'confetti');
     expect(hasStatus(w, e, 'staggered')).toBe(true);
     hitEnemy(w, e, 1, 0, 0, 0, 'gatling');
     expect(hasStatus(w, e, 'marked')).toBe(false);

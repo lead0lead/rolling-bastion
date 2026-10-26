@@ -1,12 +1,13 @@
 import { SIM } from '../src/config/balance';
 import { TILES, type Facing, type TileType } from '../src/config/tiles';
 import { cityChanged, createWorld } from '../src/sim/world';
+import { startRound } from '../src/sim/spawner';
 import { step } from '../src/sim/step';
 
 /**
  * Weapon measurement (concept-v2.md §2.12): the Core ringed by 8 tiles of one
  * weapon type (facing away from the Core), invulnerable, driving a slow
- * circle through the normal 12-minute spawns. Prints effective damage per
+ * circle through the rounds' spawns (the next round starts at once). Prints effective damage per
  * tile per second (overkill not counted) and, for lobbed shells, how many
  * land on nobody. Compare weapons with each other, not with real runs.
  * Run with `npm run sim:weapons`; the weapons are split over the
@@ -93,6 +94,7 @@ export function measureWeaponShard(shard: number): void {
           s.hits += n;
           if (n === 0) s.empty++;
         }
+        if (w.roundClear) startRound(w);
         const a = (w.time / CIRCLE_SEC) * Math.PI * 2;
         step(w, { x: Math.cos(a), y: Math.sin(a) }, SIM.dt);
         for (const t of w.city.tiles) t.hp = INVULNERABLE_HP;

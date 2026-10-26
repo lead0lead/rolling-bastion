@@ -26,7 +26,7 @@ describe('facing', () => {
   });
 
   it('pieces face up by default and rotate their facing with the piece', () => {
-    const def = PHASE2_POOL.find((p) => p.id === 't-cannon');
+    const def = PHASE2_POOL.find((p) => p.id === 't-gatling');
     if (!def) throw new Error('missing piece');
     const held = heldFromPiece(createCity(), def);
     expect(held.tiles.every((t) => t.facing === 0)).toBe(true);
@@ -58,7 +58,7 @@ describe('inArc', () => {
 });
 
 /** World with the Core at the centre and one weapon tile right of it. */
-function gunWorld(type: 'gatling' | 'cannon', facing: 0 | 1 | 2 | 3): World {
+function gunWorld(type: 'gatling', facing: 0 | 1 | 2 | 3): World {
   const w = createWorld(1);
   w.city = cityFrom(['...', '.Ca', '...']);
   const gun = tileAt(w.city, 2, 1);
@@ -70,29 +70,18 @@ function gunWorld(type: 'gatling' | 'cannon', facing: 0 | 1 | 2 | 3): World {
 }
 
 describe('arc targeting', () => {
-  it('a Cannon facing right ignores enemies behind it and hits ones in front', () => {
-    const w = gunWorld('cannon', 1);
+  it('a Gatling facing right ignores enemies behind it and hits ones in front', () => {
+    const w = gunWorld('gatling', 1);
     const gun = tileAt(w.city, 2, 1);
     if (!gun) throw new Error('missing tile');
     const c = tileCentre(w, gun);
-    const weapon = TILES.cannon.weapon;
+    const weapon = TILES.gatling.weapon;
     if (!weapon) throw new Error('no weapon');
     const behind = spawnEnemy(w, 'swarmer', c.x - 100, c.y);
     expect(nearestEnemy(w, c.x, c.y, weapon.range, weaponArc(gun, weapon))).toBeUndefined();
-    const front = spawnEnemy(w, 'swarmer', c.x + 300, c.y + 20);
+    const front = spawnEnemy(w, 'swarmer', c.x + 200, c.y + 20);
     expect(nearestEnemy(w, c.x, c.y, weapon.range, weaponArc(gun, weapon))).toBe(front);
     expect(nearestEnemy(w, c.x, c.y, weapon.range)).toBe(behind);
-  });
-
-  it('uses the longer arc-weapon range', () => {
-    const w = gunWorld('cannon', 1);
-    const gun = tileAt(w.city, 2, 1);
-    if (!gun) throw new Error('missing tile');
-    const c = tileCentre(w, gun);
-    const far = spawnEnemy(w, 'swarmer', c.x + 370, c.y);
-    const weapon = TILES.cannon.weapon;
-    if (!weapon) throw new Error('no weapon');
-    expect(nearestEnemy(w, c.x, c.y, weapon.range, weaponArc(gun, weapon))).toBe(far);
   });
 
   it('aims weapon barrels at the target, and back along the facing when idle', () => {

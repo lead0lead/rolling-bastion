@@ -9,46 +9,94 @@ export interface SpawnGroupDef {
 }
 
 export type SpawnGroupId =
-  'swarmer' | 'swarmerPack' | 'runnerLine' | 'brute' | 'spitterTrio' | 'sapperPair' | 'bomberPack';
+  | 'swarmer'
+  | 'swarmerPack'
+  | 'runnerLine'
+  | 'brute'
+  | 'juggernaut'
+  | 'spitterTrio'
+  | 'sapperPair'
+  | 'bomberPack'
+  | 'penguinPack'
+  | 'thiefPair'
+  | 'mirrorKnight'
+  | 'blobPair'
+  | 'discoRobot';
 
 export const SPAWN_GROUPS: Record<SpawnGroupId, SpawnGroupDef> = {
   swarmer: { enemy: 'swarmer', count: [1, 1], formation: 'cluster' },
   swarmerPack: { enemy: 'swarmer', count: [3, 5], formation: 'cluster' },
   runnerLine: { enemy: 'runner', count: [8, 12], formation: 'line' },
   brute: { enemy: 'brute', count: [1, 1], formation: 'cluster' },
+  juggernaut: { enemy: 'juggernaut', count: [1, 1], formation: 'cluster' },
   spitterTrio: { enemy: 'spitter', count: [2, 3], formation: 'cluster' },
   sapperPair: { enemy: 'sapper', count: [2, 2], formation: 'cluster' },
   bomberPack: { enemy: 'bomber', count: [3, 4], formation: 'line' },
+  penguinPack: { enemy: 'penguin', count: [4, 6], formation: 'line' },
+  thiefPair: { enemy: 'thief', count: [1, 2], formation: 'cluster' },
+  mirrorKnight: { enemy: 'mirror', count: [1, 1], formation: 'cluster' },
+  blobPair: { enemy: 'blob', count: [1, 2], formation: 'cluster' },
+  discoRobot: { enemy: 'disco', count: [1, 1], formation: 'cluster' },
 };
 
 /**
- * Wave table (concept.md §4.1). Budget per second is interpolated linearly
- * between entries; group weights come from the latest entry reached.
- * Starting values to tune.
+ * The round-based run (concept-v2.md §2.16): the city fights one round at a
+ * time and shops in between. A round spawns `roundBudget(round)` points of
+ * enemies over `spawnSec`, then ends once all of them are dead. Starting
+ * values to tune by playing.
  */
-export interface WaveEntry {
-  at: number;
-  budgetPerSec: number;
+export const ROUNDS = {
+  /** The Colossus arrives in this round; beating it wins the run. */
+  bossRound: 12,
+  /** The round's budget is spawned evenly over this many seconds. */
+  spawnSec: 28,
+  /** Budget of round 1; each round up to the boss round is this much dearer than the last. */
+  baseBudget: 20,
+  budgetGrowth: 1.18,
+  /** In a boss round the regular budget is only this share (the Colossus brings adds of its own). */
+  bossRoundShare: 0.4,
+} as const;
+
+/** Spawn group weights from `from` on, until a later entry takes over. */
+export interface RoundEntry {
+  from: number;
   groups: Partial<Record<SpawnGroupId, number>>;
 }
 
-export const WAVES: WaveEntry[] = [
-  { at: 0, budgetPerSec: 0.9, groups: { swarmer: 1 } },
-  { at: 45, budgetPerSec: 1.4, groups: { swarmer: 1, swarmerPack: 0.3 } },
-  { at: 60, budgetPerSec: 2.0, groups: { swarmer: 1, swarmerPack: 0.4, runnerLine: 0.15 } },
+export const ROUND_GROUPS: RoundEntry[] = [
+  { from: 1, groups: { swarmer: 1 } },
+  { from: 2, groups: { swarmer: 1, swarmerPack: 0.4 } },
+  { from: 3, groups: { swarmer: 1, swarmerPack: 0.5, runnerLine: 0.2, blobPair: 0.25 } },
   {
-    at: 150,
-    budgetPerSec: 2.75,
-    groups: { swarmer: 1, swarmerPack: 0.5, runnerLine: 0.2, brute: 0.12 },
+    from: 4,
+    groups: { swarmer: 1, swarmerPack: 0.5, runnerLine: 0.2, brute: 0.15, blobPair: 0.25 },
   },
   {
-    at: 240,
-    budgetPerSec: 3.5,
-    groups: { swarmer: 0.8, swarmerPack: 0.6, runnerLine: 0.25, brute: 0.15, spitterTrio: 0.2 },
+    from: 5,
+    groups: {
+      swarmer: 1,
+      swarmerPack: 0.5,
+      runnerLine: 0.2,
+      brute: 0.15,
+      blobPair: 0.25,
+      penguinPack: 0.2,
+    },
   },
   {
-    at: 330,
-    budgetPerSec: 4.45,
+    from: 6,
+    groups: {
+      swarmer: 0.8,
+      swarmerPack: 0.6,
+      runnerLine: 0.25,
+      brute: 0.15,
+      spitterTrio: 0.2,
+      blobPair: 0.25,
+      penguinPack: 0.2,
+      thiefPair: 0.15,
+    },
+  },
+  {
+    from: 7,
     groups: {
       swarmer: 0.8,
       swarmerPack: 0.6,
@@ -56,11 +104,14 @@ export const WAVES: WaveEntry[] = [
       brute: 0.15,
       spitterTrio: 0.2,
       sapperPair: 0.2,
+      blobPair: 0.25,
+      penguinPack: 0.2,
+      thiefPair: 0.15,
+      mirrorKnight: 0.12,
     },
   },
   {
-    at: 420,
-    budgetPerSec: 5.4,
+    from: 8,
     groups: {
       swarmer: 0.7,
       swarmerPack: 0.7,
@@ -69,62 +120,47 @@ export const WAVES: WaveEntry[] = [
       spitterTrio: 0.2,
       sapperPair: 0.2,
       bomberPack: 0.15,
+      blobPair: 0.25,
+      penguinPack: 0.2,
+      thiefPair: 0.15,
+      mirrorKnight: 0.15,
+      discoRobot: 0.04,
     },
   },
   {
-    at: 480,
-    budgetPerSec: 6,
+    from: 10,
     groups: {
       swarmer: 0.6,
       swarmerPack: 0.8,
       runnerLine: 0.3,
       brute: 0.2,
+      juggernaut: 0.06,
       spitterTrio: 0.25,
       sapperPair: 0.25,
       bomberPack: 0.2,
+      blobPair: 0.3,
+      penguinPack: 0.25,
+      thiefPair: 0.2,
+      mirrorKnight: 0.2,
+      discoRobot: 0.06,
     },
   },
   {
-    at: 600,
-    budgetPerSec: 9,
+    from: 12,
     groups: {
       swarmer: 0.6,
       swarmerPack: 1,
       runnerLine: 0.35,
       brute: 0.25,
+      juggernaut: 0.1,
       spitterTrio: 0.25,
       sapperPair: 0.25,
       bomberPack: 0.25,
+      blobPair: 0.3,
+      penguinPack: 0.25,
+      thiefPair: 0.2,
+      mirrorKnight: 0.2,
+      discoRobot: 0.08,
     },
   },
-  {
-    at: 720,
-    budgetPerSec: 10,
-    groups: {
-      swarmer: 0.6,
-      swarmerPack: 1,
-      runnerLine: 0.35,
-      brute: 0.25,
-      spitterTrio: 0.25,
-      sapperPair: 0.25,
-      bomberPack: 0.25,
-    },
-  },
-];
-
-/** One-off spikes: `count` enemies spread evenly around the ring at time `at`. */
-export interface WaveSpike {
-  at: number;
-  enemy: EnemyType;
-  count: number;
-  /**
-   * Spawn as one elite with this HP multiplier that drops the XP of
-   * `levels` level-ups (the 7:00 Elite Brute).
-   */
-  elite?: { hpMultiplier: number; levels: number };
-}
-
-export const SPIKES: WaveSpike[] = [
-  { at: 150, enemy: 'swarmer', count: 40 },
-  { at: 420, enemy: 'brute', count: 1, elite: { hpMultiplier: 12, levels: 3 } },
 ];

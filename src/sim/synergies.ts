@@ -1,12 +1,5 @@
 import { LINES, MOVE } from '../config/balance';
-import {
-  TILES,
-  type BladeDef,
-  type ThrustDef,
-  type PulseDef,
-  type TileType,
-  type WeaponDef,
-} from '../config/tiles';
+import { TILES, type TileType, type WeaponDef } from '../config/tiles';
 import { cellId, type CityState, type PlacedTile } from './grid';
 import { levelDamage, levelEffect, levelHpBonus, perk } from './upgrades';
 
@@ -14,21 +7,13 @@ import { levelDamage, levelEffect, levelHpBonus, perk } from './upgrades';
 export interface TileMods {
   /** Weapon damage multiplier. */
   damage: number;
-  /** Fire rate multiplier (also the Saw's spin). */
+  /** Fire rate multiplier. */
   fireRate: number;
-  /** Multiplier on all damage taken (Shield Emitters). */
-  damageTaken: number;
-  /** Extra multiplier on contact damage taken (Plating L3, Saw L5). */
+  /** Extra multiplier on contact damage taken (perks). */
   contactTaken: number;
-  /** HP/s from Repair Bays. */
-  heal: number;
   /** HP/s the tile regenerates by itself (Hull L5). */
   regen: number;
   maxHp: number;
-  /** Damage per second dealt to touching enemies (Plating L5). */
-  thorns: number;
-  /** Fraction of contact damage returned to the attacker. */
-  reflect: number;
   /**
    * Bonus from the best chain the tile is in (0 = none): extra damage for a
    * weapon, a multiplier on its own effect for a Generator or Engine.
@@ -47,13 +32,13 @@ export interface Chain {
 }
 
 /** Neighbour buff types, in the fixed order buff pips are drawn (concept-v2.md §3.3). */
-export const BUFF_TYPES = ['generator', 'shield', 'repair', 'hull'] as const;
+export const BUFF_TYPES = ['generator', 'hull'] as const;
 export type BuffType = (typeof BUFF_TYPES)[number];
 
 /**
  * One adjacency buff from an online support tile to a neighbour. `amount` is
- * the main effect before caps: fire rate fraction (Generator), damage taken
- * reduction (Shield), HP/s (Repair Bay), max HP fraction (Hull L3).
+ * the main effect before caps: fire rate fraction (Generator),
+ * max HP fraction (Hull L3).
  */
 export interface BuffLink {
   from: number;
@@ -66,35 +51,18 @@ export interface BuffLink {
 export interface WeaponStats extends WeaponDef {
   projectiles: number;
   pierce: number;
-  shells: number;
-  shellScatter: number;
   /** Multiplier on the burn this weapon sets (Flamethrower L5). */
   burnFactor: number;
 }
 
-/** A thrust type's stats with its perks applied. */
-export interface ThrustStats extends ThrustDef {
-  jabs: number;
-}
-
-/** A blade type's stats with its perks applied. */
-export interface BladeStats extends BladeDef {
-  count: number;
-}
-
 export interface Synergies {
   mods: Map<number, TileMods>;
-  blades: Partial<Record<TileType, BladeStats>>;
-  thrusts: Partial<Record<TileType, ThrustStats>>;
   chains: Chain[];
   /** Every adjacency buff, in tile order of the source. */
   links: BuffLink[];
   weapons: Partial<Record<TileType, WeaponStats>>;
   /** Movement speed as a fraction of base. */
   speedFactor: number;
-  /** Magnet pulse with levels and perks applied (the same for every Magnet). */
-  magnetPulse: PulseDef;
-  lowHpHealBoost?: { belowFrac: number; factor: number };
 }
 
 const ORTHO = [
@@ -103,21 +71,12 @@ const ORTHO = [
   [0, 1],
   [0, -1],
 ] as const;
-const DIAG = [
-  [1, 1],
-  [1, -1],
-  [-1, 1],
-  [-1, -1],
-] as const;
 
 /** Accumulated raw buffs before caps. */
 interface Acc {
   fire: number;
   genDamage: number;
-  shield: number;
-  heal: number;
   hpBonus: number;
-  reflect: number;
 }
 
 /**
@@ -131,17 +90,11 @@ export function computeSynergies(city: CityState): Synergies {
 
   const acc = new Map<number, Acc>();
   for (const t of city.tiles) {
-    acc.set(t.id, { fire: 0, genDamage: 0, shield: 0, heal: 0, hpBonus: 0, reflect: 0 });
+    acc.set(t.id, { fire: 0, genDamage: 0, hpBonus: 0 });
   }
   const links: BuffLink[] = [];
-  const around = (
-    t: PlacedTile,
-    diagonals: boolean,
-    type: BuffType,
-    amount: number,
-    fn: (a: Acc) => void,
-  ) => {
-    for (const [dx, dy] of diagonals ? [...ORTHO, ...DIAG] : ORTHO) {
+  const around = (t: PlacedTile, type: BuffType, amount: number, fn: (a: Acc) => void) => {
+    for (const [dx, dy] of ORTHO) {
       const o = at(t.gx + dx, t.gy + dy);
       const a = o && acc.get(o.id);
       if (!a) continue;
@@ -152,11 +105,6 @@ export function computeSynergies(city: CityState): Synergies {
 
   const genAmount = (TILES.generator.support?.amount ?? 0) * levelEffect(city, 'generator');
   const genDamage = perk(city, 'generator', 'neighbourDamage')?.bonus ?? 0;
-  const shieldAmount = (TILES.shield.support?.amount ?? 0) * levelEffect(city, 'shield');
-  const shieldDiag = !!perk(city, 'shield', 'diagonals');
-  const reflect = perk(city, 'shield', 'reflect')?.fraction ?? 0;
-  const repairAmount = (TILES.repair.support?.amount ?? 0) * levelEffect(city, 'repair');
-  const repairDiag = !!perk(city, 'repair', 'diagonals');
   const hullBonus = perk(city, 'hull', 'neighbourHp')?.bonus ?? 0;
   let engines = 0;
   const { chains, chainBonus } = findChains(city, at);
@@ -167,23 +115,14 @@ export function computeSynergies(city: CityState): Synergies {
     switch (t.type) {
       case 'generator': {
         const fire = genAmount * own(t);
-        around(t, false, 'generator', fire, (a) => {
+        around(t, 'generator', fire, (a) => {
           a.fire += fire;
           a.genDamage += genDamage;
         });
         break;
       }
-      case 'shield':
-        around(t, shieldDiag, 'shield', shieldAmount, (a) => {
-          a.shield += shieldAmount;
-          a.reflect = Math.max(a.reflect, reflect);
-        });
-        break;
-      case 'repair':
-        around(t, repairDiag, 'repair', repairAmount, (a) => (a.heal += repairAmount));
-        break;
       case 'hull':
-        if (hullBonus > 0) around(t, false, 'hull', hullBonus, (a) => (a.hpBonus += hullBonus));
+        if (hullBonus > 0) around(t, 'hull', hullBonus, (a) => (a.hpBonus += hullBonus));
         break;
       case 'engine':
         engines += own(t);
@@ -192,9 +131,7 @@ export function computeSynergies(city: CityState): Synergies {
   }
 
   const fireCap = perk(city, 'generator', 'raiseCap')?.cap ?? TILES.generator.support?.cap ?? 0;
-  const shieldCap = TILES.shield.support?.cap ?? 0;
   const regen = perk(city, 'hull', 'regen')?.hpPerSec ?? 0;
-  const platingThorns = perk(city, 'plating', 'thorns')?.dps ?? 0;
 
   const mods = new Map<number, TileMods>();
   for (const t of city.tiles) {
@@ -203,17 +140,12 @@ export function computeSynergies(city: CityState): Synergies {
     const chain = def.family === 'weapon' ? (chainBonus.get(t.id) ?? 0) : 0;
     const fireRate = 1 + Math.min(a.fire, fireCap);
     const damage = levelDamage(city, t.type) * (1 + a.genDamage + chain);
-    const thorns = t.online && t.type === 'plating' ? platingThorns : 0;
     mods.set(t.id, {
       damage,
       fireRate,
-      damageTaken: 1 - Math.min(a.shield, shieldCap),
       contactTaken: perk(city, t.type, 'contactArmour')?.damageFactor ?? 1,
-      heal: a.heal,
       regen: t.type === 'hull' ? regen : 0,
       maxHp: def.maxHp * (1 + levelHpBonus(city, t.type) + a.hpBonus),
-      thorns,
-      reflect: a.reflect,
       chainBonus: chainBonus.get(t.id) ?? 0,
     });
   }
@@ -225,47 +157,18 @@ export function computeSynergies(city: CityState): Synergies {
     Math.max(MOVE.minSpeedFactor, 1 - penalty) +
     engines * MOVE.engineBonus * levelEffect(city, 'engine');
 
-  const pulse = TILES.magnet.pulse as PulseDef;
-  const magnetPulse: PulseDef = {
-    intervalSec: perk(city, 'magnet', 'pulseInterval')?.sec ?? pulse.intervalSec,
-    radius: (perk(city, 'magnet', 'pulseRadius')?.px ?? pulse.radius) * levelEffect(city, 'magnet'),
-    gemSpeed: pulse.gemSpeed,
-  };
-
   const weapons: Synergies['weapons'] = {};
-  const blades: Synergies['blades'] = {};
-  const thrusts: Synergies['thrusts'] = {};
   for (const type of Object.keys(TILES) as TileType[]) {
     const w = weaponStats(city, type);
     if (w) weapons[type] = w;
-    const thrust = TILES[type].thrust;
-    if (thrust) {
-      thrusts[type] = {
-        ...thrust,
-        reach: perk(city, type, 'thrustReach')?.px ?? thrust.reach,
-        jabs: 1 + (perk(city, type, 'extraJabs')?.count ?? 0),
-      };
-    }
-    const blade = TILES[type].blade;
-    if (blade) {
-      blades[type] = {
-        ...blade,
-        orbit: perk(city, type, 'bladeOrbit')?.px ?? blade.orbit,
-        count: 1 + (perk(city, type, 'extraBlades')?.count ?? 0),
-      };
-    }
   }
 
   return {
     mods,
-    blades,
-    thrusts,
     chains,
     links,
     weapons,
     speedFactor,
-    magnetPulse,
-    lowHpHealBoost: perk(city, 'repair', 'lowHpHealBoost'),
   };
 }
 
@@ -290,10 +193,9 @@ export function chainBonusFor(length: number): number {
   return Math.min(LINES.chainMaxBonus, LINES.chainBonusStep * (length - LINES.chainMin + 1));
 }
 
-/** True if a tile type chains regardless of facing (no firing arc: Mortar, Saw, support tiles). */
+/** True if a tile type chains regardless of facing (no firing arc: Crossbow, support tiles). */
 function ignoresFacing(type: TileType): boolean {
   const def = TILES[type];
-  if (def.thrust) return false;
   return !def.weapon || def.weapon.arcDeg >= 360;
 }
 
@@ -367,17 +269,13 @@ function findChains(
 export function weaponStats(city: CityState, type: TileType): WeaponStats | undefined {
   const base = TILES[type].weapon;
   if (!base) return undefined;
-  const shells = perk(city, type, 'shells');
   return {
     ...base,
     arcDeg: perk(city, type, 'arc')?.deg ?? base.arcDeg,
     range: perk(city, type, 'range')?.px ?? base.range,
     burnFactor: perk(city, type, 'burnFactor')?.factor ?? 1,
-    blastRadius: perk(city, type, 'blastRadius')?.px ?? base.blastRadius,
     projectiles: 1 + (perk(city, type, 'extraProjectiles')?.count ?? 0),
-    pierce: base.pierceAll ? Infinity : (perk(city, type, 'pierce')?.count ?? 0),
-    shells: shells?.count ?? 1,
-    shellScatter: shells?.scatterPx ?? 0,
+    pierce: perk(city, type, 'pierce')?.count ?? 0,
   };
 }
 
