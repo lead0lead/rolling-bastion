@@ -61,15 +61,15 @@ with no memory of earlier ones; this file and the git history are all it has.
 
 | | |
 |---|---|
-| **Status** | **v2 is live** (2.0.0): Phases 1–6 merged into `v2`, and `v2` merged into `main` on 2026-10-23 (user: "merge and deploy"), replacing v1. v1's last commit is tagged `v0.8.0`. |
-| **Current step** | **Casino (2026-10-24, §2.18), uncommitted:** shop roulette replaces the Wheel of Fortune tile. Before that: **Party update (2026-10-24, §2.17), uncommitted:** new tiles, enemies, break-off, kill streaks, synth sounds; untuned. Before that: **Round-based run (2026-10-24, §2.16), uncommitted:** waves instead of a clock, shop only between rounds, kills pay coins directly, Saw and Magnet removed, Crossbow back. Before that: v2 2.0.0 released to GitHub Pages. The v2 plan (§11) is complete. **Coin economy and shop** (§2.13) and the **speed slider** built on `main` locally on the user's explicit instruction (2026-10-24), not yet committed or pushed. Then (2026-10-24): enemy splitting (Brute → 3 Swarmers, new Juggernaut → 2 Brutes), logarithmic endless spawn budget and ever-shorter Colossus returns, Magnets on evenly staggered timers whose interval shrinks with level; uncommitted. |
+| **Status** | **v2 is live** (2.1.0): Paul's PR #1 (§2.13–§2.18: coins and shop, rounds, party update, casino) merged into `v2` and released on `main` on 2026-10-26 (user's go). 2.0.0 went live on 2026-10-23, replacing v1. v1's last commit is tagged `v0.8.0`. |
+| **Current step** | **2.1.0 released (2026-10-26).** PR #1 by Paul (GitHub `PaulProjects`) merged into `v2` and fast-forwarded to `main`; the user kept their own CLAUDE.md rules instead of the PR's trimmed version. The PR's content: coin economy and shop (§2.13), removed tiles and adaptive pressure (§2.14), run saving (§2.15), rounds instead of the 12:00 clock (§2.16), party update (§2.17), casino roulette (§2.18), enemy splitting (Brute → 3 Swarmers, Juggernaut → 2 Brutes), logarithmic endless spawn budget, balance fuzzer (`npm run sim:fuzz`). Untuned beyond Paul's playing. |
 | **Next step** | Playtest the round-based run (§2.16) and tune it by feel. None otherwise planned. New work (endless tuning, Spear/Flamethrower vs the Colossus, other §12 items) starts with planning it with the user. |
 | **Decision milestone** | Passed 2026-10-21 (spike verdicts); v2 replaced v1 on 2026-10-23. |
 | **Branches** | `main` = live game (every push redeploys), now v2. `v2` = integration branch; merged into `main` only on the user's go. New phases/spikes branch from `v2`. |
-| **Version** | `2.0.0` (released). Further labels to agree with the user. |
+| **Version** | `2.1.0` (released 2026-10-26). Further labels to agree with the user. |
 | **Play** | https://lead0lead.github.io/rolling-bastion/ (v2). v1: tag `v0.8.0` (run locally). |
 | **Target** | Unchanged from v1: desktop browsers, keyboard + mouse, 1280×720 and up. |
-| **Last updated** | 2026-10-23 (v2 2.0.0 released on `main`) |
+| **Last updated** | 2026-10-26 (PR #1 merged, 2.1.0 released on `main`) |
 
 ---
 
@@ -623,7 +623,7 @@ Everything below is Claude's draft, numbers to tune by playing.
 
 ---
 
-### 2.17 Party update (user request 2026-10-24, uncommitted)
+### 2.17 Party update (user request 2026-10-24; released in 2.1.0)
 
 Funnier, crazier content, all in `src/config/gadgets.ts` (numbers) and
 `src/sim/gadgets.ts`, `streak.ts` (logic). Starting values, untuned.
@@ -661,7 +661,7 @@ Funnier, crazier content, all in `src/config/gadgets.ts` (numbers) and
   describe the state before this change.
 - Saves: `SAVE_VERSION` is 3; older saves are ignored.
 
-### 2.18 Casino (user request 2026-10-24, uncommitted; replaces the Wheel of Fortune tile)
+### 2.18 Casino (user request 2026-10-24, released in 2.1.0; replaces the Wheel of Fortune tile)
 
 The Wheel of Fortune tile is gone. Instead the shop has a **Casino** button
 (under Buy land) that opens a roulette wheel over the paused build screen
@@ -1061,7 +1061,21 @@ start early if the user asks.
 
 Same format as v1 (`concept.md` §14). Newest first.
 
-### 2026-10-24 — rounds (on `main`, uncommitted)
+### 2026-10-26 — PR #1 merged, 2.1.0 released
+
+- Paul (a friend of the user, GitHub `PaulProjects`) opened PR #1 against
+  `main` ("Small adjustments and typo fix"; in fact 82 files: §2.13–§2.18
+  and the two 2026-10-24 entries below, where "user" means Paul). Paul's
+  sessions worked on his fork's `main`, outside this repo's branch rules.
+- Reviewed for safety (no new dependencies, no network or shell code);
+  build, lint and tests pass. The user played it locally: "I like it".
+- Decision (user): keep their own CLAUDE.md rules; the PR's version had
+  dropped most of them. Only the `sim:fuzz` command line was taken.
+- Merged the PR into `v2`, fast-forwarded `main` to `v2`, pushed; GitHub
+  Actions deployed it. Version 2.1.0 (user's pick); docs updated.
+- Next: playtest and tune the round-based run (§2.16).
+
+### 2026-10-24 — rounds (Paul's local `main`; released in 2.1.0)
 
 User: make it round-based (builder only at round end, ever harder waves),
 drop the Magnet and orb pickup (coins go straight to the account), remove the
@@ -1071,7 +1085,7 @@ and tile damage display; then: Esc must not start the round, clean up the
 shop's left text. Built as §2.16. Build, lint and 186 tests pass; balance
 sim run. Not played in a browser.
 
-### 2026-10-24 — coin economy, shop and speed slider (on `main`, uncommitted)
+### 2026-10-24 — coin economy, shop and speed slider (Paul's local `main`; released in 2.1.0)
 
 User: add a speed slider (1×/2×/5×/10×) and replace the random level-ups by
 coins and a shop (pieces, land, upgrades; Railgun-like weapons dear, Spears

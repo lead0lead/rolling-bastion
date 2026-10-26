@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**v2 is the live game (2.0.0, on `main` since 2026-10-23); `concept-v2.md`
+**v2 is the live game (2.1.0, on `main`; 2.0.0 since 2026-10-23); `concept-v2.md`
 is the source of truth.** Read it first, in particular §0 (current state), the session log (§14) and open
 questions (§12). Follow its "Start Here" instructions. `concept.md` is the
 frozen v1 record (tag `v0.8.0`): read the sections `concept-v2.md`
